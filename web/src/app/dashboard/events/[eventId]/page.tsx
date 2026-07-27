@@ -354,7 +354,21 @@ export default function EventDetailPage() {
                         <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
                       </td>
                       <td className="py-3 pr-4">
-                        {g.rsvpStatus === "attending" ? 1 + g.plusOnes : "—"}
+                        {g.rsvpStatus === "attending" ? (
+                          <>
+                            <div>{1 + g.plusOnes}</div>
+                            {/* Names the guest supplied for the people they're
+                                bringing — what a host actually needs for place
+                                cards and a door list. */}
+                            {g.plusOneNames?.length ? (
+                              <div className="text-xs text-slate-500">
+                                + {g.plusOneNames.join(", ")}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="max-w-[16rem] py-3 pr-4 text-slate-600">
                         {[g.dietaryNotes, g.message].filter(Boolean).join(" · ") || "—"}

@@ -194,6 +194,13 @@ export const guests = pgTable(
     // when attending. Kept separate from a "party size" so the host can see who
     // the named invitee is versus how many they added.
     plusOnes: integer("plus_ones").notNull().default(0),
+    // Names of those additional people, in order. jsonb rather than its own
+    // table: they are not invitees in their own right — no invite token, no
+    // RSVP, no login — so a row per person would imply a lifecycle they don't
+    // have. A host needs them for place cards and a door list, nothing more.
+    // May be shorter than plusOnes when a guest doesn't know yet who they're
+    // bringing; the count is authoritative for headcount, not the array length.
+    plusOneNames: jsonb("plus_one_names").$type<string[]>(),
     dietaryNotes: text("dietary_notes"),
     // Free-text message from guest to host, shown in the RSVP list, not public.
     message: text("message"),

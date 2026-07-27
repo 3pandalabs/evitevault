@@ -41,15 +41,26 @@ export type RsvpInput = {
   email?: string | null;
   status: "attending" | "declined" | "maybe";
   plusOnes: number;
+  plusOneNames?: string[];
   dietaryNotes?: string | null;
   message?: string | null;
 };
 
+export type RsvpResult = {
+  ok: true;
+  status: "attending" | "declined" | "maybe";
+  plusOnes: number;
+  plusOneNames: string[] | null;
+  name: string;
+  email: string | null;
+  inviteToken?: string;
+};
+
 export function submitRsvp(slug: string, input: RsvpInput) {
-  return request<{ ok: true; status: string; plusOnes: number; inviteToken?: string }>(
-    `/public/events/${encodeURIComponent(slug)}/rsvp`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+  return request<RsvpResult>(`/public/events/${encodeURIComponent(slug)}/rsvp`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 export function postGuestbookEntry(

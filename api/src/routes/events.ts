@@ -298,6 +298,7 @@ export async function eventRoutes(app: FastifyInstance) {
           "Phone",
           "RSVP",
           "Plus ones",
+          "Bringing",
           "Total headcount",
           "Dietary notes",
           "Message",
@@ -312,6 +313,10 @@ export async function eventRoutes(app: FastifyInstance) {
           g.phone,
           g.rsvpStatus,
           g.plusOnes,
+          // Joined into one cell rather than N columns — the width would be set
+          // by whichever guest brings the most people, leaving the sheet mostly
+          // empty for everyone else.
+          g.plusOneNames?.join("; ") ?? "",
           g.rsvpStatus === "attending" ? 1 + g.plusOnes : 0,
           g.dietaryNotes,
           g.message,

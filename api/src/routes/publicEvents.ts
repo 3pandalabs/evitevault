@@ -147,6 +147,7 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
           email: guest.email,
           rsvpStatus: guest.rsvpStatus,
           plusOnes: guest.plusOnes,
+          plusOneNames: guest.plusOneNames,
           dietaryNotes: guest.dietaryNotes,
           message: guest.message,
           respondedAt: guest.respondedAt,
@@ -212,6 +213,10 @@ export async function publicEventRoutes(app: FastifyInstance) {
           email: z.string().email().max(320).nullish(),
           status: z.enum(["attending", "declined", "maybe"]),
           plusOnes: z.number().int().min(0).max(20).default(0),
+          // Names of the people they're bringing. Trimmed and blank-filtered
+          // below — a guest who fills two of three boxes shouldn't be rejected,
+          // they just don't know the third name yet.
+          plusOneNames: z.array(z.string().max(200)).max(20).optional(),
           dietaryNotes: z.string().max(1000).nullish(),
           message: z.string().max(2000).nullish(),
         }),
@@ -225,6 +230,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
         email?: string | null;
         status: "attending" | "declined" | "maybe";
         plusOnes: number;
+        plusOneNames?: string[];
         dietaryNotes?: string | null;
         message?: string | null;
       };
@@ -238,6 +244,19 @@ export async function publicEventRoutes(app: FastifyInstance) {
       }
 
       const plusOnes = event.allowPlusOnes ? Math.min(body.plusOnes, event.maxPlusOnes) : 0;
+
+      // Names are only meaningful for people actually coming, and never more of
+      // them than the (already clamped) count — otherwise a caller could store
+      // an arbitrary-length array by declaring one plus-one and sending fifty
+      // names.
+      const plusOneNames =
+        body.status === "attending" && plusOnes > 0
+          ? (body.plusOneNames ?? [])
+              .map((n) => n.trim())
+              .filter(Boolean)
+              .slice(0, plusOnes)
+          : null;
+
       const guest = await loadGuestByToken(event.id, body.token);
 
       if (!guest && !event.allowPublicRsvp) {
@@ -268,17 +287,39 @@ export async function publicEventRoutes(app: FastifyInstance) {
       const now = new Date();
 
       if (guest) {
+        // A guest may now set or correct their own email — hosts want a way to
+        // reach them, and many invited rows start with a name only. Guarded
+        // against colliding with another invitee on this event: the partial
+        // unique index enforces it regardless, this just turns a 500 into a
+        // usable message.
+        const email = body.email?.trim().toLowerCase() || null;
+        if (email && email !== guest.email) {
+          const [clash] = await db
+            .select({ id: guests.id })
+            .from(guests)
+            .where(
+              and(
+                eq(guests.eventId, event.id),
+                sql`lower(${guests.email}) = ${email}`,
+                sql`${guests.id} <> ${guest.id}`,
+              ),
+            )
+            .limit(1);
+          if (clash) return reply.code(409).send({ error: "email_already_used" });
+        }
+
         const [updated] = await db
           .update(guests)
           .set({
             rsvpStatus: body.status,
             plusOnes,
+            plusOneNames,
             dietaryNotes: event.collectDietary ? body.dietaryNotes ?? null : null,
             message: body.message ?? null,
-            // The guest may correct the name on their own invitation, but not
-            // their email — changing it could collide with another invitee's
-            // row and is not something an RSVP form needs to do.
+            // The guest may correct the name on their own invitation.
             name: body.name?.trim() || guest.name,
+            // Never clear an address the host already has by omitting it.
+            email: email ?? guest.email,
             respondedAt: now,
             updatedAt: now,
           })
@@ -286,7 +327,14 @@ export async function publicEventRoutes(app: FastifyInstance) {
           .returning();
 
         await db.insert(rsvpLog).values(rsvpLogValues(updated.id, event.id, guest.rsvpStatus, updated));
-        return { ok: true, status: updated.rsvpStatus, plusOnes: updated.plusOnes };
+        return {
+          ok: true,
+          status: updated.rsvpStatus,
+          plusOnes: updated.plusOnes,
+          plusOneNames: updated.plusOneNames,
+          name: updated.name,
+          email: updated.email,
+        };
       }
 
       // Open RSVP: a brand-new guest row.
@@ -319,6 +367,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
           email,
           rsvpStatus: body.status,
           plusOnes,
+          plusOneNames,
           dietaryNotes: event.collectDietary ? body.dietaryNotes ?? null : null,
           message: body.message ?? null,
           source: "public",
@@ -334,6 +383,9 @@ export async function publicEventRoutes(app: FastifyInstance) {
         ok: true,
         status: created.rsvpStatus,
         plusOnes: created.plusOnes,
+        plusOneNames: created.plusOneNames,
+        name: created.name,
+        email: created.email,
         inviteToken: created.inviteToken,
       });
     },

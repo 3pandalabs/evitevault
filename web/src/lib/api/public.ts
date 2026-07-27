@@ -53,6 +53,7 @@ export type PublicEvent = {
     email: string | null;
     rsvpStatus: "pending" | "attending" | "declined" | "maybe";
     plusOnes: number;
+    plusOneNames: string[] | null;
     dietaryNotes: string | null;
     message: string | null;
     respondedAt: string | null;

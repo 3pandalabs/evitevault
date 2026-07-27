@@ -177,7 +177,13 @@ export default async function InvitationPage({ params, searchParams }: PageProps
           </section>
 
           <section className="mt-8">
-            <RsvpForm slug={event.slug} token={token} rsvp={event.rsvp} you={event.you} />
+            <RsvpForm
+              slug={event.slug}
+              token={token}
+              rsvp={event.rsvp}
+              you={event.you}
+              calendar={event.calendar}
+            />
           </section>
 
           {event.guestbook.enabled ? (
@@ -192,12 +198,10 @@ export default async function InvitationPage({ params, searchParams }: PageProps
             </section>
           ) : null}
 
-          <footer className="ev-muted mt-12 text-center text-xs">
-            Invitation by{" "}
-            <a href="https://evitevault.3pandalabs.com" className="underline underline-offset-4">
-              EviteVault
-            </a>
-          </footer>
+          {/* No product footer here by design. The invitation belongs to the
+              host, and a guest arriving from a personal link is not an audience
+              to market to — the branding sat between them and the page's
+              actual purpose. */}
         </div>
       </main>
     </>
