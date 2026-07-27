@@ -91,6 +91,9 @@ export type EventSummary = {
   // Present on GET /events/:id (the full row) but not on the list projection,
   // which selects only what the dashboard cards render.
   coverImageKey?: string | null;
+  // Also only on the full row. Determines whether a scanned QR can actually
+  // lead to an RSVP, or only to a "this invitation is personal" message.
+  allowPublicRsvp?: boolean;
   status: "draft" | "published" | "cancelled" | "archived";
   capacity: number | null;
   invited: number;
