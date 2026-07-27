@@ -1,68 +1,60 @@
-import os from "node:os";
+// In-process counters backing GET /metrics. Everything here lives in memory and
+// resets when the container restarts — that is deliberate: an ops dashboard does
+// not justify a metrics store, and nothing here is worth persisting.
+//
+// Kept byte-for-byte in step with the same file in the other 3PandaLabs apps.
+// The admin page's rendering script is fully generic over the shared envelope,
+// so a local "improvement" here becomes a per-app special case there.
 
-// Rolling request counter behind GET /metrics. Buckets are per-minute so the
-// hourly figure is a true trailing window rather than a counter that resets on
-// deploy — a per-app table on admin.3pandalabs.com compares apps, and a
-// deploy-reset counter would make a freshly deployed app look idle.
-const WINDOW_MINUTES = 60;
-const buckets = new Map<number, number>();
+const BUCKET_COUNT = 60;
 
-function currentMinute(): number {
-  return Math.floor(Date.now() / 60_000);
-}
+// Ring of one-minute buckets. `bucketMinute` records which absolute minute each
+// slot currently holds so a stale slot from the previous lap is ignored rather
+// than counted again an hour later.
+const buckets = new Array<number>(BUCKET_COUNT).fill(0);
+const bucketMinute = new Array<number>(BUCKET_COUNT).fill(-1);
 
-export function recordRequest(): void {
-  const m = currentMinute();
-  buckets.set(m, (buckets.get(m) ?? 0) + 1);
-  const cutoff = m - WINDOW_MINUTES;
-  for (const k of buckets.keys()) {
-    if (k < cutoff) buckets.delete(k);
+export function recordRequest(at: number = Date.now()): void {
+  const minute = Math.floor(at / 60_000);
+  const slot = minute % BUCKET_COUNT;
+  if (bucketMinute[slot] !== minute) {
+    bucketMinute[slot] = minute;
+    buckets[slot] = 0;
   }
+  buckets[slot] += 1;
 }
 
-export function requestsLastHour(): number {
-  const cutoff = currentMinute() - WINDOW_MINUTES;
+export function requestsLastHour(now: number = Date.now()): number {
+  const minute = Math.floor(now / 60_000);
   let total = 0;
-  for (const [k, v] of buckets) {
-    if (k >= cutoff) total += v;
+  for (let slot = 0; slot < BUCKET_COUNT; slot += 1) {
+    const held = bucketMinute[slot];
+    if (held >= 0 && minute - held < BUCKET_COUNT) total += buckets[slot];
   }
   return total;
 }
 
-// process.cpuUsage() is cumulative, so a single reading says nothing about
-// current load. Sample the delta on an interval and report that instead.
-let lastCpu = process.cpuUsage();
-let lastSampleAt = Date.now();
+// Sampled CPU share, expressed as a percentage of ONE core — so a box with 4
+// vCPUs can legitimately report up to 400%.
 let cpuPercent = 0;
+let lastSample = process.cpuUsage();
+let lastSampleAt = Date.now();
 
-export function startCpuSampler(intervalMs = 15_000): NodeJS.Timeout {
-  const t = setInterval(() => {
+export function startCpuSampler(intervalMs = 15_000): void {
+  const timer = setInterval(() => {
+    const used = process.cpuUsage(lastSample);
     const now = Date.now();
-    const usage = process.cpuUsage(lastCpu);
     const elapsedMicros = (now - lastSampleAt) * 1000;
-    const used = usage.user + usage.system;
-    cpuPercent = elapsedMicros > 0 ? Math.min(100, (used / elapsedMicros) * 100) : 0;
-    lastCpu = process.cpuUsage();
+    lastSample = process.cpuUsage();
     lastSampleAt = now;
+    if (elapsedMicros > 0) {
+      cpuPercent = ((used.user + used.system) / elapsedMicros) * 100;
+    }
   }, intervalMs);
-  // Don't hold the event loop open on shutdown.
-  t.unref();
-  return t;
+  // Never hold the process open just to keep sampling.
+  timer.unref();
 }
 
-export function snapshot() {
-  const mem = process.memoryUsage();
-  return {
-    app: "evitevault",
-    uptimeSeconds: Math.round(process.uptime()),
-    requestsLastHour: requestsLastHour(),
-    cpuPercent: Number(cpuPercent.toFixed(1)),
-    memory: {
-      rssMb: Math.round(mem.rss / 1024 / 1024),
-      heapUsedMb: Math.round(mem.heapUsed / 1024 / 1024),
-      heapTotalMb: Math.round(mem.heapTotal / 1024 / 1024),
-    },
-    loadAverage: os.loadavg().map((n) => Number(n.toFixed(2))),
-    nodeVersion: process.version,
-  };
+export function cpuPercentOfOneCore(): number {
+  return Math.round(cpuPercent * 10) / 10;
 }
