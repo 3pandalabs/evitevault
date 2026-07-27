@@ -35,6 +35,7 @@ same one RentVault makes.
 3. DNS records above — **before** the first Coolify deploy, or the Let's Encrypt
    challenge has nothing to resolve.
 4. `coolify-setup.md` — the `evitevault-api` application.
+5. `email-setup.md` — outbound email. **Deferred as of 2026-07-27**: the code is live but the provider is not wired up, so sends are skipped. Not a blocker — hosts share the link or QR code instead.
 5. `web-deploy.md` — the Worker and its custom domain.
 
 ## Gotchas inherited from RentVault
