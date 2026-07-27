@@ -3,11 +3,14 @@
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 import { API_URL } from "@/lib/api/browser";
 import { setTokens } from "@/lib/api/host";
+import { GradientBackdrop } from "@/components/GradientBackdrop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { geistSans } from "@/lib/fonts";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,19 +57,33 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4 py-12">
-      <Card className="w-full max-w-sm">
+    <div
+      className={`flex min-h-screen flex-col items-center justify-center px-6 ${geistSans.className}`}
+    >
+      <GradientBackdrop />
+      <Link href="/" className="mb-8 text-lg font-semibold text-zinc-900">
+        EviteVault
+      </Link>
+
+      <Card className="w-full max-w-sm rounded-2xl border-zinc-200 bg-white/90 shadow-xl shadow-zinc-900/5 backdrop-blur-sm">
         <CardHeader>
-          <CardTitle>{mode === "login" ? "Sign in" : "Create an account"}</CardTitle>
-          <CardDescription>Host events and track RSVPs on EviteVault.</CardDescription>
+          <CardTitle className="text-zinc-900">
+            {mode === "login" ? "Sign in" : "Create an account"}
+          </CardTitle>
+          <CardDescription className="text-zinc-500">
+            Host events and track RSVPs on EviteVault.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             {mode === "register" ? (
               <div className="space-y-1.5">
-                <Label htmlFor="name">Your name</Label>
+                <Label htmlFor="name" className="text-zinc-700">
+                  Your name
+                </Label>
                 <Input
                   id="name"
+                  className="rounded-lg border-zinc-300 focus-visible:ring-zinc-400"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   autoComplete="name"
@@ -75,11 +92,14 @@ export default function LoginPage() {
             ) : null}
 
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-zinc-700">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
                 required
+                className="rounded-lg border-zinc-300 focus-visible:ring-zinc-400"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -87,18 +107,21 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-zinc-700">
+                Password
+              </Label>
               <Input
                 id="password"
                 type="password"
                 required
                 minLength={10}
+                className="rounded-lg border-zinc-300 focus-visible:ring-zinc-400"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
               />
               {mode === "register" ? (
-                <p className="text-xs text-slate-500">At least 10 characters.</p>
+                <p className="text-xs text-zinc-500">At least 10 characters.</p>
               ) : null}
             </div>
 
@@ -108,7 +131,11 @@ export default function LoginPage() {
               </p>
             ) : null}
 
-            <Button type="submit" className="w-full" disabled={submitting}>
+            <Button
+              type="submit"
+              className="w-full rounded-full bg-zinc-900 hover:bg-zinc-700"
+              disabled={submitting}
+            >
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
               {mode === "login" ? "Sign in" : "Create account"}
             </Button>
@@ -120,12 +147,12 @@ export default function LoginPage() {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
             }}
-            className="mt-4 w-full text-center text-sm text-slate-500 underline underline-offset-4"
+            className="mt-4 w-full text-center text-sm text-zinc-500 hover:text-zinc-900"
           >
             {mode === "login" ? "Need an account?" : "Already have an account?"}
           </button>
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }
