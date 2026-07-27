@@ -19,22 +19,29 @@ export function Guestbook({
   initialPosts,
   photosEnabled,
   knownName,
+  knownEmail,
 }: {
   slug: string;
   token?: string;
   initialPosts: GuestbookPost[];
   photosEnabled: boolean;
   knownName: string | null;
+  knownEmail: string | null;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [posts, setPosts] = useState(initialPosts);
   const [authorName, setAuthorName] = useState(knownName ?? "");
+  const [email, setEmail] = useState(knownEmail ?? "");
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // No attendance fields here. The RSVP form above already collects party size
+  // and the names of everyone coming; asking again in the guestbook duplicated
+  // it and created a second write path into the same guest data.
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,6 +59,7 @@ export function Guestbook({
         authorName: knownName ? undefined : authorName.trim(),
         body: body.trim() || null,
         imageKey,
+        email: email.trim() || null,
       });
 
       // Optimistically prepend without the image URL: the presigned GET for a
@@ -94,6 +102,19 @@ export function Guestbook({
             />
           </div>
         ) : null}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="gb-email">Email (optional)</Label>
+          <Input
+            id="gb-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <p className="ev-muted text-xs">Shared with the host only — never shown on this page.</p>
+        </div>
 
         <Textarea
           aria-label="Your message"

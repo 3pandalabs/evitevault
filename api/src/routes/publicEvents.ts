@@ -457,6 +457,11 @@ export async function publicEventRoutes(app: FastifyInstance) {
           authorName: z.string().min(1).max(120).optional(),
           body: z.string().max(2000).nullish(),
           imageKey: z.string().max(300).nullish(),
+          // Optional contact address, so a host can reach someone who left a
+          // message. Attendance is NOT collected here — the RSVP form owns
+          // that, and asking twice produced two write paths into the same
+          // guest data for no benefit.
+          email: z.string().email().max(320).nullish(),
         }),
       },
     },
@@ -467,13 +472,17 @@ export async function publicEventRoutes(app: FastifyInstance) {
         authorName?: string;
         body?: string | null;
         imageKey?: string | null;
+        email?: string | null;
+        plusOnes?: number;
+        plusOneNames?: string[];
       };
 
       const row = await loadPublishedEvent(slug);
       if (!row) return reply.code(404).send({ error: "not_found" });
       if (!row.event.guestbookEnabled) return reply.code(403).send({ error: "guestbook_disabled" });
 
-      const guest = await loadGuestByToken(row.event.id, body.token);
+      const event = row.event;
+      let guest = await loadGuestByToken(event.id, body.token);
       const authorName = guest?.name ?? body.authorName?.trim();
       if (!authorName) return reply.code(400).send({ error: "author_name_required" });
 
@@ -490,12 +499,38 @@ export async function publicEventRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "invalid_image_key" });
       }
 
+      const email = body.email?.trim().toLowerCase() || null;
+
+      // If the poster came through their own link and the host has no address
+      // for them, fill it in. Deliberately the only guest-record write this
+      // route makes: it never changes an RSVP, never creates a guest, and never
+      // overwrites an address already on file. Leaving a message is not
+      // responding to an invitation.
+      if (guest && email && !guest.email) {
+        const [clash] = await db
+          .select({ id: guests.id })
+          .from(guests)
+          .where(and(eq(guests.eventId, event.id), sql`lower(${guests.email}) = ${email}`))
+          .limit(1);
+        if (!clash) {
+          await db
+            .update(guests)
+            .set({ email, updatedAt: new Date() })
+            .where(eq(guests.id, guest.id));
+        }
+      }
+
       const [created] = await db
         .insert(guestbookPosts)
         .values({
-          eventId: row.event.id,
+          eventId: event.id,
           guestId: guest?.id ?? null,
           authorName,
+          // Stored on the post, not as a new guest row. An anonymous
+          // well-wisher isn't an invitee, and adding them to the guest list as
+          // "pending" would both imply they were invited and skew the host's
+          // response-rate figure.
+          authorEmail: email,
           body: body.body?.trim() || null,
           imageKey: body.imageKey ?? null,
         })

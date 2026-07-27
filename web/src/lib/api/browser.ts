@@ -63,14 +63,26 @@ export function submitRsvp(slug: string, input: RsvpInput) {
   });
 }
 
-export function postGuestbookEntry(
-  slug: string,
-  input: { token?: string; authorName?: string; body?: string | null; imageKey?: string | null },
-) {
-  return request<{ id: string; authorName: string; body: string | null; createdAt: string }>(
-    `/public/events/${encodeURIComponent(slug)}/guestbook`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+export type GuestbookInput = {
+  token?: string;
+  authorName?: string;
+  body?: string | null;
+  imageKey?: string | null;
+  // Contact address only. Attendance belongs to the RSVP form — collecting it
+  // here as well meant two write paths into the same guest data.
+  email?: string | null;
+};
+
+export function postGuestbookEntry(slug: string, input: GuestbookInput) {
+  return request<{
+    id: string;
+    authorName: string;
+    body: string | null;
+    createdAt: string;
+  }>(`/public/events/${encodeURIComponent(slug)}/guestbook`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 // Two steps: ask the API for a presigned PUT, then upload straight to R2. The

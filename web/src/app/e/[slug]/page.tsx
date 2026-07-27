@@ -194,6 +194,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
                 initialPosts={posts}
                 photosEnabled={event.guestbook.photosEnabled}
                 knownName={event.you?.name ?? null}
+                knownEmail={event.you?.email ?? null}
               />
             </section>
           ) : null}

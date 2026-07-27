@@ -15,6 +15,13 @@
       "when": 1785179334660,
       "tag": "0001_guest_party_names",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785180969556,
+      "tag": "0002_guestbook_author_email",
+      "breakpoints": true
     }
   ]
 }
