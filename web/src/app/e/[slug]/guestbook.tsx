@@ -19,22 +19,42 @@ export function Guestbook({
   initialPosts,
   photosEnabled,
   knownName,
+  knownEmail,
+  alreadyAttending,
+  canRsvp,
+  maxPlusOnes,
 }: {
   slug: string;
   token?: string;
   initialPosts: GuestbookPost[];
   photosEnabled: boolean;
   knownName: string | null;
+  knownEmail: string | null;
+  alreadyAttending: boolean;
+  canRsvp: boolean;
+  maxPlusOnes: number;
 }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [posts, setPosts] = useState(initialPosts);
   const [authorName, setAuthorName] = useState(knownName ?? "");
+  const [email, setEmail] = useState(knownEmail ?? "");
   const [body, setBody] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  // Attendance details are behind an explicit opt-in. Someone leaving
+  // "congratulations!" is not making an RSVP, and quietly adding them to the
+  // headcount because they typed their name would be a real misreading of what
+  // they did.
+  const [alsoAttending, setAlsoAttending] = useState(false);
+  const [plusOnes, setPlusOnes] = useState(0);
+  const [plusOneNames, setPlusOneNames] = useState<string[]>([]);
+
+  const offerRsvp = canRsvp && !alreadyAttending;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,6 +62,7 @@ export function Guestbook({
 
     setSubmitting(true);
     setError(null);
+    setNotice(null);
     try {
       // The photo goes straight to R2 via a presigned PUT; only the resulting
       // key is sent to the API.
@@ -52,6 +73,10 @@ export function Guestbook({
         authorName: knownName ? undefined : authorName.trim(),
         body: body.trim() || null,
         imageKey,
+        email: email.trim() || null,
+        // Sent only when the guest opted in — undefined leaves the guest list
+        // untouched on the server.
+        ...(alsoAttending ? { plusOnes, plusOneNames } : {}),
       });
 
       // Optimistically prepend without the image URL: the presigned GET for a
@@ -62,6 +87,20 @@ export function Guestbook({
       setBody("");
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
+
+      if (created.rsvpRecorded) {
+        setNotice(
+          `Thanks — your message is up, and the host knows ${
+            1 + plusOnes === 1 ? "you're" : `${1 + plusOnes} of you are`
+          } coming.`,
+        );
+        setAlsoAttending(false);
+      }
+      // A first-time responder gets a token back; put it in the URL so they can
+      // come back and change the RSVP they just made.
+      if (created.inviteToken && !token) {
+        router.replace(`/e/${slug}?t=${created.inviteToken}`);
+      }
       router.refresh();
     } catch (err) {
       const code = err instanceof ApiError ? err.code : "request_failed";
@@ -95,6 +134,19 @@ export function Guestbook({
           </div>
         ) : null}
 
+        <div className="space-y-1.5">
+          <Label htmlFor="gb-email">Email (optional)</Label>
+          <Input
+            id="gb-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            placeholder="you@example.com"
+          />
+          <p className="ev-muted text-xs">Shared with the host only — never shown on this page.</p>
+        </div>
+
         <Textarea
           aria-label="Your message"
           placeholder="Say something nice…"
@@ -103,6 +155,70 @@ export function Guestbook({
           rows={3}
           maxLength={2000}
         />
+
+        {offerRsvp ? (
+          <div className="rounded-xl border border-black/10 p-3">
+            <label className="flex items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={alsoAttending}
+                onChange={(e) => {
+                  setAlsoAttending(e.target.checked);
+                  if (!e.target.checked) {
+                    setPlusOnes(0);
+                    setPlusOneNames([]);
+                  }
+                }}
+                className="mt-0.5 size-4 shrink-0 rounded"
+              />
+              <span className="text-sm font-medium">Also let the host know I&apos;m coming</span>
+            </label>
+
+            {alsoAttending ? (
+              <div className="mt-3 space-y-2 pl-6">
+                {maxPlusOnes > 0 ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="gb-plus-ones">
+                      Bringing anyone? (up to {maxPlusOnes})
+                    </Label>
+                    <Input
+                      id="gb-plus-ones"
+                      type="number"
+                      min={0}
+                      max={maxPlusOnes}
+                      value={plusOnes}
+                      onChange={(e) => {
+                        const next = Math.max(0, Math.min(maxPlusOnes, Number(e.target.value) || 0));
+                        setPlusOnes(next);
+                        setPlusOneNames((prev) =>
+                          Array.from({ length: next }, (_, i) => prev[i] ?? ""),
+                        );
+                      }}
+                    />
+                  </div>
+                ) : null}
+
+                {plusOnes > 0
+                  ? Array.from({ length: plusOnes }, (_, i) => (
+                      <Input
+                        key={i}
+                        value={plusOneNames[i] ?? ""}
+                        onChange={(e) =>
+                          setPlusOneNames((prev) => {
+                            const next = [...prev];
+                            next[i] = e.target.value;
+                            return next;
+                          })
+                        }
+                        placeholder={`Guest ${i + 2}`}
+                        aria-label={`Name of guest ${i + 2}`}
+                      />
+                    ))
+                  : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap items-center gap-3">
           {photosEnabled ? (
@@ -151,6 +267,12 @@ export function Guestbook({
             Post
           </Button>
         </div>
+
+        {notice ? (
+          <p className="text-sm" style={{ color: "var(--ev-accent)" }}>
+            {notice}
+          </p>
+        ) : null}
 
         {error ? (
           <p role="alert" className="text-sm text-red-600">

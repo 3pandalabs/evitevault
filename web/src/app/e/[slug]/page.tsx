@@ -194,6 +194,10 @@ export default async function InvitationPage({ params, searchParams }: PageProps
                 initialPosts={posts}
                 photosEnabled={event.guestbook.photosEnabled}
                 knownName={event.you?.name ?? null}
+                knownEmail={event.you?.email ?? null}
+                alreadyAttending={event.you?.rsvpStatus === "attending"}
+                canRsvp={event.rsvp.canRespond}
+                maxPlusOnes={event.rsvp.allowPlusOnes ? event.rsvp.maxPlusOnes : 0}
               />
             </section>
           ) : null}

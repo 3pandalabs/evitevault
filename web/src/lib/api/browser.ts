@@ -63,14 +63,31 @@ export function submitRsvp(slug: string, input: RsvpInput) {
   });
 }
 
-export function postGuestbookEntry(
-  slug: string,
-  input: { token?: string; authorName?: string; body?: string | null; imageKey?: string | null },
-) {
-  return request<{ id: string; authorName: string; body: string | null; createdAt: string }>(
-    `/public/events/${encodeURIComponent(slug)}/guestbook`,
-    { method: "POST", body: JSON.stringify(input) },
-  );
+export type GuestbookInput = {
+  token?: string;
+  authorName?: string;
+  body?: string | null;
+  imageKey?: string | null;
+  // Optional attendance details carried alongside the message. Omitted
+  // entirely when the guest doesn't fill them in, so a plain message never
+  // touches the guest list.
+  email?: string | null;
+  plusOnes?: number;
+  plusOneNames?: string[];
+};
+
+export function postGuestbookEntry(slug: string, input: GuestbookInput) {
+  return request<{
+    id: string;
+    authorName: string;
+    body: string | null;
+    createdAt: string;
+    rsvpRecorded: boolean;
+    inviteToken?: string;
+  }>(`/public/events/${encodeURIComponent(slug)}/guestbook`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 // Two steps: ask the API for a presigned PUT, then upload straight to R2. The
