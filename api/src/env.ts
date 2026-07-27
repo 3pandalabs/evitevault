@@ -35,10 +35,18 @@ export const env = {
   // normally, so a missing ops secret can't take a deploy down.
   METRICS_TOKEN: process.env.METRICS_TOKEN ?? "",
 
-  // Outbound email for invitations/announcements. Unset in dev (and right now
-  // in prod too) — see lib/mailer.ts: sends are logged instead of delivered,
-  // and the announcement still records what it would have sent.
+  // Outbound email via Cloudflare Email Sending (REST API — this is a Node
+  // process, not a Worker, so the send_email binding isn't available).
+  //
+  // All optional. With any of them unset, sends are logged and counted as
+  // skipped rather than throwing: guests are already saved by then, and losing
+  // a host's guest list because an ops secret is missing would be a far worse
+  // failure than an undelivered invitation. See lib/mailer.ts.
+  //
+  // The sending domain must be onboarded first (`wrangler email sending enable
+  // <domain>`), and the token needs the email sending permission.
   EMAIL_FROM: process.env.EMAIL_FROM ?? "",
-  EMAIL_API_URL: process.env.EMAIL_API_URL ?? "",
+  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "EviteVault",
+  EMAIL_ACCOUNT_ID: process.env.EMAIL_ACCOUNT_ID ?? "",
   EMAIL_API_TOKEN: process.env.EMAIL_API_TOKEN ?? "",
 };

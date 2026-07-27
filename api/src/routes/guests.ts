@@ -1,10 +1,27 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
-import { guests, rsvpLog } from "../db/schema.js";
+import { guests, rsvpLog, type Event, type Guest } from "../db/schema.js";
+import { buildInvitationEmail } from "../lib/emails/invitation.js";
+import { mailerConfigured, sendMail, type SendResult } from "../lib/mailer.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
+
+// Building each message renders a QR PNG, so this is a little more than string
+// concatenation — but still far cheaper than the send itself, which is what the
+// mailer batches.
+async function sendInvitations(
+  event: Event,
+  recipients: Guest[],
+  log: (msg: string) => void,
+): Promise<SendResult> {
+  const withEmail = recipients.filter((g) => g.email);
+  if (withEmail.length === 0) return { delivered: 0, failed: 0, skipped: 0 };
+
+  const messages = await Promise.all(withEmail.map((g) => buildInvitationEmail(event, g)));
+  return sendMail(messages, log);
+}
 
 const eventParams = z.object({ eventId: z.string().uuid() });
 const guestParams = eventParams.extend({ guestId: z.string().uuid() });
@@ -66,16 +83,21 @@ export async function guestRoutes(app: FastifyInstance) {
         body: z.object({
           guests: z.array(guestInput).min(1).max(500),
           markInvited: z.boolean().default(false),
+          // Defaults on: a host adding a guest with an email address means to
+          // invite them. Set false to build a list quietly and send later.
+          sendInvites: z.boolean().default(true),
         }),
       },
     },
     async (req, reply) => {
       const { eventId } = req.params as z.infer<typeof eventParams>;
-      const { guests: input, markInvited } = req.body as {
+      const { guests: input, markInvited, sendInvites } = req.body as {
         guests: z.infer<typeof guestInput>[];
         markInvited: boolean;
+        sendInvites: boolean;
       };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      if (!event) return;
 
       // Dedupe within the request too. The uq_guests_event_email index catches
       // collisions against existing rows, but a single INSERT containing the
@@ -107,11 +129,93 @@ export async function guestRoutes(app: FastifyInstance) {
         .onConflictDoNothing()
         .returning();
 
+      // Only for a published event. Emailing an invitation whose link 404s is
+      // worse than not emailing at all — and unlike the link, an email can't be
+      // taken back once it's out.
+      const mailed =
+        sendInvites && event.status === "published"
+          ? await sendInvitations(event, inserted, (m) => req.log.info({ eventId }, m))
+          : { delivered: 0, failed: 0, skipped: 0 };
+
       return reply.code(201).send({
         added: inserted.length,
         skipped: input.length - inserted.length,
+        emailed: mailed.delivered,
+        emailsFailed: mailed.failed + mailed.skipped,
+        // So the dashboard can say "added, but email isn't set up" rather than
+        // implying invitations went out.
+        emailConfigured: mailerConfigured(),
         guests: inserted,
       });
+    },
+  );
+
+  // Re-send to guests who haven't responded — the "I don't think they got it"
+  // button. Deliberately separate from adding guests: the two are different
+  // intents, and conflating them makes a duplicate paste re-mail everyone.
+  app.post(
+    "/events/:eventId/guests/send-invitations",
+    {
+      schema: {
+        params: eventParams,
+        body: z
+          .object({
+            // Default false so the common case can't spam people who already replied.
+            includeResponded: z.boolean().default(false),
+            guestIds: z.array(z.string().uuid()).max(500).optional(),
+          })
+          .default({ includeResponded: false }),
+      },
+    },
+    async (req, reply) => {
+      const { eventId } = req.params as z.infer<typeof eventParams>;
+      const { includeResponded, guestIds } = req.body as {
+        includeResponded: boolean;
+        guestIds?: string[];
+      };
+      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      if (!event) return;
+
+      if (event.status !== "published") {
+        return reply.code(409).send({ error: "event_not_published" });
+      }
+
+      const conditions = [eq(guests.eventId, eventId), isNotNull(guests.email)];
+      if (!includeResponded) conditions.push(eq(guests.rsvpStatus, "pending"));
+      if (guestIds?.length) conditions.push(inArray(guests.id, guestIds));
+
+      const recipients = await db
+        .select()
+        .from(guests)
+        .where(and(...conditions));
+
+      const result = await sendInvitations(event, recipients, (m) =>
+        req.log.info({ eventId }, m),
+      );
+
+      // Mark them invited only once something actually went out, so the column
+      // reflects delivery rather than intent.
+      if (result.delivered > 0) {
+        await db
+          .update(guests)
+          .set({ invitedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(guests.eventId, eventId),
+              inArray(
+                guests.id,
+                recipients.map((r) => r.id),
+              ),
+            ),
+          );
+      }
+
+      return {
+        recipients: recipients.length,
+        delivered: result.delivered,
+        failed: result.failed + result.skipped,
+        emailConfigured: mailerConfigured(),
+      };
     },
   );
 

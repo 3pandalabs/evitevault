@@ -11,6 +11,16 @@ import { loadOwnedEvent } from "../lib/ownership.js";
 const eventParams = z.object({ eventId: z.string().uuid() });
 const AUDIENCES = ["all", "attending", "pending", "maybe", "declined"] as const;
 
+// The announcement body is host-supplied and this markup is delivered to third
+// parties, so it is escaped before interpolation.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export async function announcementRoutes(app: FastifyInstance) {
   app.addHook("onRequest", requireAuth);
 
@@ -66,11 +76,20 @@ export async function announcementRoutes(app: FastifyInstance) {
 
       // Each recipient gets their own personalised link so clicking through
       // from an announcement lands them on their own RSVP, already identified.
-      const messages: Mail[] = recipients.map((r) => ({
-        to: r.email!,
-        subject,
-        text: `${body}\n\n---\n${event.title}\n${env.WEB_ORIGIN}/e/${event.slug}?t=${r.inviteToken}`,
-      }));
+      const messages: Mail[] = recipients.map((r) => {
+        const url = `${env.WEB_ORIGIN}/e/${event.slug}?t=${r.inviteToken}`;
+        return {
+          to: r.email!,
+          subject,
+          text: `${body}\n\n---\n${event.title}\n${url}`,
+          html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;max-width:520px;">
+  <p style="white-space:pre-line;font-size:15px;line-height:1.6;">${escapeHtml(body)}</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
+  <p style="font-size:14px;"><strong>${escapeHtml(event.title)}</strong></p>
+  <p style="font-size:14px;"><a href="${url}" style="color:#b45309;">View the invitation</a></p>
+</div>`,
+        };
+      });
 
       const result = await sendMail(messages, (msg) => req.log.info({ eventId }, msg));
 
