@@ -2,27 +2,37 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { clearTokens, getTokens } from "@/lib/api/host";
 import { Button } from "@/components/ui/button";
 
-// Client-side gate, and deliberately not a security boundary: it only decides
-// what to render. Every dashboard request carries a bearer token that the API
-// validates with requireAuth — that is what actually protects the data. See
-// CLAUDE.md for why there is no middleware/proxy.ts doing this at the edge.
+// localStorage is an external store, so it is read with useSyncExternalStore
+// rather than copied into state inside an effect. Two things fall out of that
+// for free: the server snapshot is always "signed out", so prerender and
+// hydration agree, and signing out in one tab redirects the others, because the
+// `storage` event is a real subscription rather than a one-shot read on mount.
+function subscribe(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  return () => window.removeEventListener("storage", onChange);
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [ready, setReady] = useState(false);
 
+  const signedIn = useSyncExternalStore(
+    subscribe,
+    () => getTokens().access !== null,
+    () => false,
+  );
+
+  // A gate on what renders, NOT a security boundary. Every dashboard request
+  // carries a bearer token the API validates with requireAuth — that is what
+  // actually protects the data. See CLAUDE.md for why there's no middleware.
   useEffect(() => {
-    if (!getTokens().access) {
-      router.replace("/login");
-      return;
-    }
-    setReady(true);
-  }, [router]);
+    if (!signedIn) router.replace("/login");
+  }, [signedIn, router]);
 
-  if (!ready) return null;
+  if (!signedIn) return null;
 
   return (
     <div className="min-h-screen">
