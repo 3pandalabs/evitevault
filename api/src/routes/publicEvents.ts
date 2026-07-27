@@ -15,6 +15,8 @@ import {
 } from "../db/schema.js";
 import { currentHour, visitorHash } from "../lib/analytics.js";
 import { buildIcs, googleCalendarUrl } from "../lib/ics.js";
+import { buildRsvpConfirmationEmail } from "../lib/emails/rsvpConfirmation.js";
+import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { resolveTheme } from "../lib/theme.js";
 import { env } from "../env.js";
 import {
@@ -154,6 +156,29 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
         }
       : null,
   };
+}
+
+// Confirmation to the guest, after they respond.
+//
+// Fire-and-forget on purpose: a guest tapping "Going" should not wait on an
+// outbound HTTP call, and a mail failure must never turn a recorded RSVP into
+// an error they'd retry. The RSVP is already committed by this point.
+//
+// Only sent when the STATUS changed. A guest nudging their party size from two
+// to three doesn't need another email, and someone toggling while they make up
+// their mind shouldn't get one per tap.
+function sendRsvpConfirmation(
+  req: FastifyRequest,
+  event: Event,
+  guest: Guest,
+  previousStatus: string | null,
+) {
+  if (!guest.email || guest.rsvpStatus === previousStatus) return;
+  if (!mailerConfigured()) return;
+
+  sendMail([buildRsvpConfirmationEmail(event, guest)], (m) =>
+    req.log.info({ eventId: event.id }, m),
+  ).catch((err) => req.log.warn({ err }, "rsvp confirmation not sent"));
 }
 
 // Fire-and-forget so a slow analytics write never delays the invitation
@@ -327,6 +352,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
           .returning();
 
         await db.insert(rsvpLog).values(rsvpLogValues(updated.id, event.id, guest.rsvpStatus, updated));
+        sendRsvpConfirmation(req, event, updated, guest.rsvpStatus);
         return {
           ok: true,
           status: updated.rsvpStatus,
@@ -376,6 +402,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
         .returning();
 
       await db.insert(rsvpLog).values(rsvpLogValues(created.id, event.id, null, created));
+      sendRsvpConfirmation(req, event, created, null);
 
       // The new guest gets their own token back so they can return and amend
       // their answer — it is the only way an open-RSVP responder can edit.
