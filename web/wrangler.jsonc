@@ -15,6 +15,16 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // wrangler creates and maintains the DNS record for a custom_domain route
+  // itself — do NOT also add a manual record for this hostname in the
+  // Cloudflare dashboard. (The two api.* records are a different case: they
+  // point at the Hetzner box, not at a Worker, so they are managed by hand.)
+  "routes": [
+    {
+      "pattern": "evitevault.3pandalabs.com",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "NEXT_PUBLIC_API_URL": "https://api.evitevault.3pandalabs.com",
     "NEXT_PUBLIC_SITE_URL": "https://evitevault.3pandalabs.com",
