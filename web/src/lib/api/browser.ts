@@ -68,12 +68,9 @@ export type GuestbookInput = {
   authorName?: string;
   body?: string | null;
   imageKey?: string | null;
-  // Optional attendance details carried alongside the message. Omitted
-  // entirely when the guest doesn't fill them in, so a plain message never
-  // touches the guest list.
+  // Contact address only. Attendance belongs to the RSVP form — collecting it
+  // here as well meant two write paths into the same guest data.
   email?: string | null;
-  plusOnes?: number;
-  plusOneNames?: string[];
 };
 
 export function postGuestbookEntry(slug: string, input: GuestbookInput) {
@@ -82,8 +79,6 @@ export function postGuestbookEntry(slug: string, input: GuestbookInput) {
     authorName: string;
     body: string | null;
     createdAt: string;
-    rsvpRecorded: boolean;
-    inviteToken?: string;
   }>(`/public/events/${encodeURIComponent(slug)}/guestbook`, {
     method: "POST",
     body: JSON.stringify(input),

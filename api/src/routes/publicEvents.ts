@@ -457,13 +457,11 @@ export async function publicEventRoutes(app: FastifyInstance) {
           authorName: z.string().min(1).max(120).optional(),
           body: z.string().max(2000).nullish(),
           imageKey: z.string().max(300).nullish(),
-          // Signing the guestbook can double as telling the host you're
-          // coming. Optional throughout: someone who only wants to leave a
-          // message must never be silently RSVP'd, so the guest record is only
-          // touched when these are actually filled in.
+          // Optional contact address, so a host can reach someone who left a
+          // message. Attendance is NOT collected here — the RSVP form owns
+          // that, and asking twice produced two write paths into the same
+          // guest data for no benefit.
           email: z.string().email().max(320).nullish(),
-          plusOnes: z.number().int().min(0).max(20).optional(),
-          plusOneNames: z.array(z.string().max(200)).max(20).optional(),
         }),
       },
     },
@@ -501,94 +499,24 @@ export async function publicEventRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "invalid_image_key" });
       }
 
-      // --- optional RSVP carried on the guestbook post ----------------------
-      // Only runs when the guest actually supplied attendance details. A bare
-      // message leaves the guest list untouched — posting "congratulations"
-      // must never quietly mark someone as attending.
       const email = body.email?.trim().toLowerCase() || null;
-      const declaresAttendance = body.plusOnes !== undefined;
-      let rsvpRecorded = false;
 
-      if ((email || declaresAttendance) && !rsvpClosed(event)) {
-        const plusOnes =
-          declaresAttendance && event.allowPlusOnes
-            ? Math.min(body.plusOnes!, event.maxPlusOnes)
-            : 0;
-        const plusOneNames = declaresAttendance
-          ? (body.plusOneNames ?? []).map((n) => n.trim()).filter(Boolean).slice(0, plusOnes)
-          : null;
-        const now = new Date();
-
-        if (guest) {
-          // Never downgrade an existing answer. Someone who already declined
-          // and then leaves a kind message stays declined.
-          const nextStatus = declaresAttendance ? "attending" : guest.rsvpStatus;
-          const [updated] = await db
+      // If the poster came through their own link and the host has no address
+      // for them, fill it in. Deliberately the only guest-record write this
+      // route makes: it never changes an RSVP, never creates a guest, and never
+      // overwrites an address already on file. Leaving a message is not
+      // responding to an invitation.
+      if (guest && email && !guest.email) {
+        const [clash] = await db
+          .select({ id: guests.id })
+          .from(guests)
+          .where(and(eq(guests.eventId, event.id), sql`lower(${guests.email}) = ${email}`))
+          .limit(1);
+        if (!clash) {
+          await db
             .update(guests)
-            .set({
-              email: email ?? guest.email,
-              ...(declaresAttendance
-                ? { rsvpStatus: nextStatus, plusOnes, plusOneNames, respondedAt: now }
-                : {}),
-              updatedAt: now,
-            })
-            .where(eq(guests.id, guest.id))
-            .returning();
-
-          if (declaresAttendance && guest.rsvpStatus !== "attending") {
-            await db
-              .insert(rsvpLog)
-              .values(rsvpLogValues(updated.id, event.id, guest.rsvpStatus, updated));
-          }
-          guest = updated;
-          rsvpRecorded = declaresAttendance;
-        } else if (event.allowPublicRsvp && declaresAttendance) {
-          // Match an existing invitee by email rather than creating a duplicate
-          // — but only ever fill in their details, never overwrite a response
-          // they already gave through their own link.
-          const existing = email
-            ? (
-                await db
-                  .select()
-                  .from(guests)
-                  .where(and(eq(guests.eventId, event.id), sql`lower(${guests.email}) = ${email}`))
-                  .limit(1)
-              )[0]
-            : undefined;
-
-          if (existing) {
-            if (existing.rsvpStatus === "pending") {
-              const [updated] = await db
-                .update(guests)
-                .set({ rsvpStatus: "attending", plusOnes, plusOneNames, respondedAt: now, updatedAt: now })
-                .where(eq(guests.id, existing.id))
-                .returning();
-              await db
-                .insert(rsvpLog)
-                .values(rsvpLogValues(updated.id, event.id, existing.rsvpStatus, updated));
-              guest = updated;
-              rsvpRecorded = true;
-            } else {
-              guest = existing;
-            }
-          } else {
-            const [createdGuest] = await db
-              .insert(guests)
-              .values({
-                eventId: event.id,
-                name: authorName,
-                email,
-                rsvpStatus: "attending",
-                plusOnes,
-                plusOneNames,
-                source: "public",
-                respondedAt: now,
-              })
-              .returning();
-            await db.insert(rsvpLog).values(rsvpLogValues(createdGuest.id, event.id, null, createdGuest));
-            guest = createdGuest;
-            rsvpRecorded = true;
-          }
+            .set({ email, updatedAt: new Date() })
+            .where(eq(guests.id, guest.id));
         }
       }
 
@@ -598,6 +526,11 @@ export async function publicEventRoutes(app: FastifyInstance) {
           eventId: event.id,
           guestId: guest?.id ?? null,
           authorName,
+          // Stored on the post, not as a new guest row. An anonymous
+          // well-wisher isn't an invitee, and adding them to the guest list as
+          // "pending" would both imply they were invited and skew the host's
+          // response-rate figure.
+          authorEmail: email,
           body: body.body?.trim() || null,
           imageKey: body.imageKey ?? null,
         })
@@ -608,14 +541,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
           createdAt: guestbookPosts.createdAt,
         });
 
-      return reply.code(201).send({
-        ...created,
-        // So the UI can confirm what actually happened rather than guessing.
-        rsvpRecorded,
-        // A newly created guest gets their token back — the only way they can
-        // return and amend the RSVP they just made.
-        inviteToken: rsvpRecorded && !body.token ? guest?.inviteToken : undefined,
-      });
+      return reply.code(201).send(created);
     },
   );
 
@@ -647,10 +573,6 @@ export async function publicEventRoutes(app: FastifyInstance) {
       return { key, uploadUrl: await presignUpload(key, contentType) };
     },
   );
-}
-
-function rsvpClosed(event: Event): boolean {
-  return event.rsvpDeadline !== null && event.rsvpDeadline.getTime() < Date.now();
 }
 
 // Small helper so the two RSVP paths can't drift on what gets logged.

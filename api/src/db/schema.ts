@@ -269,6 +269,12 @@ export const guestbookPosts = pgTable(
     guestId: uuid("guest_id").references(() => guests.id, { onDelete: "set null" }),
     // Denormalised so a post keeps its byline if the guest row is deleted.
     authorName: text("author_name").notNull(),
+    // Optional contact address for whoever left the message. Kept here rather
+    // than creating a guest row: an anonymous well-wisher is not an invitee,
+    // and adding them to the guest list as "pending" would imply they were
+    // invited and skew the host's response-rate figure. Never returned by the
+    // public read — only the host's moderation view sees it.
+    authorEmail: text("author_email"),
     body: text("body"),
     // R2 object key for an attached photo — never a URL. The API mints a
     // short-lived presigned GET when rendering, so an object can't be hotlinked
