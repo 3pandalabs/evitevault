@@ -116,6 +116,7 @@ export type GuestRow = {
   phone: string | null;
   rsvpStatus: "pending" | "attending" | "declined" | "maybe";
   plusOnes: number;
+  plusOneNames: string[] | null;
   dietaryNotes: string | null;
   message: string | null;
   source: "invited" | "public";
