@@ -35,18 +35,19 @@ export const env = {
   // normally, so a missing ops secret can't take a deploy down.
   METRICS_TOKEN: process.env.METRICS_TOKEN ?? "",
 
-  // Outbound email via Cloudflare Email Sending (REST API — this is a Node
-  // process, not a Worker, so the send_email binding isn't available).
+  // Outbound email goes through the shared org gateway (3pandalabs/mailer), a
+  // Cloudflare Worker using the send_email binding. Deliberately NOT a
+  // Cloudflare API token: the binding authenticates implicitly, so no provider
+  // credential exists in this app's environment at all. MAILER_TOKEN grants
+  // exactly one capability — send as evitevault's configured sender.
   //
-  // All optional. With any of them unset, sends are logged and counted as
-  // skipped rather than throwing: guests are already saved by then, and losing
-  // a host's guest list because an ops secret is missing would be a far worse
-  // failure than an undelivered invitation. See lib/mailer.ts.
-  //
-  // The sending domain must be onboarded first (`wrangler email sending enable
-  // <domain>`), and the token needs the email sending permission.
-  EMAIL_FROM: process.env.EMAIL_FROM ?? "",
+  // Both optional. Unset means sends are logged and counted as skipped rather
+  // than throwing: guests are already saved by then, and losing a host's guest
+  // list to a missing ops secret would be a far worse failure than an
+  // undelivered invitation. See lib/mailer.ts.
+  MAILER_URL: process.env.MAILER_URL ?? "",
+  MAILER_TOKEN: process.env.MAILER_TOKEN ?? "",
+  // Display name only. The from ADDRESS lives in the gateway's APP_SENDERS, so
+  // it isn't duplicated here and can't drift.
   EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "EviteVault",
-  EMAIL_ACCOUNT_ID: process.env.EMAIL_ACCOUNT_ID ?? "",
-  EMAIL_API_TOKEN: process.env.EMAIL_API_TOKEN ?? "",
 };

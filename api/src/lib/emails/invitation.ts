@@ -136,7 +136,9 @@ export async function buildInvitationEmail(event: Event, guest: Guest): Promise<
         filename: "rsvp-qr.png",
         type: "image/png",
         disposition: "inline",
-        content_id: "invite-qr",
+        // camelCase: the gateway mirrors the Workers binding's naming, not the
+        // REST API's `content_id`.
+        contentId: "invite-qr",
       },
     ],
   };
