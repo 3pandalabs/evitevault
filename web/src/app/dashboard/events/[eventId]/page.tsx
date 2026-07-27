@@ -21,7 +21,9 @@ import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
+import { formatEventDate, formatEventTime } from "@/lib/utils";
 import { EventQrCode } from "./qr-code";
+import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -201,6 +203,32 @@ export default function EventDetailPage() {
         </div>
       </div>
 
+      {event.status === "published" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Send className="size-4 text-slate-400" />
+              Invite people
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ShareButtons
+              url={invitationUrl}
+              subject={event.title}
+              message={buildInviteMessage({
+                title: event.title,
+                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)}`,
+                url: invitationUrl,
+              })}
+            />
+            <p className="mt-3 text-sm text-slate-500">
+              These open your own WhatsApp, mail app or messages — the invitation comes from you,
+              not from us. Nothing is sent automatically, and there&apos;s no sending limit.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Only for a published event — a QR pointing at a draft would scan to a
           404, and printing one is the sort of mistake you find out about from a
           guest standing in your hallway. */}
@@ -376,17 +404,26 @@ export default function EventDetailPage() {
                       <td className="py-3">
                         <div className="flex items-center gap-1">
                           {g.firstViewedAt ? (
-                            <Eye className="size-3.5 text-slate-400" aria-label="Has opened the invitation" />
+                            <Eye
+                              className="size-3.5 shrink-0 text-slate-400"
+                              aria-label="Has opened the invitation"
+                            />
                           ) : null}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              copy(`${invitationUrl}?t=${g.inviteToken}`, g.id)
-                            }
-                          >
-                            {copied === g.id ? "Copied" : "Copy"}
-                          </Button>
+                          {/* Each guest's own link, so their reply arrives
+                              already attributed to them rather than as a
+                              stranger filling in the open form. */}
+                          <GuestShareButtons
+                            url={`${invitationUrl}?t=${g.inviteToken}`}
+                            subject={event.title}
+                            email={g.email}
+                            phone={g.phone}
+                            message={buildInviteMessage({
+                              title: event.title,
+                              whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)}`,
+                              url: `${invitationUrl}?t=${g.inviteToken}`,
+                              guestName: g.name.split(" ")[0],
+                            })}
+                          />
                         </div>
                       </td>
                     </tr>
