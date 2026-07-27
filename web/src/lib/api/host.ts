@@ -59,7 +59,12 @@ export async function hostFetch<T>(path: string, init: RequestInit = {}): Promis
     fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        "content-type": "application/json",
+        // Only when there IS a body. Fastify rejects a request that declares
+        // application/json and then sends nothing (FST_ERR_CTP_EMPTY_JSON_BODY)
+        // before routing it, so a bodyless POST — publish, and any other
+        // action-shaped endpoint — failed with a generic error that looked like
+        // the route was missing.
+        ...(init.body ? { "content-type": "application/json" } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(init.headers ?? {}),
       },

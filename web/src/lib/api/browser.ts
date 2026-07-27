@@ -18,7 +18,11 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+    // Declared only when a body is actually sent — see the note in host.ts.
+    headers: {
+      ...(init.body ? { "content-type": "application/json" } : {}),
+      ...(init.headers ?? {}),
+    },
   });
 
   if (!res.ok) {

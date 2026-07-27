@@ -54,8 +54,18 @@ app.setErrorHandler((err: FastifyError & { code?: string }, req, reply) => {
   if (err.validation) {
     return reply.code(400).send({ error: "invalid_request", details: err.validation });
   }
+  // Anything Fastify itself rejected before the handler ran — an empty body
+  // declared as application/json, an unsupported content type, a payload over
+  // the limit. These carry a 4xx statusCode already, and answering
+  // "internal_error" for them actively misleads: it points debugging at the
+  // server when the request was malformed. FST_ERR_CTP_EMPTY_JSON_BODY reached
+  // production this way on 2026-07-27 and read as a missing route.
+  const status = err.statusCode ?? 500;
+  if (status < 500) {
+    return reply.code(status).send({ error: err.code ?? "bad_request" });
+  }
   req.log.error(err);
-  return reply.code(err.statusCode ?? 500).send({ error: "internal_error" });
+  return reply.code(status).send({ error: "internal_error" });
 });
 
 await app.register(authRoutes);
