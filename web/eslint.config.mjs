@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build output from @opennextjs/cloudflare. Not in eslint-config-next's
+    // defaults, so without this `npm run lint` reports thousands of findings in
+    // generated bundles and buries the handful in src/.
+    ".open-next/**",
+    ".wrangler/**",
   ]),
 ]);
 

@@ -1,20 +1,25 @@
 "use client";
 
-import { Copy, Download, Eye, Loader2, Users } from "lucide-react";
+import { Copy, Download, Eye, ImagePlus, Loader2, Plus, Send, Users } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  addGuests,
   downloadGuestCsv,
   getAnalytics,
   getEvent,
   listGuests,
+  publishEvent,
+  uploadCoverImage,
   type Analytics,
   type EventSummary,
   type GuestRow,
 } from "@/lib/api/host";
+import { ApiError } from "@/lib/api/browser";
 import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/input";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -26,6 +31,13 @@ export default function EventDetailPage() {
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [bulkGuests, setBulkGuests] = useState("");
+  const [addingGuests, setAddingGuests] = useState(false);
+  const [addResult, setAddResult] = useState<string | null>(null);
+  const coverRef = useRef<HTMLInputElement>(null);
+
 
   const load = useCallback(async () => {
     try {
@@ -45,8 +57,64 @@ export default function EventDetailPage() {
   }, [eventId]);
 
   useEffect(() => {
+    // react-hooks/set-state-in-effect can't see that load() awaits before its
+    // first setState — the rule targets synchronous cascading renders, and
+    // there are none here. Fetching on mount is what an effect is for.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  async function onPublish() {
+    setPublishing(true);
+    setError(null);
+    try {
+      await publishEvent(eventId);
+      await load();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "incomplete_event") {
+        setError("Add a title and a date before publishing.");
+      } else {
+        setError("Couldn't publish this event.");
+      }
+    } finally {
+      setPublishing(false);
+    }
+  }
+
+  async function onAddGuests() {
+    setAddingGuests(true);
+    setError(null);
+    setAddResult(null);
+    try {
+      // "Name, email" per line, email optional — a guest with no address is
+      // legitimate (invited by hand, or over the phone), and the API only
+      // requires a name.
+      const parsed = bulkGuests
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [name, email] = line.split(",").map((s) => s.trim());
+          return { name, email: email || null };
+        })
+        .filter((g) => g.name);
+
+      if (parsed.length === 0) return;
+
+      const res = await addGuests(eventId, parsed);
+      setBulkGuests("");
+      setAddResult(
+        res.skipped > 0
+          ? `Added ${res.added}. Skipped ${res.skipped} already on the list.`
+          : `Added ${res.added}.`,
+      );
+      await load();
+    } catch {
+      setError("Couldn't add those guests.");
+    } finally {
+      setAddingGuests(false);
+    }
+  }
 
   if (error) return <p className="text-sm text-red-600">{error}</p>;
   if (!event || !analytics) {
@@ -69,20 +137,113 @@ export default function EventDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{event.title}</h1>
-          <div className="mt-2 flex items-center gap-2">
-            <code className="rounded bg-slate-100 px-2 py-1 text-xs">{invitationUrl}</code>
-            <Button variant="ghost" size="sm" onClick={() => copy(invitationUrl, "link")}>
-              <Copy className="size-3.5" />
-              {copied === "link" ? "Copied" : "Copy"}
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">{event.title}</h1>
+            {event.status !== "published" ? <Badge variant="outline">{event.status}</Badge> : null}
+          </div>
+          {event.status === "published" ? (
+            <div className="mt-2 flex items-center gap-2">
+              <code className="rounded bg-slate-100 px-2 py-1 text-xs">{invitationUrl}</code>
+              <Button variant="ghost" size="sm" onClick={() => copy(invitationUrl, "link")}>
+                <Copy className="size-3.5" />
+                {copied === "link" ? "Copied" : "Copy"}
+              </Button>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">
+              This is a draft — the link doesn&apos;t work for guests until you publish it.
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          {event.status !== "published" ? (
+            <Button onClick={onPublish} disabled={publishing}>
+              {publishing ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+              Publish
+            </Button>
+          ) : null}
+          <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>
+            <Download className="size-4" />
+            Download CSV
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardTitle className="flex items-center gap-2">
+            <ImagePlus className="size-4 text-slate-400" />
+            Cover image
+          </CardTitle>
+          <div>
+            <input
+              ref={coverRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setUploading(true);
+                setError(null);
+                try {
+                  await uploadCoverImage(eventId, file);
+                  await load();
+                } catch {
+                  setError("Couldn't upload that image.");
+                } finally {
+                  setUploading(false);
+                  e.target.value = "";
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={uploading}
+              onClick={() => coverRef.current?.click()}
+            >
+              {uploading ? <Loader2 className="size-4 animate-spin" /> : null}
+              {event.coverImageKey ? "Replace" : "Upload"}
             </Button>
           </div>
-        </div>
-        <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>
-          <Download className="size-4" />
-          Download CSV
-        </Button>
-      </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-500">
+            {event.coverImageKey
+              ? "A cover image is set. Replacing it deletes the old one."
+              : "Optional. JPEG, PNG, WebP or AVIF, up to 10MB."}
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Invite guests</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {/* One textarea rather than a repeating row form: hosts arrive with a
+              list already written down somewhere, and retyping it into
+              individual fields is the friction that stops them inviting anyone. */}
+          <Textarea
+            rows={4}
+            value={bulkGuests}
+            onChange={(e) => setBulkGuests(e.target.value)}
+            placeholder={"One per line:\nMeera Iyer, meera@example.com\nSanjay Rao"}
+          />
+          <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
+            {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+            Add guests
+          </Button>
+          {addResult ? <p className="text-sm text-slate-600">{addResult}</p> : null}
+        </CardContent>
+      </Card>
+
+      {error ? (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Going" value={`${analytics.rsvp.headcount}`} hint={`${analytics.rsvp.attending} responded yes`} />

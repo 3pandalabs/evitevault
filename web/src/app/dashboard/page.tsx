@@ -1,12 +1,13 @@
 "use client";
 
-import { CalendarDays, Loader2, MapPin, Users } from "lucide-react";
+import { CalendarDays, Loader2, MapPin, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import { listEvents, type EventSummary } from "@/lib/api/host";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatEventDate, formatRelative } from "@/lib/utils";
 
@@ -42,6 +43,12 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Your events</h1>
+        <Link href="/dashboard/events/new">
+          <Button>
+            <Plus className="size-4" />
+            New event
+          </Button>
+        </Link>
       </div>
 
       {events.length === 0 ? (
@@ -51,6 +58,12 @@ export default function DashboardPage() {
             <p className="mt-1 text-sm text-slate-500">
               Create your first invitation to start collecting RSVPs.
             </p>
+            <Link href="/dashboard/events/new" className="mt-4 inline-block">
+              <Button>
+                <Plus className="size-4" />
+                New event
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       ) : (

@@ -88,6 +88,9 @@ export type EventSummary = {
   endsAt: string | null;
   timezone: string;
   locationName: string | null;
+  // Present on GET /events/:id (the full row) but not on the list projection,
+  // which selects only what the dashboard cards render.
+  coverImageKey?: string | null;
   status: "draft" | "published" | "cancelled" | "archived";
   capacity: number | null;
   invited: number;
@@ -130,6 +133,78 @@ export type Analytics = {
   };
   responseRate: number;
 };
+
+export type Template = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  theme: {
+    palette: { bg: string; surface: string; text: string; muted: string; accent: string; accentText: string };
+    fonts: { heading: string; body: string };
+    layout: string;
+  };
+};
+
+export type EventInput = {
+  title: string;
+  description?: string | null;
+  hostDisplayName?: string | null;
+  startsAt: string;
+  endsAt?: string | null;
+  timezone: string;
+  locationName?: string | null;
+  locationAddress?: string | null;
+  locationMapUrl?: string | null;
+  templateId?: string | null;
+  rsvpDeadline?: string | null;
+  allowPlusOnes?: boolean;
+  maxPlusOnes?: number;
+  capacity?: number | null;
+  collectDietary?: boolean;
+  allowPublicRsvp?: boolean;
+  guestbookEnabled?: boolean;
+  guestPhotosEnabled?: boolean;
+  showGuestList?: boolean;
+};
+
+export const listTemplates = () => hostFetch<{ templates: Template[] }>("/templates");
+
+export const createEvent = (input: EventInput) =>
+  hostFetch<{ id: string; slug: string }>("/events", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+
+export const updateEvent = (id: string, patch: Partial<EventInput> & { coverImageKey?: string | null }) =>
+  hostFetch<EventSummary>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const publishEvent = (id: string) =>
+  hostFetch<EventSummary>(`/events/${id}/publish`, { method: "POST" });
+
+export const deleteEvent = (id: string) => hostFetch<void>(`/events/${id}`, { method: "DELETE" });
+
+// Cover art can only be uploaded after the event exists — the R2 key is scoped
+// to the event id, so there is nothing to presign against beforehand. The
+// create form therefore saves first and offers the upload on the detail page.
+export async function uploadCoverImage(eventId: string, file: File): Promise<string> {
+  const { key, uploadUrl } = await hostFetch<{ key: string; uploadUrl: string }>(
+    `/events/${eventId}/cover/presign-upload`,
+    { method: "POST", body: JSON.stringify({ contentType: file.type }) },
+  );
+
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    // Must match the content type pinned into the signature, or R2 rejects it.
+    headers: { "content-type": file.type },
+    body: file,
+  });
+  if (!put.ok) throw new ApiError(put.status, "upload_failed");
+
+  await updateEvent(eventId, { coverImageKey: key });
+  return key;
+}
 
 export const listEvents = () => hostFetch<{ events: EventSummary[] }>("/events");
 export const getEvent = (id: string) => hostFetch<EventSummary & Record<string, unknown>>(`/events/${id}`);
