@@ -79,6 +79,15 @@ export default function DashboardPage() {
                         {ev.status !== "published" ? (
                           <Badge variant="outline">{ev.status}</Badge>
                         ) : null}
+                        {/* The whole point of the feature: a host scanning this
+                            list should be able to see, without opening
+                            anything, which events have moved since they last
+                            looked. */}
+                        {ev.newResponses > 0 ? (
+                          <Badge>
+                            {ev.newResponses} new
+                          </Badge>
+                        ) : null}
                       </div>
                       <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
                         <span className="flex items-center gap-1.5">

@@ -1,23 +1,26 @@
 import { env } from "../env.js";
 
-// Cloudflare Email Sending, via the REST API — this is a Node process on
-// Hetzner, not a Worker, so the `send_email` binding isn't available and a
-// bearer token is the supported path.
+// Sends through the shared org email gateway (3pandalabs/mailer), not directly
+// to a provider.
 //
-// Field names differ from the Workers binding in ways that fail silently if you
-// assume they match: `from` takes `address` (not `email`), `reply_to` is
-// snake_case (not `replyTo`), and inline attachments use `content_id` (not
-// `contentId`).
-
-const ENDPOINT = (accountId: string) =>
-  `https://api.cloudflare.com/client/v4/accounts/${accountId}/email/sending/send`;
+// The gateway is a Cloudflare Worker using the `send_email` binding, which
+// authenticates implicitly — so no Cloudflare API token exists in this app's
+// environment, in Coolify, or anywhere else. This app holds only MAILER_TOKEN,
+// which grants exactly one capability: send email as evitevault's own
+// configured sender address.
+//
+// Templates deliberately stay HERE, not in the gateway. It is a dumb transport;
+// it renders nothing and knows nothing about events, guests or invitations.
 
 export type Attachment = {
-  content: string; // base64
+  content: string; // base64 — the gateway decodes it for the binding
   filename: string;
   type: string;
   disposition: "inline" | "attachment";
-  content_id?: string;
+  // Required when disposition is "inline": without it the image can't be
+  // referenced by a cid: in the HTML and arrives as a dangling file. The
+  // gateway rejects inline attachments that omit it.
+  contentId?: string;
 };
 
 export type Mail = {
@@ -31,38 +34,17 @@ export type Mail = {
 export type SendResult = { delivered: number; failed: number; skipped: number };
 
 export function mailerConfigured(): boolean {
-  return Boolean(env.EMAIL_ACCOUNT_ID && env.EMAIL_API_TOKEN && env.EMAIL_FROM);
+  return Boolean(env.MAILER_URL && env.MAILER_TOKEN);
 }
 
-async function sendOne(mail: Mail): Promise<void> {
-  const res = await fetch(ENDPOINT(env.EMAIL_ACCOUNT_ID), {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${env.EMAIL_API_TOKEN}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      to: mail.to,
-      from: { address: env.EMAIL_FROM, name: env.EMAIL_FROM_NAME || "EviteVault" },
-      subject: mail.subject,
-      // Always both. Some clients only render text, and an HTML-only message
-      // scores worse with spam filters.
-      html: mail.html,
-      text: mail.text,
-      ...(mail.attachments?.length ? { attachments: mail.attachments } : {}),
-    }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`email send failed: ${res.status} ${body.slice(0, 300)}`);
-  }
-}
+// The gateway caps a request at 100 messages; stay well under so a large guest
+// list is several modest requests rather than one that risks a timeout.
+const BATCH = 50;
 
 // Unconfigured sends are logged and counted as skipped rather than throwing.
-// A host clicking "invite" should not lose their guest list because an ops
-// secret is missing — the guests are already saved, and the send can be retried
-// once the provider is wired.
+// Guests are already saved by the time this runs, and losing a host's guest
+// list because an ops secret is missing would be a far worse failure than an
+// undelivered invitation.
 export async function sendMail(messages: Mail[], log: (msg: string) => void): Promise<SendResult> {
   if (!mailerConfigured()) {
     log(`mailer not configured — ${messages.length} message(s) not delivered`);
@@ -72,19 +54,54 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
   let delivered = 0;
   let failed = 0;
 
-  // Batched rather than one Promise.all over the whole list: a 200-guest event
-  // firing 200 simultaneous requests is how an account gets rate-limited on its
-  // first real send.
-  const BATCH = 10;
   for (let i = 0; i < messages.length; i += BATCH) {
-    const results = await Promise.allSettled(messages.slice(i, i + BATCH).map(sendOne));
-    for (const r of results) {
-      if (r.status === "fulfilled") {
-        delivered += 1;
-      } else {
-        failed += 1;
-        log(`mail send failed: ${String(r.reason)}`);
+    const batch = messages.slice(i, i + BATCH);
+    try {
+      const res = await fetch(`${env.MAILER_URL.replace(/\/$/, "")}/send`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.MAILER_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          app: "evitevault",
+          messages: batch.map((m) => ({
+            to: m.to,
+            fromName: env.EMAIL_FROM_NAME || "EviteVault",
+            // `from` is omitted on purpose — the gateway defaults to this app's
+            // configured sender, so the address lives in one place rather than
+            // being duplicated into this app's environment.
+            subject: m.subject,
+            html: m.html,
+            text: m.text,
+            ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+          })),
+        }),
+      });
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        log(`mailer gateway error ${res.status}: ${body.slice(0, 300)}`);
+        failed += batch.length;
+        continue;
       }
+
+      // The gateway answers 200 with per-message outcomes even when some
+      // failed — a partial failure is not a failed request.
+      const result = (await res.json()) as {
+        delivered: number;
+        failed: number;
+        results?: { to: string; ok: boolean; error?: string }[];
+      };
+      delivered += result.delivered;
+      failed += result.failed;
+
+      for (const r of result.results ?? []) {
+        if (!r.ok) log(`mail send failed for ${r.to}: ${r.error ?? "unknown"}`);
+      }
+    } catch (err) {
+      log(`mailer gateway unreachable: ${String(err)}`);
+      failed += batch.length;
     }
   }
 
