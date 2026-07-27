@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, Eye, ImagePlus, Loader2, Mail, Plus, Send, Users } from "lucide-react";
+import { BellDot, Copy, Download, Eye, ImagePlus, Loader2, Mail, Plus, Send, Users } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -9,6 +9,7 @@ import {
   getAnalytics,
   getEvent,
   listGuests,
+  markResponsesSeen,
   publishEvent,
   sendInvitations,
   uploadCoverImage,
@@ -42,6 +43,15 @@ export default function EventDetailPage() {
   const [addResult, setAddResult] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
+  const seenClearedRef = useRef(false);
+  // Captured on first load and held for the session: the server value is
+  // cleared moments later, but the highlights should persist while the host is
+  // still reading the page.
+  //
+  // State rather than a ref because it IS render data — which row gets a dot
+  // depends on it. A ref read during render is the anti-pattern
+  // react-hooks/refs exists to catch.
+  const [seenBaseline, setSeenBaseline] = useState<string | null | undefined>(undefined);
 
 
   const load = useCallback(async () => {
@@ -53,9 +63,24 @@ export default function EventDetailPage() {
         listGuests(eventId),
         getAnalytics(eventId),
       ]);
+      // Functional form so this only takes effect on the first load and
+      // doesn't need to be a dependency of the callback.
+      setSeenBaseline((prev) => (prev === undefined ? ev.responsesSeenAt ?? null : prev));
       setEvent(ev as unknown as EventSummary);
       setGuests(gs.guests);
       setAnalytics(an);
+
+      // Clear the marker only AFTER rendering what was new, and only on the
+      // first load — a refresh triggered by adding guests or publishing
+      // shouldn't wipe responses the host hasn't actually read yet.
+      if (!seenClearedRef.current && (ev.newResponses ?? 0) > 0) {
+        seenClearedRef.current = true;
+        markResponsesSeen(eventId).catch(() => {
+          // Best effort. Failing to clear means they see the badge again,
+          // which is a far better outcome than losing the event data because
+          // a bookkeeping call failed.
+        });
+      }
     } catch {
       setError("Couldn't load this event.");
     }
@@ -160,6 +185,14 @@ export default function EventDetailPage() {
   }
 
   const invitationUrl = `${SITE_URL}/e/${event.slug}`;
+
+  // Compared against the baseline captured on first load, not the live server
+  // value — that gets cleared moments after the page renders, and the
+  // highlights should stay put while the host is reading.
+  const isNewResponse = (g: GuestRow) =>
+    Boolean(g.respondedAt) &&
+    (!seenBaseline || new Date(g.respondedAt!) > new Date(seenBaseline));
+  const newResponses = guests.filter(isNewResponse).length;
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -331,6 +364,18 @@ export default function EventDetailPage() {
         </p>
       ) : null}
 
+      {newResponses > 0 ? (
+        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <BellDot className="size-4 shrink-0" />
+          <span>
+            <strong>
+              {newResponses} new {newResponses === 1 ? "response" : "responses"}
+            </strong>{" "}
+            since you last looked — marked below.
+          </span>
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Going" value={`${analytics.rsvp.headcount}`} hint={`${analytics.rsvp.attending} responded yes`} />
         <Stat label="Awaiting reply" value={`${analytics.rsvp.pending}`} />
@@ -375,7 +420,16 @@ export default function EventDetailPage() {
                   {guests.map((g) => (
                     <tr key={g.id} className="border-b border-slate-100 last:border-0">
                       <td className="py-3 pr-4">
-                        <div className="font-medium">{g.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          {isNewResponse(g) ? (
+                            <span
+                              className="size-1.5 shrink-0 rounded-full bg-emerald-500"
+                              aria-label="New since you last looked"
+                              title="New since you last looked"
+                            />
+                          ) : null}
+                          <span className="font-medium">{g.name}</span>
+                        </div>
                         {g.email ? <div className="text-xs text-slate-500">{g.email}</div> : null}
                       </td>
                       <td className="py-3 pr-4">

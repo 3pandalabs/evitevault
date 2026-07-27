@@ -107,6 +107,12 @@ export type EventSummary = {
   maybe: number;
   pending: number;
   headcount: number;
+  // Responses the host hasn't looked at yet. A guest changing their answer
+  // counts, because responded_at moves.
+  newResponses: number;
+  // Only on the full row (GET /events/:id) — lets the detail page mark which
+  // individual rows are new before clearing the marker.
+  responsesSeenAt?: string | null;
 };
 
 export type GuestRow = {
@@ -193,6 +199,11 @@ export const publishEvent = (id: string) =>
   hostFetch<EventSummary>(`/events/${id}/publish`, { method: "POST" });
 
 export const deleteEvent = (id: string) => hostFetch<void>(`/events/${id}`, { method: "DELETE" });
+
+// Clears the "new responses" marker. Called after the detail page has rendered,
+// so the host sees what was new before it's marked read.
+export const markResponsesSeen = (id: string) =>
+  hostFetch<{ responsesSeenAt: string }>(`/events/${id}/responses-seen`, { method: "POST" });
 
 // Cover art can only be uploaded after the event exists — the R2 key is scoped
 // to the event id, so there is nothing to presign against beforehand. The

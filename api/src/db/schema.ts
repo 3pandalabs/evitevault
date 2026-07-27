@@ -152,6 +152,15 @@ export const events = pgTable(
     // Whether the public page lists who else is attending.
     showGuestList: boolean("show_guest_list").notNull().default(false),
 
+    // When the host last looked at this event's responses. Everything with a
+    // later responded_at counts as new to them.
+    //
+    // A single column on events rather than its own table: an event has exactly
+    // one host, so there is no per-viewer dimension to model. Null means never
+    // looked, so every response so far is new — which is the right answer for a
+    // host opening an event for the first time.
+    responsesSeenAt: timestamp("responses_seen_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

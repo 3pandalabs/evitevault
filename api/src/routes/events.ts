@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
@@ -83,6 +83,11 @@ export async function eventRoutes(app: FastifyInstance) {
           maybe: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'maybe')::int`,
           pending: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'pending')::int`,
           headcount: sql<number>`coalesce(sum(1 + ${guests.plusOnes}) filter (where ${guests.rsvpStatus} = 'attending'), 0)::int`,
+          // Responses the host hasn't looked at yet. A guest CHANGING their
+          // answer counts as new, because responded_at moves — which is
+          // correct: "Meera switched to declined" is exactly what a host needs
+          // to notice.
+          newResponses: sql<number>`count(*) filter (where ${guests.respondedAt} is not null and (${events.responsesSeenAt} is null or ${guests.respondedAt} > ${events.responsesSeenAt}))::int`,
         })
         .from(events)
         .leftJoin(guests, eq(guests.eventId, events.id))
@@ -130,7 +135,45 @@ export async function eventRoutes(app: FastifyInstance) {
       const { eventId } = req.params as { eventId: string };
       const event = await loadOwnedEvent(eventId, req.userId!, reply);
       if (!event) return;
-      return event;
+
+      // Built in TS rather than interpolated into SQL: responsesSeenAt is
+      // already a JS value here, and a null one means "never looked", so the
+      // comparison simply drops out of the predicate.
+      const seen = event.responsesSeenAt;
+      const [tally] = await db
+        .select({ newResponses: count() })
+        .from(guests)
+        .where(
+          and(
+            eq(guests.eventId, eventId),
+            isNotNull(guests.respondedAt),
+            ...(seen ? [gt(guests.respondedAt, seen)] : []),
+          ),
+        );
+
+      // responsesSeenAt is returned alongside so the client can mark which
+      // individual rows are new BEFORE calling /responses-seen to clear it.
+      return { ...event, newResponses: tally?.newResponses ?? 0 };
+    },
+  );
+
+  // Marks the responses as read. Separate from GET on purpose: a read
+  // shouldn't have a side effect, and the client needs the "before" state to
+  // render what's new in the same paint.
+  app.post(
+    "/events/:eventId/responses-seen",
+    { schema: { params: z.object({ eventId: z.string().uuid() }) } },
+    async (req, reply) => {
+      const { eventId } = req.params as { eventId: string };
+      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+
+      const [updated] = await db
+        .update(events)
+        .set({ responsesSeenAt: new Date() })
+        .where(and(eq(events.id, eventId), eq(events.hostId, req.userId!)))
+        .returning({ responsesSeenAt: events.responsesSeenAt });
+
+      return { responsesSeenAt: updated.responsesSeenAt };
     },
   );
 
