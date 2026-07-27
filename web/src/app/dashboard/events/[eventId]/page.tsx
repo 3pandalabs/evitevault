@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, Eye, ImagePlus, Loader2, Plus, Send, Users } from "lucide-react";
+import { Copy, Download, Eye, ImagePlus, Loader2, Mail, Plus, Send, Users } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -10,6 +10,7 @@ import {
   getEvent,
   listGuests,
   publishEvent,
+  sendInvitations,
   uploadCoverImage,
   type Analytics,
   type EventSummary,
@@ -37,6 +38,7 @@ export default function EventDetailPage() {
   const [bulkGuests, setBulkGuests] = useState("");
   const [addingGuests, setAddingGuests] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
 
 
@@ -82,6 +84,26 @@ export default function EventDetailPage() {
     }
   }
 
+  async function onResend() {
+    setResending(true);
+    setError(null);
+    setAddResult(null);
+    try {
+      const res = await sendInvitations(eventId);
+      if (!res.emailConfigured) {
+        setAddResult("Email isn't set up yet, so nothing was sent — share the link or QR code instead.");
+      } else {
+        const failed = res.failed > 0 ? ` ${res.failed} failed.` : "";
+        setAddResult(`Emailed ${res.delivered} of ${res.recipients} who hadn't replied.${failed}`);
+      }
+      await load();
+    } catch {
+      setError("Couldn't send those invitations.");
+    } finally {
+      setResending(false);
+    }
+  }
+
   async function onAddGuests() {
     setAddingGuests(true);
     setError(null);
@@ -104,11 +126,20 @@ export default function EventDetailPage() {
 
       const res = await addGuests(eventId, parsed);
       setBulkGuests("");
-      setAddResult(
-        res.skipped > 0
-          ? `Added ${res.added}. Skipped ${res.skipped} already on the list.`
-          : `Added ${res.added}.`,
-      );
+
+      // Say plainly what happened to the email, rather than letting "Added 5"
+      // imply five invitations went out when none did.
+      const parts = [`Added ${res.added}.`];
+      if (res.skipped > 0) parts.push(`Skipped ${res.skipped} already on the list.`);
+      if (!res.emailConfigured) {
+        parts.push("Email isn't set up yet, so no invitations were sent — share the link or QR code.");
+      } else if (event?.status !== "published") {
+        parts.push("Publish the event to send invitations.");
+      } else if (res.emailed > 0) {
+        parts.push(`Emailed ${res.emailed}.`);
+      }
+      if (res.emailsFailed > 0) parts.push(`${res.emailsFailed} email(s) failed.`);
+      setAddResult(parts.join(" "));
       await load();
     } catch {
       setError("Couldn't add those guests.");
@@ -248,10 +279,20 @@ export default function EventDetailPage() {
             onChange={(e) => setBulkGuests(e.target.value)}
             placeholder={"One per line:\nMeera Iyer, meera@example.com\nSanjay Rao"}
           />
-          <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
-            {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-            Add guests
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
+              {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              Add guests
+            </Button>
+            {/* Separate from adding, so a re-paste of the same list can't
+                re-mail everyone. Only goes to guests who haven't replied. */}
+            {event.status === "published" && guests.some((g) => g.email && g.rsvpStatus === "pending") ? (
+              <Button size="sm" variant="outline" disabled={resending} onClick={onResend}>
+                {resending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                Email guests who haven&apos;t replied
+              </Button>
+            ) : null}
+          </div>
           {addResult ? <p className="text-sm text-slate-600">{addResult}</p> : null}
         </CardContent>
       </Card>

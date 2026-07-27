@@ -220,9 +220,26 @@ export const listGuests = (id: string) => hostFetch<{ guests: GuestRow[] }>(`/ev
 export const getAnalytics = (id: string) => hostFetch<Analytics>(`/events/${id}/analytics`);
 
 export const addGuests = (id: string, guests: { name: string; email?: string | null }[]) =>
-  hostFetch<{ added: number; skipped: number }>(`/events/${id}/guests`, {
+  hostFetch<{
+    added: number;
+    skipped: number;
+    emailed: number;
+    emailsFailed: number;
+    emailConfigured: boolean;
+  }>(`/events/${id}/guests`, {
     method: "POST",
-    body: JSON.stringify({ guests, markInvited: true }),
+    body: JSON.stringify({ guests, markInvited: true, sendInvites: true }),
+  });
+
+export const sendInvitations = (id: string, includeResponded = false) =>
+  hostFetch<{
+    recipients: number;
+    delivered: number;
+    failed: number;
+    emailConfigured: boolean;
+  }>(`/events/${id}/guests/send-invitations`, {
+    method: "POST",
+    body: JSON.stringify({ includeResponded }),
   });
 
 export const updateGuest = (eventId: string, guestId: string, patch: Partial<GuestRow>) =>
