@@ -51,7 +51,15 @@ Consequences worth remembering before adding a public route:
 Per the org convention, every app exposes an ops-only `GET /metrics` behind the
 shared `METRICS_TOKEN` bearer, and gets a per-app "Usage & resources" table on
 admin.3pandalabs.com. `api/src/metrics/collector.ts` + `routes/metrics.ts`
-implement it here; the app key is `evitevault`. When a route or auth boundary
+implement it here; the app key is `evitevault`.
+
+The response envelope — `app`, `collectedAt`, `uptimeSeconds`, `counts`,
+`traffic`, `process`, `database` — is **shared verbatim across every
+3PandaLabs app**, and `collector.ts` is a byte-for-byte copy of the other
+apps'. The admin page's rendering script is fully generic over that shape, so
+changing it here doesn't customise this app, it forces a special case into a
+page that currently has none. The `counts` keys are the per-app part and are
+free to change. When a route or auth boundary
 changes, also update this app's Mermaid flow diagram in `3pandalabs/admin`.
 
 ## Deployment gotchas inherited from RentVault
