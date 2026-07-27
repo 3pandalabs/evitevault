@@ -1,0 +1,87 @@
+# Auto-deploy evitevault-api on every push to main.
+#
+# WHY THIS EXISTS RATHER THAN COOLIFY'S BUILT-IN AUTO-DEPLOY
+#
+# Coolify's normal auto-deploy (and its GitHub App source) works by GitHub
+# sending an inbound webhook to the Coolify instance. That cannot work here:
+# coolify.3pandalabs.com sits behind Cloudflare Access, so an unauthenticated
+# POST from GitHub's webhook sender is bounced to the Access login screen and
+# never reaches Coolify. Nothing in Coolify signals this — the toggle just looks
+# enabled and nothing ever deploys.
+#
+# So the direction is inverted: GitHub Actions calls OUT to Coolify, and can
+# carry the Access service-token headers that a raw webhook cannot hold.
+#
+# The alternative — punching a Cloudflare Access bypass for the deploy path —
+# was rejected deliberately: it opens an unauthenticated hole in an admin panel
+# to anyone who learns the URL, in exchange for saving this file.
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions):
+#   COOLIFY_APP_UUID        the evitevault-api resource UUID (in its Coolify URL)
+#   COOLIFY_API_TOKEN       Coolify → Keys & Tokens → API tokens (deploy scope)
+#   CF_ACCESS_CLIENT_ID     Access service token, authorised on the Coolify app
+#   CF_ACCESS_CLIENT_SECRET
+#
+# Until all four are set the job exits early and does nothing, so merging this
+# file changes no behaviour on its own.
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    # Only the API is deployed here. web/ ships through `npm run cf:deploy`,
+    # which must run a real build (NEXT_PUBLIC_* is inlined at build time), so
+    # it is not a webhook away from being deployable.
+    paths:
+      - "api/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+concurrency:
+  # A rapid second push should supersede the first, not queue behind it —
+  # deploying an older commit after a newer one is worse than skipping it.
+  group: deploy-api
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets are configured
+        id: guard
+        env:
+          UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          if [ -z "$UUID" ] || [ -z "$TOKEN" ] || [ -z "$CF_ID" ] || [ -z "$CF_SECRET" ]; then
+            echo "::warning::Deploy secrets not configured — skipping. See the header of this file."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger Coolify deploy
+        if: steps.guard.outputs.ready == 'true'
+        env:
+          UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+          CF_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          # -f so a 4xx/5xx fails the job. Without it curl exits 0 on an HTTP
+          # error and a broken token would show up as a green tick forever.
+          response=$(curl -fsS -X POST \
+            "https://coolify.3pandalabs.com/api/v1/deploy?uuid=${UUID}&force=false" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "CF-Access-Client-Id: ${CF_ID}" \
+            -H "CF-Access-Client-Secret: ${CF_SECRET}")
+          echo "$response"
+          # Coolify answers 200 with an HTML login page if Access rejected the
+          # service token — a "success" that deployed nothing. Insist on JSON.
+          echo "$response" | grep -q "deployment_uuid" || {
+            echo "::error::Coolify did not return a deployment_uuid — check the Access service token is authorised on the Coolify application."
+            exit 1
+          }
