@@ -59,7 +59,12 @@ export async function hostFetch<T>(path: string, init: RequestInit = {}): Promis
     fetch(`${API_URL}${path}`, {
       ...init,
       headers: {
-        "content-type": "application/json",
+        // Only when there IS a body. Fastify rejects a request that declares
+        // application/json and then sends nothing (FST_ERR_CTP_EMPTY_JSON_BODY)
+        // before routing it, so a bodyless POST — publish, and any other
+        // action-shaped endpoint — failed with a generic error that looked like
+        // the route was missing.
+        ...(init.body ? { "content-type": "application/json" } : {}),
         ...(token ? { authorization: `Bearer ${token}` } : {}),
         ...(init.headers ?? {}),
       },
@@ -91,6 +96,9 @@ export type EventSummary = {
   // Present on GET /events/:id (the full row) but not on the list projection,
   // which selects only what the dashboard cards render.
   coverImageKey?: string | null;
+  // Also only on the full row. Determines whether a scanned QR can actually
+  // lead to an RSVP, or only to a "this invitation is personal" message.
+  allowPublicRsvp?: boolean;
   status: "draft" | "published" | "cancelled" | "archived";
   capacity: number | null;
   invited: number;

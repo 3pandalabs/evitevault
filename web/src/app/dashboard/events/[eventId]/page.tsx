@@ -20,6 +20,7 @@ import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
+import { EventQrCode } from "./qr-code";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -168,6 +169,22 @@ export default function EventDetailPage() {
           </Button>
         </div>
       </div>
+
+      {/* Only for a published event — a QR pointing at a draft would scan to a
+          404, and printing one is the sort of mistake you find out about from a
+          guest standing in your hallway. */}
+      {event.status === "published" ? (
+        <>
+          <EventQrCode url={invitationUrl} slug={event.slug} />
+          {event.allowPublicRsvp === false ? (
+            <p className="-mt-3 text-sm text-amber-700">
+              This event is invitation-only, so scanning the code shows the invitation but
+              can&apos;t be used to reply. Turn on &ldquo;anyone with the link can RSVP&rdquo;, or share
+              each guest&apos;s personal link instead.
+            </p>
+          ) : null}
+        </>
+      ) : null}
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">
