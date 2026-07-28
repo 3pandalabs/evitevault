@@ -29,6 +29,13 @@
       "when": 1785187456700,
       "tag": "0003_event_responses_seen",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785261447015,
+      "tag": "0004_password_reset_tokens",
+      "breakpoints": true
     }
   ]
 }
