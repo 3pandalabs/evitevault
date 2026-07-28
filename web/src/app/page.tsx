@@ -22,7 +22,7 @@ export default function HomePage() {
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
         <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
-          EviteVault
+          RsvpVault
         </h1>
         <p className="mt-4 max-w-xl text-lg leading-8 text-zinc-600">
           Design an invitation, share one link, and watch the RSVPs come in — no app for your

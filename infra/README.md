@@ -1,6 +1,6 @@
-# EviteVault infrastructure
+# RsvpVault infrastructure
 
-EviteVault reuses the shared 3PandaLabs infrastructure — there is no new server,
+RsvpVault reuses the shared 3PandaLabs infrastructure — there is no new server,
 no new Postgres instance, and no new Cloudflare account. What is specific to
 this app is a database, a role, two R2 buckets, one Coolify application, three
 DNS records and one Worker.

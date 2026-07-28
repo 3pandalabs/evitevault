@@ -1,7 +1,7 @@
 export function WordmarkName() {
   return (
     <>
-      Evite<span className="text-[#b98d4f]">Vault</span>
+      Rsvp<span className="text-[#b98d4f]">Vault</span>
     </>
   );
 }

@@ -67,7 +67,7 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
           app: "evitevault",
           messages: batch.map((m) => ({
             to: m.to,
-            fromName: env.EMAIL_FROM_NAME || "EviteVault",
+            fromName: env.EMAIL_FROM_NAME || "RsvpVault",
             // `from` is omitted on purpose — the gateway defaults to this app's
             // configured sender, so the address lives in one place rather than
             // being duplicated into this app's environment.

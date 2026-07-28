@@ -21,9 +21,9 @@ export function buildPasswordResetEmail(to: string, token: string, ttlMinutes: n
 
   return {
     to,
-    subject: "Reset your EviteVault password",
+    subject: "Reset your RsvpVault password",
     text: [
-      "Someone asked to reset the password for this EviteVault account.",
+      "Someone asked to reset the password for this RsvpVault account.",
       "",
       `Open this link to choose a new one — it works once and expires in ${ttlMinutes} minutes:`,
       url,
@@ -31,7 +31,7 @@ export function buildPasswordResetEmail(to: string, token: string, ttlMinutes: n
       "If this wasn't you, ignore this email. Your password stays as it is.",
     ].join("\n"),
     html: `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;max-width:520px;">
-  <p style="font-size:15px;line-height:1.6;">Someone asked to reset the password for this EviteVault account.</p>
+  <p style="font-size:15px;line-height:1.6;">Someone asked to reset the password for this RsvpVault account.</p>
   <p style="margin:24px 0;">
     <a href="${esc(url)}" style="background:#b45309;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-size:15px;display:inline-block;">Choose a new password</a>
   </p>

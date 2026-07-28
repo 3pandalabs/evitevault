@@ -46,7 +46,7 @@ export function buildIcs(ev: IcsInput): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//3PandaLabs//EviteVault//EN",
+    "PRODID:-//3PandaLabs//RsvpVault//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

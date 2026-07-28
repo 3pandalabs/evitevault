@@ -1,4 +1,4 @@
-# EviteVault
+# RsvpVault
 
 Digital invitations and event management — hosts design an invitation, share one
 link, and track RSVPs in real time. A 3PandaLabs product.

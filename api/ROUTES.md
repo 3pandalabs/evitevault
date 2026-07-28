@@ -1,4 +1,4 @@
-# EviteVault API routes
+# RsvpVault API routes
 
 `H` = requires a host access token (`Authorization: Bearer <jwt>`).
 `P` = public/anonymous — the event slug and the guest invite token are the only
