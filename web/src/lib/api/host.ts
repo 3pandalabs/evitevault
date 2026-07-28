@@ -226,6 +226,16 @@ export async function uploadCoverImage(eventId: string, file: File): Promise<str
   return key;
 }
 
+// Mints a short-lived read URL for an object the host owns. The bucket is
+// private, so a stored key is not a URL — it has to be exchanged for one every
+// time it's rendered. The URL expires in 10 minutes; re-fetch rather than
+// caching it anywhere durable.
+export const presignDownload = (key: string) =>
+  hostFetch<{ url: string }>("/storage/presign-download", {
+    method: "POST",
+    body: JSON.stringify({ key }),
+  });
+
 export const listEvents = () => hostFetch<{ events: EventSummary[] }>("/events");
 export const getEvent = (id: string) => hostFetch<EventSummary & Record<string, unknown>>(`/events/${id}`);
 export const listGuests = (id: string) => hostFetch<{ guests: GuestRow[] }>(`/events/${id}/guests`);
