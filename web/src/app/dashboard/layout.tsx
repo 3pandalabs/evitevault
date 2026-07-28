@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import { clearTokens, getTokens } from "@/lib/api/host";
 import { Button } from "@/components/ui/button";
+import { WordmarkName, WordmarkTag } from "@/components/Wordmark";
 
 // localStorage is an external store, so it is read with useSyncExternalStore
 // rather than copied into state inside an effect. Two things fall out of that
@@ -38,9 +39,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <Link href="/dashboard" className="font-semibold">
-            EviteVault
-          </Link>
+          <span className="inline-flex items-center">
+            <Link href="/dashboard" className="font-semibold">
+              <WordmarkName />
+            </Link>
+            <WordmarkTag />
+          </span>
           <Button
             variant="ghost"
             size="sm"

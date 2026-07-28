@@ -10,6 +10,7 @@ import { GradientBackdrop } from "@/components/GradientBackdrop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { WordmarkName, WordmarkTag } from "@/components/Wordmark";
 import { geistSans } from "@/lib/fonts";
 
 export default function LoginPage() {
@@ -61,9 +62,12 @@ export default function LoginPage() {
       className={`flex min-h-screen flex-col items-center justify-center px-6 ${geistSans.className}`}
     >
       <GradientBackdrop />
-      <Link href="/" className="mb-8 text-lg font-semibold text-zinc-900">
-        EviteVault
-      </Link>
+      <span className="mb-8 inline-flex items-center">
+        <Link href="/" className="text-lg font-semibold text-zinc-900">
+          <WordmarkName />
+        </Link>
+        <WordmarkTag />
+      </span>
 
       <Card className="w-full max-w-sm rounded-2xl border-zinc-200 bg-white/90 shadow-xl shadow-zinc-900/5 backdrop-blur-sm">
         <CardHeader>
