@@ -6,7 +6,7 @@ import { Guestbook } from "./guestbook";
 import { RsvpForm } from "./rsvp-form";
 import { fetchGuestbook, fetchPublicEvent } from "@/lib/api/public";
 import { googleFontsHref, themeStyle } from "@/lib/theme";
-import { formatEventDate, formatEventTime } from "@/lib/utils";
+import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
 
 // Next 15+ passes params and searchParams as promises.
 type PageProps = {
@@ -107,6 +107,12 @@ export default async function InvitationPage({ params, searchParams }: PageProps
                     <Clock className="size-3.5" />
                     {formatEventTime(event.startsAt, event.timezone)}
                     {event.endsAt ? ` – ${formatEventTime(event.endsAt, event.timezone)}` : ""}
+                  </dd>
+                  {/* On its own line, once, rather than stamped onto both ends
+                      of the range. A guest reading from another country needs
+                      to know which clock this is. */}
+                  <dd className="ev-muted mt-0.5 text-xs">
+                    {formatTimeZoneLabel(event.startsAt, event.timezone)}
                   </dd>
                 </div>
               </div>

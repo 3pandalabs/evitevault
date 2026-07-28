@@ -28,14 +28,58 @@ body {
   font-family: var(--ev-font-body);
 }
 
+/* Colour comes from the event's own accent rather than a fixed palette, so
+   every template gets depth without any of them being overridden — a wash of
+   the invitation's own colour, not a decoration bolted on top.
+
+   Two things deliberately avoided:
+   - `background-attachment: fixed`, which iOS Safari sizes to the document
+     rather than the viewport and renders unpredictably on long pages.
+   - Any dependence on this rule parsing. `color-mix()` is well supported, but
+     where it isn't the whole `background-image` is dropped and the flat
+     `--ev-bg` above still renders — so the page degrades to exactly what it
+     looked like before.
+
+   Anchored to the top and sized in vh, so a long guestbook thread scrolls off
+   into plain --ev-bg instead of repeating the gradient down the page. */
+.ev-themed {
+  background-image:
+    radial-gradient(
+      90% 55% at 8% 0%,
+      color-mix(in oklab, var(--ev-accent) 20%, transparent) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      70% 45% at 100% 4%,
+      color-mix(in oklab, var(--ev-accent) 12%, transparent) 0%,
+      transparent 65%
+    );
+  background-repeat: no-repeat;
+  background-size:
+    100% 90vh,
+    100% 70vh;
+  background-position:
+    top left,
+    top right;
+}
+
 .ev-themed h1,
 .ev-themed h2,
 .ev-themed .ev-heading {
   font-family: var(--ev-font-heading);
 }
 
+/* Cards read as panels sitting on that wash rather than patches of flat
+   colour: a hairline in the text colour — so it works on light and dark
+   palettes alike, without a second variable per template — plus a softer,
+   deeper shadow than the shadow-sm the markup asks for. These override the
+   Tailwind utility because unlayered rules beat @layer utilities. */
 .ev-surface {
   background-color: var(--ev-surface);
+  border: 1px solid color-mix(in oklab, var(--ev-text) 9%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--ev-text) 6%, transparent),
+    0 8px 24px -12px color-mix(in oklab, var(--ev-text) 18%, transparent);
 }
 
 .ev-muted {

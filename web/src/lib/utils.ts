@@ -24,8 +24,43 @@ export function formatEventTime(iso: string, timeZone: string): string {
     hour: "numeric",
     minute: "2-digit",
     timeZone,
-    timeZoneName: "short",
   }).format(new Date(iso));
+}
+
+// Pulls just the zone name out of a formatted date.
+function zoneName(
+  iso: string,
+  timeZone: string,
+  style: "long" | "shortOffset",
+): string | undefined {
+  try {
+    return new Intl.DateTimeFormat("en-GB", { timeZone, timeZoneName: style })
+      .formatToParts(new Date(iso))
+      .find((p) => p.type === "timeZoneName")?.value;
+  } catch {
+    // shortOffset needs a reasonably current ICU. Falling back to no label
+    // beats throwing on an invitation page.
+    return undefined;
+  }
+}
+
+/**
+ * "India Standard Time (GMT+5:30)".
+ *
+ * `timeZoneName: "short"` — what the times used to carry — only produces a
+ * familiar abbreviation for US zones. Everywhere else it degrades to a raw
+ * offset: Asia/Kolkata renders as "GMT+5:30", which tells a guest nothing
+ * about which timezone the invitation means. The long name is plain English;
+ * the offset stays alongside it for anyone reading from another country.
+ */
+export function formatTimeZoneLabel(iso: string, timeZone: string): string {
+  const long = zoneName(iso, timeZone, "long");
+  const offset = zoneName(iso, timeZone, "shortOffset");
+
+  if (long && offset && long !== offset) return `${long} (${offset})`;
+  // Some zones have no distinct long name (Asia/Dubai is just "GST"), and a
+  // bad ICU may give neither — never render an empty label or bare "()".
+  return long ?? offset ?? timeZone;
 }
 
 export function formatRelative(iso: string): string {

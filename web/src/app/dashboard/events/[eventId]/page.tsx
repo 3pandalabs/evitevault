@@ -39,7 +39,7 @@ import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
-import { formatEventDate, formatEventTime } from "@/lib/utils";
+import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
 import { DeleteEventButton } from "../delete-event-button";
 import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
@@ -280,6 +280,9 @@ export default function EventDetailPage() {
                 {formatEventDate(event.startsAt, event.timezone)}
                 {" · "}
                 {formatEventTime(event.startsAt, event.timezone)}
+                <span className="text-slate-400">
+                  {formatTimeZoneLabel(event.startsAt, event.timezone)}
+                </span>
               </span>
               {event.locationName ? (
                 <span className="flex items-center gap-1.5">
@@ -359,7 +362,9 @@ export default function EventDetailPage() {
               subject={event.title}
               message={buildInviteMessage({
                 title: event.title,
-                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)}`,
+                // The zone belongs in a shared message too — it used to ride
+                // along inside formatEventTime, which no longer carries it.
+                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`,
                 url: invitationUrl,
               })}
             />
@@ -601,7 +606,9 @@ export default function EventDetailPage() {
                             phone={g.phone}
                             message={buildInviteMessage({
                               title: event.title,
-                              whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)}`,
+                              // The zone belongs in a shared message too — it used to ride
+                // along inside formatEventTime, which no longer carries it.
+                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`,
                               url: `${invitationUrl}?t=${g.inviteToken}`,
                               guestName: g.name.split(" ")[0],
                             })}
