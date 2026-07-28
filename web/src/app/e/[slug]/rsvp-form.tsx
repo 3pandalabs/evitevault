@@ -8,6 +8,7 @@ import type { PublicEvent } from "@/lib/api/public";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { Confetti } from "./confetti";
 
 type Status = "attending" | "declined" | "maybe";
 
@@ -64,6 +65,9 @@ export function RsvpForm({
   // Lets someone who already replied reopen the form deliberately, rather than
   // landing on it and wondering whether their answer was recorded.
   const [editing, setEditing] = useState(false);
+  // Timestamp doubling as a replay key for the confetti burst; null means no
+  // burst. Set only when an answer *becomes* "attending" — see onSubmit.
+  const [celebrate, setCelebrate] = useState<number | null>(null);
 
   if (rsvp.closed) {
     return (
@@ -101,6 +105,11 @@ export function RsvpForm({
 
     return (
       <div className="ev-surface rounded-2xl p-6 shadow-sm sm:p-8">
+        {/* Rendered here rather than in the form, because saying yes swaps the
+            form out for this panel — mounted on the form it would unmount on
+            the same render that triggered it. The key replays the burst if
+            someone switches to yes a second time. */}
+        {celebrate ? <Confetti key={celebrate} /> : null}
         <div className="flex items-start gap-3">
           <span
             className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
@@ -204,6 +213,11 @@ export function RsvpForm({
     e.preventDefault();
     if (!status) return;
 
+    // Captured before the request: what the server last had on record, which is
+    // this session's confirmation if there was one, otherwise what the page
+    // loaded with.
+    const previousStatus = confirmed?.status ?? you?.rsvpStatus ?? null;
+
     setSubmitting(true);
     setError(null);
     try {
@@ -224,6 +238,14 @@ export function RsvpForm({
       if (result.inviteToken && !token) {
         router.replace(`/e/${slug}?t=${result.inviteToken}`);
       }
+      // Only when the answer *becomes* yes: a first "going", or a switch to it
+      // from maybe/declined. Someone already coming who reopens the form to fix
+      // a dietary note has not just accepted an invitation, and confetti every
+      // time they save would turn a celebration into a tic.
+      if (status === "attending" && previousStatus !== "attending") {
+        setCelebrate(Date.now());
+      }
+
       setConfirmed(result);
       setEditing(false);
       router.refresh();
