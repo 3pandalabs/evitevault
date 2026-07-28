@@ -5,11 +5,23 @@ messages to the shared org gateway, **[3pandalabs/mailer](https://github.com/3pa
 — one Cloudflare Worker at `mailer.3pandalabs.com` that every app in the org
 sends through.
 
-**Status: gateway is live; the sending domain is not onboarded yet, so sends are
-logged and counted as skipped.** Nothing is broken meanwhile — hosts share the
-invitation link or its QR code and guests RSVP normally. Email is an addition,
-not a dependency, and the dashboard says plainly when it isn't configured rather
-than implying mail went out.
+**Status: live and delivering** (confirmed 2026-07-28 — invitation, RSVP
+confirmation, announcement and password-reset mail all arriving at an external
+address). `evitevault.3pandalabs.com` is onboarded as the sending domain and
+`MAILER_URL`/`MAILER_TOKEN` are set on `evitevault-api` in Coolify, so
+"Remaining setup" below is history, not a to-do.
+
+Email is still an addition rather than a dependency: if the gateway is ever
+unreachable the app counts the sends as skipped and says so, instead of
+implying mail went out, and hosts can always share the link or QR code.
+
+**The sender address is `invitations@evitevault.3pandalabs.com` and stays that
+way** after the 2026-07-28 rename to RsvpVault. The display name follows the
+product (`EMAIL_FROM_NAME`, defaulting to `RsvpVault`), but the address is an
+infrastructure identifier like every other `evitevault` one — see the naming
+rule in `CLAUDE.md`. Moving it to an `rsvpvault.` subdomain would mean
+onboarding a second sending domain, waiting on SPF/DKIM propagation, and
+starting again from zero sender reputation on a domain that mails strangers.
 
 ## Why there is no Cloudflare API token here
 
