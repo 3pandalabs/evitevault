@@ -21,8 +21,7 @@ export default function HomePage() {
       </header>
 
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-16">
-        <p className="text-xs tracking-[0.2em] text-zinc-500">by 3PandaLabs</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
+        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
           EviteVault
         </h1>
         <p className="mt-4 max-w-xl text-lg leading-8 text-zinc-600">
