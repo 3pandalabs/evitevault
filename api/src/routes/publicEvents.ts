@@ -235,6 +235,9 @@ export async function publicEventRoutes(app: FastifyInstance) {
           // Required only on the open-RSVP path, checked below rather than in
           // the schema so the error is specific.
           name: z.string().min(1).max(200).optional(),
+          // Likewise for email: required to respond, but an invited guest who
+          // already has one on file needn't resend it, so the rule can't live
+          // in the schema. Still nullish here — the check is below.
           email: z.string().email().max(320).nullish(),
           status: z.enum(["attending", "declined", "maybe"]),
           plusOnes: z.number().int().min(0).max(20).default(0),
@@ -288,6 +291,15 @@ export async function publicEventRoutes(app: FastifyInstance) {
         // No token and the event isn't open: refuse rather than silently
         // creating a guest, which would let anyone with the slug pad the list.
         return reply.code(403).send({ error: "invitation_required" });
+      }
+
+      // Every response must leave an address on the row. Without one there is
+      // no confirmation to send and no way to tell that guest the event moved
+      // — the host would have a headcount and no means of reaching half of it.
+      // An invited guest whose row already carries an address doesn't have to
+      // resend it, so this can't be a schema rule.
+      if (!body.email?.trim() && !guest?.email) {
+        return reply.code(400).send({ error: "email_required" });
       }
 
       // Capacity is checked before the write and again by nothing else — two

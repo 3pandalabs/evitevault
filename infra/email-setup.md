@@ -15,19 +15,32 @@ Email is still an addition rather than a dependency: if the gateway is ever
 unreachable the app counts the sends as skipped and says so, instead of
 implying mail went out, and hosts can always share the link or QR code.
 
-**The sender address is `invitations@evitevault.3pandalabs.com` and stays that
-way** after the 2026-07-28 rename to RsvpVault. The display name follows the
-product (`EMAIL_FROM_NAME`, defaulting to `RsvpVault`), but the address is an
-infrastructure identifier like every other `evitevault` one — see the naming
-rule in `CLAUDE.md`. Moving it to an `rsvpvault.` subdomain would mean
-onboarding a second sending domain, waiting on SPF/DKIM propagation, and
-starting again from zero sender reputation on a domain that mails strangers.
+**The sender address is moving to `invitations@rsvpvault.3pandalabs.com`** —
+the one exception to the copy-only rename, because guests read the from-line.
+Decided 2026-07-28; the gateway change is 3pandalabs/mailer#1, held until
+`rsvpvault.3pandalabs.com` verifies. Until then mail still goes out as
+`invitations@evitevault.3pandalabs.com`, which keeps working — both addresses
+stay authorised, so a fallback needs no re-onboarding.
 
-## Why there is no Cloudflare API token here
+Note this costs the new subdomain's sender reputation, which starts at zero.
+Everything else keeps its `evitevault` identifier per the naming rule in
+`CLAUDE.md`; the address is carved out only because it is guest-visible.
 
-The gateway uses the Workers `send_email` binding, which authenticates
-implicitly. So **no Cloudflare API token exists anywhere** — not in this app's
-environment, not in Coolify, not in a `.env`. This app holds only
+## Why there is no provider credential here
+
+**The gateway sends through Resend** — it POSTs to `api.resend.com` with a
+`RESEND_API_KEY` held as a Worker secret, using a sending-only restricted key
+that cannot list domains or manage the account. Sending domains are therefore
+verified **in the Resend dashboard**, not in Cloudflare Email Sending. (An
+earlier version of this document described a Workers `send_email` binding;
+that was never how the gateway shipped. Corrected 2026-07-28 — it would send
+you to the wrong dashboard.)
+
+DNS records for a sending domain do live in Cloudflare, because that is where
+`3pandalabs.com` is hosted, but they are ordinary TXT/MX records added by hand.
+
+Either way the point stands: **no provider credential exists in this app** —
+not in its environment, not in Coolify, not in a `.env`. This app holds only
 `MAILER_TOKEN`, which grants exactly one capability: send as RsvpVault's own
 configured sender address.
 
@@ -48,12 +61,13 @@ what an "event" is, something has been put in the wrong place.
 
 ## Remaining setup
 
-### 1. Onboard the sending domain — dashboard, one time
+### 1. Verify the sending domain — dashboard, one time
 
-**Cloudflare → Compute & AI → Email Service → Email Sending → Onboard Domain**
-→ select **`evitevault.3pandalabs.com`** → **Add records and onboard**.
-
-Auto-adds SPF and DKIM; propagation is 5–15 minutes.
+**Resend → Domains → Add Domain** → the subdomain
+(`evitevault.3pandalabs.com` originally; `rsvpvault.3pandalabs.com` for the
+rename). Resend then lists DKIM/SPF TXT records and a bounce-handling MX
+record — add each in **Cloudflare DNS for `3pandalabs.com`**. TXT and MX are
+never proxied, so there is no orange-cloud decision. Propagation is minutes.
 
 Prefer the subdomain over the apex. RsvpVault mails guests who never signed up
 with the org — the one sender most likely to collect spam complaints. Reputation

@@ -25,6 +25,7 @@ const ERROR_COPY: Record<string, string> = {
   email_already_used: "Another guest is already using that email address.",
   invitation_required: "This event is invitation only — please use the link you were sent.",
   name_required: "Please tell us your name.",
+  email_required: "Please give an email address so the host can reach you.",
 };
 
 export function RsvpForm({
@@ -286,20 +287,25 @@ export function RsvpForm({
             />
           </div>
 
-          {/* Now asked of everyone, not only anonymous responders — an invited
-              guest often has no address on file, and the host needs a way to
-              reach them about changes. */}
+          {/* Required of everyone, not only anonymous responders — an invited
+              guest often has no address on file, and without one there is no
+              way to send them a confirmation or tell them the event moved.
+              Enforced server-side too; `required` here only buys the better
+              message. */}
           <div className="space-y-1.5">
             <Label htmlFor="rsvp-email">Email</Label>
             <Input
               id="rsvp-email"
               type="email"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
               placeholder="you@example.com"
             />
-            <p className="ev-muted text-xs">So the host can reach you about any changes.</p>
+            <p className="ev-muted text-xs">
+              So the host can send your confirmation and reach you if anything changes.
+            </p>
           </div>
 
           {status === "attending" && rsvp.allowPlusOnes && rsvp.maxPlusOnes > 0 ? (
