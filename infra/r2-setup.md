@@ -50,6 +50,33 @@ R2_ENDPOINT=https://f688cc57abfb9e1ef72a57f4841e0e73.r2.cloudflarestorage.com
 The same key pair goes into both `evitevault-api`'s Coolify environment and
 Coolify's S3 Storage entry for backups — only the bucket name differs.
 
+## CORS — required, and not created by default
+
+The browser PUTs straight to the R2 endpoint, so the *bucket* needs a CORS
+policy. A new bucket has none, and the symptom is a preflight failure that
+never reaches the API at all:
+
+```
+Access to fetch at 'https://evitevault-media.<account>.r2.cloudflarestorage.com/...'
+from origin 'https://evitevault.3pandalabs.com' has been blocked by CORS policy
+```
+
+The policy lives in `infra/r2-cors.json` and is applied with:
+
+```bash
+npx wrangler r2 bucket cors set evitevault-media --file infra/r2-cors.json
+npx wrangler r2 bucket cors list evitevault-media   # verify
+```
+
+**Applied 2026-07-28.** Only `evitevault-media` needs it — `evitevault-backups`
+is written server-side by Coolify, never from a browser. Note the file uses the
+Cloudflare API shape (`{"rules":[{"allowed":{...}}]}`), not the S3
+`AllowedOrigins` shape; wrangler rejects the latter.
+
+If a new frontend origin is ever added (a preview deployment, a custom event
+domain), it must be added to `origins` here or uploads silently break from that
+origin only.
+
 ## Key layout
 
 Defined in `api/src/plugins/r2.ts`; authorization is a prefix check, never a
