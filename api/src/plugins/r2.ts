@@ -8,6 +8,13 @@ import { env } from "../env.js";
 export const r2 = new S3Client({
   region: "auto",
   endpoint: env.R2_ENDPOINT,
+  // Required for presigned PUTs. Since v3.729 the SDK defaults this to
+  // "WHEN_SUPPORTED", which computes an x-amz-checksum-crc32 at *signing* time —
+  // when there is no body yet — and bakes CRC32("") into the signed query
+  // string. The browser then PUTs real bytes and R2 rejects the mismatch. The
+  // signature already pins bucket, key and content type, so dropping the
+  // checksum costs no integrity we were relying on.
+  requestChecksumCalculation: "WHEN_REQUIRED",
   credentials: {
     accessKeyId: env.R2_ACCESS_KEY_ID,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY,
