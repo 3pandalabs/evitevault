@@ -11,7 +11,7 @@ export default function InvitationNotFound() {
           The link may be incorrect, or the host may have unpublished the event.
         </p>
         <Link href="/" className="mt-6 inline-block text-sm underline underline-offset-4">
-          Go to EviteVault
+          Go to RsvpVault
         </Link>
       </div>
     </main>

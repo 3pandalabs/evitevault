@@ -75,7 +75,7 @@ export default function LoginPage() {
             {mode === "login" ? "Sign in" : "Create an account"}
           </CardTitle>
           <CardDescription className="text-zinc-500">
-            Host events and track RSVPs on EviteVault.
+            Host events and track RSVPs on RsvpVault.
           </CardDescription>
         </CardHeader>
         <CardContent>

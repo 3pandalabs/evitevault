@@ -83,5 +83,5 @@ running it on every restart would be surprising.
 - Add the app to `admin.3pandalabs.com`: a "Usage & resources" table fed by
   `GET /metrics` (app key `evitevault`), plus a hand-authored Mermaid flow
   diagram, per the org conventions.
-- Add EviteVault's line to the Costs view — currently €0 incremental (shared
+- Add RsvpVault's line to the Costs view — currently €0 incremental (shared
   box, R2 free tier, Workers free tier).

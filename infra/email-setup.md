@@ -1,6 +1,6 @@
 # Email sending
 
-EviteVault does not talk to an email provider directly. It posts finished
+RsvpVault does not talk to an email provider directly. It posts finished
 messages to the shared org gateway, **[3pandalabs/mailer](https://github.com/3pandalabs/mailer)**
 — one Cloudflare Worker at `mailer.3pandalabs.com` that every app in the org
 sends through.
@@ -16,7 +16,7 @@ than implying mail went out.
 The gateway uses the Workers `send_email` binding, which authenticates
 implicitly. So **no Cloudflare API token exists anywhere** — not in this app's
 environment, not in Coolify, not in a `.env`. This app holds only
-`MAILER_TOKEN`, which grants exactly one capability: send as EviteVault's own
+`MAILER_TOKEN`, which grants exactly one capability: send as RsvpVault's own
 configured sender address.
 
 That is also why the gateway is a Worker rather than a shared npm package. A
@@ -43,7 +43,7 @@ what an "event" is, something has been put in the wrong place.
 
 Auto-adds SPF and DKIM; propagation is 5–15 minutes.
 
-Prefer the subdomain over the apex. EviteVault mails guests who never signed up
+Prefer the subdomain over the apex. RsvpVault mails guests who never signed up
 with the org — the one sender most likely to collect spam complaints. Reputation
 is per-domain, so isolating it keeps that away from the domain the company's
 real mail flows through. (The Cloudflare *account* reputation is shared
@@ -56,7 +56,7 @@ MAILER_URL=https://mailer.3pandalabs.com
 MAILER_TOKEN=<evitevault's token from the gateway's APP_TOKENS secret>
 ```
 
-`EMAIL_FROM_NAME` is optional and defaults to `EviteVault`. There is deliberately
+`EMAIL_FROM_NAME` is optional and defaults to `RsvpVault`. There is deliberately
 no `EMAIL_FROM` here — the sender **address** lives in the gateway's
 `APP_SENDERS` so it can't drift between the two repos.
 

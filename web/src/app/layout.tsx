@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EviteVault",
+  title: "RsvpVault",
   description: "Design an invitation, share one link, track every RSVP.",
 };
 

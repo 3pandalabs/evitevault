@@ -49,5 +49,5 @@ export const env = {
   MAILER_TOKEN: process.env.MAILER_TOKEN ?? "",
   // Display name only. The from ADDRESS lives in the gateway's APP_SENDERS, so
   // it isn't duplicated here and can't drift.
-  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "EviteVault",
+  EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "RsvpVault",
 };

@@ -4,7 +4,7 @@
 box, not because it needs running again.
 
 There is one Postgres instance on `nrighar-coolify-fsn` shared by every app
-(`3pandalabs-postgres`), with a database and an owning role per app. EviteVault
+(`3pandalabs-postgres`), with a database and an owning role per app. RsvpVault
 adds:
 
 | Database | Owning role |

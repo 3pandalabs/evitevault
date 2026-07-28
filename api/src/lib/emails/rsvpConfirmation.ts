@@ -1,6 +1,7 @@
 import type { Event, Guest } from "../../db/schema.js";
 import { env } from "../../env.js";
 import { googleCalendarUrl } from "../ics.js";
+import { formatEventWhen } from "../eventTime.js";
 import type { Mail } from "../mailer.js";
 
 function esc(value: string): string {
@@ -11,23 +12,6 @@ function esc(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function formatWhen(event: Event): string {
-  const date = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: event.timezone,
-  }).format(event.startsAt);
-  const time = new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: event.timezone,
-    timeZoneName: "short",
-  }).format(event.startsAt);
-  return `${date} at ${time}`;
-}
-
 const HEADLINE: Record<string, string> = {
   attending: "You're going",
   maybe: "You're a maybe",
@@ -36,7 +20,7 @@ const HEADLINE: Record<string, string> = {
 
 export function buildRsvpConfirmationEmail(event: Event, guest: Guest): Mail {
   const personalUrl = `${env.WEB_ORIGIN}/e/${event.slug}?t=${guest.inviteToken}`;
-  const when = formatWhen(event);
+  const when = formatEventWhen(event.startsAt, event.timezone);
   const where = [event.locationName, event.locationAddress].filter(Boolean).join(", ");
   const going = guest.rsvpStatus === "attending";
   const headline = HEADLINE[guest.rsvpStatus] ?? "Your response is recorded";
@@ -80,7 +64,7 @@ export function buildRsvpConfirmationEmail(event: Event, guest: Guest): Mail {
     personalUrl,
     "",
     "—",
-    "Sent with EviteVault — free digital invitations and RSVP tracking.",
+    "Sent with RsvpVault — free digital invitations and RSVP tracking.",
     env.WEB_ORIGIN,
   ]
     .filter((l) => l !== null)
@@ -116,7 +100,7 @@ export function buildRsvpConfirmationEmail(event: Event, guest: Guest): Mail {
                  gets reclassified as promotional and stops reaching inboxes. -->
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:28px;border-top:1px solid #eee;padding-top:18px;">
               <tr><td style="font-size:12px;color:#9ca3af;line-height:1.6;">
-                Sent with <a href="${esc(env.WEB_ORIGIN)}" style="color:#b45309;text-decoration:none;font-weight:600;">EviteVault</a>
+                Sent with <a href="${esc(env.WEB_ORIGIN)}" style="color:#b45309;text-decoration:none;font-weight:600;">RsvpVault</a>
                 — free digital invitations with RSVP tracking, a guestbook and QR sharing.
                 <br />
                 <a href="${esc(env.WEB_ORIGIN)}" style="color:#9ca3af;">Create your own invitation →</a>

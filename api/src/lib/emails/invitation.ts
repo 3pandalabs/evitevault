@@ -1,5 +1,6 @@
 import type { Event, Guest } from "../../db/schema.js";
 import { env } from "../../env.js";
+import { formatEventWhen } from "../eventTime.js";
 import type { Mail } from "../mailer.js";
 import { qrPngBase64 } from "../qr.js";
 
@@ -14,25 +15,6 @@ function esc(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function formatWhen(event: Event): string {
-  const date = new Intl.DateTimeFormat("en-GB", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    timeZone: event.timezone,
-  }).format(event.startsAt);
-
-  const time = new Intl.DateTimeFormat("en-GB", {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: event.timezone,
-    timeZoneName: "short",
-  }).format(event.startsAt);
-
-  return `${date} at ${time}`;
-}
-
 export async function buildInvitationEmail(event: Event, guest: Guest): Promise<Mail> {
   // The guest's own link, not the shared one. Scanning it from a desktop inbox
   // opens their RSVP on their phone already identified, which is the whole
@@ -40,7 +22,7 @@ export async function buildInvitationEmail(event: Event, guest: Guest): Promise<
   // QR is deliberately the shared link — different job: posters and cards.)
   const personalUrl = `${env.WEB_ORIGIN}/e/${event.slug}?t=${guest.inviteToken}`;
 
-  const when = formatWhen(event);
+  const when = formatEventWhen(event.startsAt, event.timezone);
   const where = [event.locationName, event.locationAddress].filter(Boolean).join(", ");
   const hostName = event.hostDisplayName ?? "Your host";
   const qr = await qrPngBase64(personalUrl);
@@ -114,7 +96,7 @@ export async function buildInvitationEmail(event: Event, guest: Guest): Promise<
                 <p style="margin:24px 0 0;font-size:12px;color:#9ca3af;line-height:1.5;">
                   This link is personal to you and opens your RSVP directly — please don't forward it.
                   <br />
-                  Sent by <a href="${esc(env.WEB_ORIGIN)}" style="color:#9ca3af;">EviteVault</a>.
+                  Sent by <a href="${esc(env.WEB_ORIGIN)}" style="color:#9ca3af;">RsvpVault</a>.
                 </p>
               </td>
             </tr>

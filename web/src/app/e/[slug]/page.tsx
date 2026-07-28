@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!event) return { title: "Invitation not found" };
 
   return {
-    title: `${event.title} · EviteVault`,
+    title: `${event.title} · RsvpVault`,
     description: event.description ?? undefined,
     openGraph: {
       title: event.title,

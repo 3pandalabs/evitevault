@@ -1,16 +1,26 @@
-# EviteVault — repo conventions
+# RsvpVault — repo conventions
 
 Digital invitation + event management platform. Third 3PandaLabs product, after
 RentVault (`3pandalabs/nrighar`) and ReceiptCash.
 
 ## Naming
 
-The product is **EviteVault** (one word, camel case) in all user-facing copy.
-Every internal identifier is lowercase `evitevault` — repo, database, the
-`evitevault_app` Postgres role, R2 buckets, Coolify resources, hostnames, the
-`/metrics` app key. Do not introduce a second spelling; RentVault's rename
-(see that repo's CLAUDE.md) is the cautionary tale — copy changed, identifiers
-deliberately did not.
+The product is **RsvpVault** (one word, camel case) in all user-facing copy —
+renamed from "EviteVault" on 2026-07-28.
+
+**The rename was user-facing copy only.** Every internal identifier is still
+lowercase `evitevault` and stays that way: repo name, database, the
+`evitevault_app` Postgres role, R2 buckets (`evitevault-media`,
+`evitevault-backups`), Coolify resources, hostnames
+(`evitevault.3pandalabs.com`, `api.evitevault.3pandalabs.com`), and the
+`app: "evitevault"` key in `api/src/routes/metrics.ts` that `3pandalabs/admin`
+reads. This is the same split RentVault made when it stopped being NRIGhar —
+see that repo's CLAUDE.md. Renaming identifiers buys nothing and breaks the
+admin dashboard, DNS, backups and the Coolify wiring all at once.
+
+So: when adding user-visible text, say RsvpVault; when adding config or
+infrastructure, match the existing `evitevault` identifiers. Do not introduce
+a third spelling.
 
 ## Monorepo layout
 
