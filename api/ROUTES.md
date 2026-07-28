@@ -12,6 +12,8 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | P | POST | `/auth/login` | → `accessToken` (15m) + `refreshToken` (30d) |
 | P | POST | `/auth/refresh` | Rotates: the presented token is destroyed |
 | P | POST | `/auth/logout` | Always 204 |
+| P | POST | `/auth/forgot-password` | Always 204 — an unknown address must be indistinguishable from a known one |
+| P | POST | `/auth/reset-password` | Single-use token, 30m TTL; revokes every session on success |
 | H | GET | `/auth/me` | |
 | H | DELETE | `/auth/sessions` | Revokes every session for the caller |
 

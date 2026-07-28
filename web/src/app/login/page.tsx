@@ -111,9 +111,21 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-zinc-700">
-                Password
-              </Label>
+              <div className="flex items-baseline justify-between gap-2">
+                <Label htmlFor="password" className="text-zinc-700">
+                  Password
+                </Label>
+                {/* Only on the sign-in tab: offering a reset to someone
+                    creating an account makes no sense. */}
+                {mode === "login" ? (
+                  <Link
+                    href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
+                    className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-900 hover:underline"
+                  >
+                    Forgot password?
+                  </Link>
+                ) : null}
+              </div>
               <Input
                 id="password"
                 type="password"

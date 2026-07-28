@@ -54,6 +54,26 @@ export const sessions = pgTable(
   (t) => [index("idx_sessions_user").on(t.userId)],
 );
 
+// Only the hash is stored, exactly as for refresh tokens: a leaked database
+// dump must not hand the reader a working reset link for every account that
+// has one outstanding. `usedAt` makes a token single-use — without it, anyone
+// who later reads the email (a shared inbox, a forwarded thread) could reset
+// the password again inside the validity window.
+export const passwordResetTokens = pgTable(
+  "password_reset_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_password_reset_user").on(t.userId)],
+);
+
 // ---------------------------------------------------------------------------
 // Templates — the preset invitation designs a host starts from.
 // ---------------------------------------------------------------------------
