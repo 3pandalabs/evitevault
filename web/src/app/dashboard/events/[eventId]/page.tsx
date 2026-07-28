@@ -10,6 +10,7 @@ import {
   getEvent,
   listGuests,
   markResponsesSeen,
+  presignDownload,
   publishEvent,
   sendInvitations,
   uploadCoverImage,
@@ -38,6 +39,9 @@ export default function EventDetailPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // Held with the key it was minted for, so a stale URL is never shown against
+  // a newly replaced cover — see the derived `coverUrl` below.
+  const [cover, setCover] = useState<{ key: string; url: string } | null>(null);
   const [bulkGuests, setBulkGuests] = useState("");
   const [addingGuests, setAddingGuests] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
@@ -93,6 +97,34 @@ export default function EventDetailPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load();
   }, [load]);
+
+  // The bucket is private, so the stored key has to be exchanged for a
+  // short-lived read URL before it can go in an <img>. Keyed on coverImageKey
+  // rather than the event, so replacing the image re-presigns and a plain
+  // refresh doesn't. `cancelled` guards the case where the host replaces the
+  // cover twice quickly and the first presign resolves last.
+  const coverKey = event?.coverImageKey ?? null;
+  useEffect(() => {
+    if (!coverKey) return;
+    let cancelled = false;
+    presignDownload(coverKey)
+      .then(({ url }) => {
+        if (!cancelled) setCover({ key: coverKey, url });
+      })
+      .catch(() => {
+        // Non-fatal: the caption below still says a cover is set, and the
+        // guest-facing invitation renders it regardless of this preview.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [coverKey]);
+
+  // Derived rather than cleared in the effect: a URL minted for the previous
+  // key must not be rendered against the new one while its presign is in
+  // flight, and clearing state synchronously inside an effect is what
+  // react-hooks/set-state-in-effect exists to prevent.
+  const coverUrl = cover && cover.key === coverKey ? cover.url : null;
 
   async function onPublish() {
     setPublishing(true);
@@ -317,10 +349,29 @@ export default function EventDetailPage() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
+          {event.coverImageKey ? (
+            <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
+              {coverUrl ? (
+                /* Presigned R2 URL on a per-request host — next/image would need
+                   every one of them in remotePatterns, and optimising a preview
+                   the host looks at once buys nothing. */
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={coverUrl}
+                  alt="Event cover"
+                  className="h-40 w-full object-cover sm:h-48"
+                />
+              ) : (
+                <div className="flex h-40 items-center justify-center sm:h-48">
+                  <Loader2 className="size-5 animate-spin text-slate-400" />
+                </div>
+              )}
+            </div>
+          ) : null}
           <p className="text-sm text-slate-500">
             {event.coverImageKey
-              ? "A cover image is set. Replacing it deletes the old one."
+              ? "Replacing it deletes the old one."
               : "Optional. JPEG, PNG, WebP or AVIF, up to 10MB."}
           </p>
         </CardContent>
