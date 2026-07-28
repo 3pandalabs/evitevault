@@ -5,9 +5,11 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
-import { getEvent, updateEvent } from "@/lib/api/host";
+import { getEvent, updateEvent, type EventInput } from "@/lib/api/host";
 import { utcToZonedWallTime } from "@/lib/datetime";
+import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
 import { EventForm, type EventFormValues } from "../../event-form";
+import { NotifyGuestsDialog, type EventChange } from "./notify-guests-dialog";
 
 // The API stores absolute instants; the form edits wall-clock time in the
 // event's own zone. Converting here rather than in the form keeps the form
@@ -38,20 +40,67 @@ function toFormValues(ev: Record<string, unknown>): Partial<EventFormValues> {
   };
 }
 
+// "" and null both mean "no address"; a trailing space is not a change.
+const same = (a?: string | null, b?: string | null) => (a ?? "").trim() === (b ?? "").trim();
+const sameInstant = (a?: string | null, b?: string | null) =>
+  a == null || b == null ? a == b : new Date(a).getTime() === new Date(b).getTime();
+
+function describeWhen(input: { startsAt: string; endsAt?: string | null; timezone: string }) {
+  const start = `${formatEventDate(input.startsAt, input.timezone)}, ${formatEventTime(input.startsAt, input.timezone)}`;
+  const end = input.endsAt ? ` – ${formatEventTime(input.endsAt, input.timezone)}` : "";
+  return `${start}${end} ${formatTimeZoneLabel(input.startsAt, input.timezone)}`;
+}
+
+function describeWhere(input: { locationName?: string | null; locationAddress?: string | null }) {
+  return [input.locationName, input.locationAddress].filter(Boolean).join(", ");
+}
+
+/**
+ * Only time and place. A guest has already acted on those — booked a sitter,
+ * planned a drive — so a change to either is worth an email; a reworded
+ * description or a new plus-one limit is not.
+ */
+function detectChanges(before: EventInput, after: EventInput): EventChange[] {
+  const changes: EventChange[] = [];
+
+  if (
+    !sameInstant(before.startsAt, after.startsAt) ||
+    !sameInstant(before.endsAt, after.endsAt) ||
+    !same(before.timezone, after.timezone)
+  ) {
+    changes.push({ label: "When", from: describeWhen(before), to: describeWhen(after) });
+  }
+
+  if (!same(before.locationName, after.locationName) || !same(before.locationAddress, after.locationAddress)) {
+    changes.push({ label: "Where", from: describeWhere(before), to: describeWhere(after) });
+  }
+
+  return changes;
+}
+
 export default function EditEventPage() {
   const router = useRouter();
   const { eventId } = useParams<{ eventId: string }>();
 
   const [initial, setInitial] = useState<Partial<EventFormValues> | null>(null);
+  // The event exactly as it was loaded. Kept apart from `initial` (which is
+  // form-shaped) so the saved values can be diffed against what the guests
+  // were last told.
+  const [original, setOriginal] = useState<EventInput | null>(null);
   const [title, setTitle] = useState<string>("");
   const [published, setPublished] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingNotice, setPendingNotice] = useState<{
+    changes: EventChange[];
+    body: string;
+  } | null>(null);
 
   useEffect(() => {
     getEvent(eventId)
       .then((ev) => {
         setTitle(ev.title);
         setPublished(ev.status === "published");
+        setOriginal(ev as unknown as EventInput);
         setInitial(toFormValues(ev as unknown as Record<string, unknown>));
       })
       .catch((err) => {
@@ -101,6 +150,24 @@ export default function EditEventPage() {
         onSubmit={async (input) => {
           try {
             await updateEvent(eventId, input);
+
+            // Offered only for a published event: on a draft nobody has been
+            // told anything yet, so there is nothing to correct.
+            const changes = published && original ? detectChanges(original, input) : [];
+            if (changes.length > 0) {
+              setPendingNotice({
+                changes,
+                body: [
+                  `The details for ${input.title} have changed.`,
+                  "",
+                  ...changes.map((c) => `${c.label}: ${c.to}`),
+                  "",
+                  "Sorry for the change — the invitation has the latest details.",
+                ].join("\n"),
+              });
+              return;
+            }
+
             router.push(`/dashboard/events/${eventId}`);
           } catch (err) {
             if (err instanceof ApiError && err.status === 401) {
@@ -111,6 +178,16 @@ export default function EditEventPage() {
           }
         }}
       />
+
+      {pendingNotice ? (
+        <NotifyGuestsDialog
+          eventId={eventId}
+          eventTitle={title}
+          changes={pendingNotice.changes}
+          defaultBody={pendingNotice.body}
+          onDone={() => router.push(`/dashboard/events/${eventId}`)}
+        />
+      ) : null}
     </div>
   );
 }
