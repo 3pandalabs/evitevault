@@ -19,10 +19,14 @@ export function formatEventDate(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
+// en-US, not the en-GB used for dates above, purely for the clock format: both
+// support hour12, but en-GB renders lowercase "7:00 pm" where en-US gives the
+// uppercase "7:00 PM" an invitation wants. Dates stay en-GB for day-before-month.
 export function formatEventTime(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
+  return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
+    hour12: true,
     timeZone,
   }).format(new Date(iso));
 }

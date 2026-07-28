@@ -226,6 +226,18 @@ export async function uploadCoverImage(eventId: string, file: File): Promise<str
   return key;
 }
 
+// Emails every guest with an address, each getting their own invite link so
+// clicking through lands them on their own RSVP. Recorded server-side, so a
+// host can see afterwards what was sent and to whom.
+export const createAnnouncement = (
+  eventId: string,
+  input: { subject: string; body: string; audience?: "all" | "attending" | "pending" | "maybe" },
+) =>
+  hostFetch<{ id: string; recipientCount: number; delivered: number; skipped: number }>(
+    `/events/${eventId}/announcements`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+
 // Mints a short-lived read URL for an object the host owns. The bucket is
 // private, so a stored key is not a URL — it has to be exchanged for one every
 // time it's rendered. The URL expires in 10 minutes; re-fetch rather than
