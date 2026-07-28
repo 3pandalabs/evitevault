@@ -1,7 +1,23 @@
 "use client";
 
-import { BellDot, Copy, Download, Eye, ImagePlus, Loader2, Mail, Plus, Send, Users } from "lucide-react";
-import { useParams } from "next/navigation";
+import {
+  ArrowLeft,
+  BellDot,
+  CalendarDays,
+  Copy,
+  Download,
+  Eye,
+  ImagePlus,
+  Loader2,
+  Mail,
+  MapPin,
+  Pencil,
+  Plus,
+  Send,
+  Users,
+} from "lucide-react";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addGuests,
@@ -24,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import { formatEventDate, formatEventTime } from "@/lib/utils";
+import { DeleteEventButton } from "../delete-event-button";
 import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
 
@@ -31,6 +48,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
 export default function EventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>();
+  const router = useRouter();
 
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [guests, setGuests] = useState<GuestRow[]>([]);
@@ -234,39 +252,98 @@ export default function EventDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold">{event.title}</h1>
-            {event.status !== "published" ? <Badge variant="outline">{event.status}</Badge> : null}
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
+      >
+        <ArrowLeft className="size-4" />
+        Back to events
+      </Link>
+
+      {/* The page header doubles as the at-a-glance summary of the invitation:
+          what it is, when and where, and how to reach it. Before, the date and
+          location only appeared on the guest-facing page, so a host checking a
+          detail had to open their own invitation to read it back. */}
+      <header className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold tracking-tight">{event.title}</h1>
+              <Badge variant={event.status === "published" ? "attending" : "outline"}>
+                {event.status}
+              </Badge>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-600">
+              <span className="flex items-center gap-1.5">
+                <CalendarDays className="size-4 text-slate-400" />
+                {formatEventDate(event.startsAt, event.timezone)}
+                {" · "}
+                {formatEventTime(event.startsAt, event.timezone)}
+              </span>
+              {event.locationName ? (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="size-4 text-slate-400" />
+                  {event.locationName}
+                </span>
+              ) : null}
+              <span className="flex items-center gap-1.5">
+                <Users className="size-4 text-slate-400" />
+                {event.headcount} attending
+                {event.capacity ? ` of ${event.capacity}` : ""}
+              </span>
+            </div>
           </div>
+
+          <div className="flex flex-wrap gap-2">
+            {event.status !== "published" ? (
+              <Button onClick={onPublish} disabled={publishing}>
+                {publishing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+                Publish
+              </Button>
+            ) : (
+              <a href={invitationUrl} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline">
+                  <Eye className="size-4" />
+                  Preview
+                </Button>
+              </a>
+            )}
+            <Link href={`/dashboard/events/${eventId}/edit`}>
+              <Button variant="outline">
+                <Pencil className="size-4" />
+                Edit
+              </Button>
+            </Link>
+            <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>
+              <Download className="size-4" />
+              Download CSV
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-5 border-t border-slate-100 pt-4">
           {event.status === "published" ? (
-            <div className="mt-2 flex items-center gap-2">
-              <code className="rounded bg-slate-100 px-2 py-1 text-xs">{invitationUrl}</code>
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="min-w-0 truncate rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                {invitationUrl}
+              </code>
               <Button variant="ghost" size="sm" onClick={() => copy(invitationUrl, "link")}>
                 <Copy className="size-3.5" />
                 {copied === "link" ? "Copied" : "Copy"}
               </Button>
             </div>
           ) : (
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="text-sm text-slate-500">
               This is a draft — the link doesn&apos;t work for guests until you publish it.
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          {event.status !== "published" ? (
-            <Button onClick={onPublish} disabled={publishing}>
-              {publishing ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-              Publish
-            </Button>
-          ) : null}
-          <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>
-            <Download className="size-4" />
-            Download CSV
-          </Button>
-        </div>
-      </div>
+      </header>
 
       {event.status === "published" ? (
         <Card>
@@ -537,6 +614,26 @@ export default function EventDetailPage() {
               </table>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Last on the page and visually set apart, so it is never the thing a
+          host reaches for by accident while scanning RSVPs. */}
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="text-red-900">Delete this event</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="mb-4 max-w-prose text-sm text-slate-600">
+            Removes the invitation, its guest list and every RSVP. Anyone holding the link — or a
+            printed QR code — will find nothing there.
+          </p>
+          <DeleteEventButton
+            eventId={eventId}
+            title={event.title}
+            size="default"
+            onDeleted={() => router.replace("/dashboard")}
+          />
         </CardContent>
       </Card>
     </div>
