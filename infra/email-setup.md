@@ -15,16 +15,37 @@ Email is still an addition rather than a dependency: if the gateway is ever
 unreachable the app counts the sends as skipped and says so, instead of
 implying mail went out, and hosts can always share the link or QR code.
 
-**The sender address is moving to `invitations@rsvpvault.3pandalabs.com`** —
-the one exception to the copy-only rename, because guests read the from-line.
-Decided 2026-07-28; the gateway change is 3pandalabs/mailer#1, held until
-`rsvpvault.3pandalabs.com` verifies. Until then mail still goes out as
-`invitations@evitevault.3pandalabs.com`, which keeps working — both addresses
-stay authorised, so a fallback needs no re-onboarding.
+**The sender address is `invitations@rsvpvault.3pandalabs.com`** (switched
+2026-07-28, 3pandalabs/mailer#1) — the one exception to the copy-only rename,
+because guests read the from-line. Everything else keeps its `evitevault`
+identifier per the naming rule in `CLAUDE.md`.
 
-Note this costs the new subdomain's sender reputation, which starts at zero.
-Everything else keeps its `evitevault` identifier per the naming rule in
-`CLAUDE.md`; the address is carved out only because it is guest-visible.
+**`evitevault.3pandalabs.com` no longer exists in Resend — it was deleted
+during the switchover, so there is no falling back to it.** Its DNS records are
+still in Cloudflare but mean nothing without the Resend domain; sending from
+that address now returns `403 domain is not verified`. `APP_SENDERS` therefore
+lists only the rsvpvault address. Do not "restore" the old one as a safety net
+without re-adding and re-verifying the domain first — a dead address in that
+list looks like a fallback and is not one.
+
+Sender reputation restarted from zero on the new subdomain, so expect a rougher
+first week for inbox placement than the old domain had earned.
+
+### If mail stops: read the API log, not the dashboard
+
+Every failed send is logged by `evitevault-api` with Resend's own message,
+which names the exact domain and reason:
+
+```bash
+ssh root@167.233.223.241 \
+  "docker logs --tail 40 \$(docker ps -qf name=wa8y19d56nb14wy36m5holre)"
+```
+
+This is the fastest diagnosis by a wide margin. During the 2026-07-28
+switchover the symptom was "no email arrives", and the log said plainly which
+domain was unverified — while the Resend dashboard's per-record green ticks
+were being mistaken for domain-level verification. The domain status chip sits
+next to the domain name, not in the DNS records table.
 
 ## Why there is no provider credential here
 
