@@ -1,6 +1,7 @@
 import { CalendarCheck, ImageIcon, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { GradientBackdrop } from "@/components/GradientBackdrop";
+import { Wordmark } from "@/components/Wordmark";
 import { geistSans } from "@/lib/fonts";
 
 export default function HomePage() {
@@ -8,7 +9,9 @@ export default function HomePage() {
     <div className={`flex min-h-screen flex-col ${geistSans.className}`}>
       <GradientBackdrop />
       <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-        <span className="text-lg font-semibold text-zinc-900">EviteVault</span>
+        <span className="text-lg font-semibold text-zinc-900">
+          <Wordmark />
+        </span>
         <Link
           href="/login"
           className="rounded-full border border-zinc-300 px-5 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-900 hover:text-white"
