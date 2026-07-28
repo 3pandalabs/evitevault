@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Loader2, MapPin, Plus, Users } from "lucide-react";
+import { CalendarDays, Loader2, MapPin, Pencil, Plus, Users } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatEventDate, formatRelative } from "@/lib/utils";
+import { DeleteEventButton } from "./events/delete-event-button";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -70,54 +71,73 @@ export default function DashboardPage() {
         <ul className="mt-6 space-y-3">
           {events.map((ev) => (
             <li key={ev.id}>
-              <Link href={`/dashboard/events/${ev.id}`} className="block">
-                <Card className="transition hover:border-slate-300 hover:shadow">
-                  <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="truncate font-medium">{ev.title}</h2>
-                        {ev.status !== "published" ? (
-                          <Badge variant="outline">{ev.status}</Badge>
-                        ) : null}
-                        {/* The whole point of the feature: a host scanning this
-                            list should be able to see, without opening
-                            anything, which events have moved since they last
-                            looked. */}
-                        {ev.newResponses > 0 ? (
-                          <Badge>
-                            {ev.newResponses} new
-                          </Badge>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
-                        <span className="flex items-center gap-1.5">
-                          <CalendarDays className="size-3.5" />
-                          {formatEventDate(ev.startsAt, ev.timezone)} ({formatRelative(ev.startsAt)})
-                        </span>
-                        {ev.locationName ? (
-                          <span className="flex items-center gap-1.5">
-                            <MapPin className="size-3.5" />
-                            {ev.locationName}
-                          </span>
-                        ) : null}
-                      </p>
+              {/* The card is deliberately NOT one big <Link> any more — edit
+                  and delete are buttons, and a button inside an anchor is
+                  invalid markup that swallows clicks. The title is the link. */}
+              <Card className="transition hover:border-slate-300 hover:shadow">
+                <CardContent className="flex flex-wrap items-center justify-between gap-4 p-5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/dashboard/events/${ev.id}`}
+                        className="truncate font-medium hover:underline"
+                      >
+                        {ev.title}
+                      </Link>
+                      {ev.status !== "published" ? (
+                        <Badge variant="outline">{ev.status}</Badge>
+                      ) : null}
+                      {/* The whole point of the feature: a host scanning this
+                          list should be able to see, without opening
+                          anything, which events have moved since they last
+                          looked. */}
+                      {ev.newResponses > 0 ? <Badge>{ev.newResponses} new</Badge> : null}
                     </div>
-
-                    <div className="flex items-center gap-4 text-sm">
-                      <span className="flex items-center gap-1.5 font-medium">
-                        <Users className="size-4 text-slate-400" />
-                        {ev.headcount}
-                        {ev.capacity ? ` / ${ev.capacity}` : ""}
+                    <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500">
+                      <span className="flex items-center gap-1.5">
+                        <CalendarDays className="size-3.5" />
+                        {formatEventDate(ev.startsAt, ev.timezone)} ({formatRelative(ev.startsAt)})
                       </span>
-                      <div className="flex gap-1.5">
-                        <Badge variant="attending">{ev.attending} yes</Badge>
-                        <Badge variant="maybe">{ev.maybe} maybe</Badge>
-                        <Badge variant="pending">{ev.pending} awaiting</Badge>
-                      </div>
+                      {ev.locationName ? (
+                        <span className="flex items-center gap-1.5">
+                          <MapPin className="size-3.5" />
+                          {ev.locationName}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Users className="size-4 text-slate-400" />
+                      {ev.headcount}
+                      {ev.capacity ? ` / ${ev.capacity}` : ""}
+                    </span>
+                    <div className="flex gap-1.5">
+                      <Badge variant="attending">{ev.attending} yes</Badge>
+                      <Badge variant="maybe">{ev.maybe} maybe</Badge>
+                      <Badge variant="pending">{ev.pending} awaiting</Badge>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                    <div className="flex items-center gap-2">
+                      <Link href={`/dashboard/events/${ev.id}/edit`}>
+                        <Button variant="outline" size="sm">
+                          <Pencil className="size-4" />
+                          Edit
+                        </Button>
+                      </Link>
+                      <DeleteEventButton
+                        eventId={ev.id}
+                        title={ev.title}
+                        onDeleted={() =>
+                          setEvents((current) =>
+                            (current ?? []).filter((e) => e.id !== ev.id),
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </li>
           ))}
         </ul>
