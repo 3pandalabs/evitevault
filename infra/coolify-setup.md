@@ -65,15 +65,17 @@ curl -s https://api.evitevault.3pandalabs.com/health          # {"ok":true}
 curl -s https://api-internal.evitevault.3pandalabs.com/health # {"ok":true}
 ```
 
-Then seed the invitation templates once, from the container's terminal:
+The invitation templates need no manual step: migrations *and* the template
+seed both run at container start (`api/Dockerfile` CMD), so a deploy ships the
+designs it was built with. Both must stay idempotent — the seed upserts on the
+template `key` — because a failure in either crash-loops the container.
+
+To apply a template change without a full redeploy, the seed is still safe to
+run by hand from the container's terminal:
 
 ```bash
 node dist/db/seed.js
 ```
-
-Migrations run automatically on every deploy (Dockerfile CMD); seeding is
-deliberately not in that path — it is an occasional explicit operation, and
-running it on every restart would be surprising.
 
 ## 5. After it's live
 

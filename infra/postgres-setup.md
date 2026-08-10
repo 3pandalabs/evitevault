@@ -74,8 +74,11 @@ re-check the container name before debugging anything else.
   cannot read.
 - Migrations apply automatically at container start (`api/Dockerfile` CMD) and
   must stay idempotent.
-- Seeding templates is separate and manual: `node dist/db/seed.js` inside the
-  container. It is safe to re-run (upsert on the template `key`).
+- The template seed runs at container start too, right after the migrations,
+  so new invitation designs ship with the deploy that adds them. It upserts on
+  the template `key`, so it is safe to re-run — and it has to stay that way,
+  since a throw there crash-loops the container exactly as a bad migration
+  would. Running `node dist/db/seed.js` by hand in the container is still fine.
 
 ## Backups
 
