@@ -118,6 +118,10 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
       mapUrl: event.locationMapUrl,
     },
     coverImageUrl: event.coverImageKey ? await presignDownload(event.coverImageKey) : null,
+    // Host-supplied and http(s)-validated on the way in (routes/events.ts).
+    // Safe to hand to every visitor: it is the same link the host mails out,
+    // and an album's own sharing settings decide what it opens onto.
+    photoAlbumUrl: event.photoAlbumUrl,
     theme: resolveTheme(row.templateTheme, event.themeOverrides),
     rsvp: {
       deadline: event.rsvpDeadline,

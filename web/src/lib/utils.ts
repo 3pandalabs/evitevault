@@ -67,6 +67,31 @@ export function formatTimeZoneLabel(iso: string, timeZone: string): string {
   return long ?? offset ?? timeZone;
 }
 
+/**
+ * "2 Aug, 7:14 PM" — a compact stamp for something that *happened*, such as an
+ * RSVP arriving, as opposed to the event's own date.
+ *
+ * Rendered in the event's timezone for the same reason every other time on the
+ * page is: a host reading "replied at 7:14 PM" next to "starts at 7:00 PM"
+ * should be reading off one clock, not two. The year is omitted — these are
+ * always recent relative to the event they belong to.
+ */
+export function formatTimestamp(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone,
+  })
+    .format(new Date(iso))
+    // en-GB gives "2 Aug at 7:14 pm"; the comma reads better in a table cell
+    // and the uppercase meridiem matches formatEventTime.
+    .replace(" at ", ", ")
+    .replace(/\b(am|pm)\b/, (m) => m.toUpperCase());
+}
+
 export function formatRelative(iso: string): string {
   const diffMs = new Date(iso).getTime() - Date.now();
   const days = Math.round(diffMs / 86_400_000);

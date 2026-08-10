@@ -55,6 +55,7 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 |---|---|---|---|
 | H | GET | `/events/:eventId/announcements` | |
 | H | POST | `/events/:eventId/announcements` | Audience: all/attending/pending/maybe/declined. Row is written before the send so a partial delivery is still visible |
+| H | POST | `/events/:eventId/photo-album/share` | Mails `events.photo_album_url` as a button; 409 `no_photo_album` if unset. Records an announcement row like any other broadcast |
 
 ## Templates
 

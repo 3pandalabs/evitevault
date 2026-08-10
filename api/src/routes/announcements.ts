@@ -5,7 +5,8 @@ import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { announcements, guests } from "../db/schema.js";
 import { env } from "../env.js";
-import { sendMail, type Mail } from "../lib/mailer.js";
+import { buildPhotoAlbumEmail } from "../lib/emails/photoAlbum.js";
+import { mailerConfigured, sendMail, type Mail } from "../lib/mailer.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
 
 const eventParams = z.object({ eventId: z.string().uuid() });
@@ -100,6 +101,85 @@ export async function announcementRoutes(app: FastifyInstance) {
         .returning();
 
       return reply.code(201).send({ ...updated, delivered: result.delivered, skipped: result.skipped });
+    },
+  );
+
+  // Mails the event's photo album link to the guest list.
+  //
+  // Its own route rather than a plain announcement with the URL typed into the
+  // body: the link has to arrive as a button, and the URL comes from the
+  // events row — already validated as http(s) — instead of from this request,
+  // so a host can't be talked into mailing their guest list an arbitrary link
+  // through a CSRF-shaped request. It still records an `announcements` row, so
+  // the sending history stays in one place.
+  app.post(
+    "/events/:eventId/photo-album/share",
+    {
+      schema: {
+        params: eventParams,
+        body: z
+          .object({
+            audience: z.enum(AUDIENCES).default("all"),
+            // Optional covering note. The album button is the message; this is
+            // for "thank you all for coming" above it.
+            message: z.string().max(2000).nullish(),
+          })
+          .default({ audience: "all" }),
+      },
+    },
+    async (req, reply) => {
+      const { eventId } = req.params as z.infer<typeof eventParams>;
+      const { audience, message } = req.body as {
+        audience: (typeof AUDIENCES)[number];
+        message?: string | null;
+      };
+      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      if (!event) return;
+
+      if (!event.photoAlbumUrl) {
+        return reply.code(409).send({ error: "no_photo_album" });
+      }
+
+      const recipients = await db
+        .select()
+        .from(guests)
+        .where(
+          audience === "all"
+            ? and(eq(guests.eventId, eventId), isNotNull(guests.email))
+            : and(eq(guests.eventId, eventId), isNotNull(guests.email), eq(guests.rsvpStatus, audience)),
+        );
+
+      const [record] = await db
+        .insert(announcements)
+        .values({
+          eventId,
+          subject: `Photos from ${event.title}`.slice(0, 200),
+          body: [message?.trim(), event.photoAlbumUrl].filter(Boolean).join("\n\n"),
+          audience,
+          recipientCount: recipients.length,
+        })
+        .returning();
+
+      const result = await sendMail(
+        recipients.map((g) => buildPhotoAlbumEmail(event, g, event.photoAlbumUrl!, message ?? null)),
+        (msg) => req.log.info({ eventId }, msg),
+      );
+
+      const [updated] = await db
+        .update(announcements)
+        .set({ sentAt: new Date() })
+        .where(eq(announcements.id, record.id))
+        .returning();
+
+      return reply.code(201).send({
+        ...updated,
+        delivered: result.delivered,
+        failed: result.failed,
+        skipped: result.skipped,
+        // So the dashboard can say "email isn't set up" rather than implying
+        // the album link reached anyone.
+        emailConfigured: mailerConfigured(),
+      });
     },
   );
 }

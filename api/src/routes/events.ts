@@ -11,6 +11,15 @@ import { deleteObject, eventIdForKey } from "../plugins/r2.js";
 
 const IANA_ZONE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+)+$|^UTC$/;
 
+// Only http(s). A javascript:/data: URL in any of these fields renders as a
+// link on a public page that anyone with the invitation can reach — and, for
+// the album, inside an email too.
+const httpUrl = z
+  .string()
+  .url()
+  .max(2000)
+  .refine((u) => /^https?:\/\//i.test(u), { message: "must be an http(s) URL" });
+
 const eventBody = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(5000).nullish(),
@@ -20,11 +29,7 @@ const eventBody = z.object({
   timezone: z.string().regex(IANA_ZONE, "must be an IANA timezone, e.g. Asia/Kolkata").default("UTC"),
   locationName: z.string().max(200).nullish(),
   locationAddress: z.string().max(500).nullish(),
-  // Only http(s). A javascript:/data: URL here renders as a link on a public
-  // page that anyone with the invitation can reach.
-  locationMapUrl: z.string().url().max(2000).refine((u) => /^https?:\/\//i.test(u), {
-    message: "must be an http(s) URL",
-  }).nullish(),
+  locationMapUrl: httpUrl.nullish(),
   coverImageKey: z.string().max(300).nullish(),
   templateId: z.string().uuid().nullish(),
   themeOverrides: themeOverridesSchema.nullish(),
@@ -37,6 +42,8 @@ const eventBody = z.object({
   guestbookEnabled: z.boolean().default(true),
   guestPhotosEnabled: z.boolean().default(true),
   showGuestList: z.boolean().default(false),
+  // Google Photos shared album (or any album link) for after the event.
+  photoAlbumUrl: httpUrl.nullish(),
 });
 
 const eventPatch = eventBody.partial().extend({

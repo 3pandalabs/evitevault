@@ -37,6 +37,7 @@ function toFormValues(ev: Record<string, unknown>): Partial<EventFormValues> {
     guestbookEnabled: (ev.guestbookEnabled as boolean | undefined) ?? true,
     showGuestList: (ev.showGuestList as boolean | undefined) ?? false,
     capacity: ev.capacity == null ? "" : String(ev.capacity),
+    photoAlbumUrl: (ev.photoAlbumUrl as string | null) ?? "",
   };
 }
 

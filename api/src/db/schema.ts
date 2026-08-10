@@ -172,6 +172,19 @@ export const events = pgTable(
     // Whether the public page lists who else is attending.
     showGuestList: boolean("show_guest_list").notNull().default(false),
 
+    // Where the photos live afterwards — a Google Photos shared album in
+    // practice, but any http(s) album link works (iCloud, Drive, a folder on
+    // someone's own site).
+    //
+    // Deliberately a link the host pastes rather than a Google Photos API
+    // integration. Since 2025 that API only lets an application touch media it
+    // uploaded itself, so an album RsvpVault created would sit empty beside the
+    // one the host is actually filling from their phone — and it would cost an
+    // OAuth consent screen, Google verification and a stored refresh token per
+    // host to get there. Creating a shared album is three taps in Google
+    // Photos; what this product adds is getting the link to everyone who came.
+    photoAlbumUrl: text("photo_album_url"),
+
     // When the host last looked at this event's responses. Everything with a
     // later responded_at counts as new to them.
     //

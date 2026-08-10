@@ -1,4 +1,4 @@
-import { CalendarDays, Clock, MapPin, Users } from "lucide-react";
+import { CalendarDays, Clock, Images, MapPin, Users } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AddToCalendar } from "./add-to-calendar";
@@ -191,6 +191,30 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               calendar={event.calendar}
             />
           </section>
+
+          {/* Only once the host has an album to point at — which is usually
+              after the day, so most invitations never render this. */}
+          {event.photoAlbumUrl ? (
+            <section className="ev-surface mt-8 rounded-2xl p-5 shadow-sm sm:p-8">
+              <h2 className="ev-heading text-xl font-semibold">Photos</h2>
+              <p className="ev-muted mt-1 text-sm">
+                The pictures from the day live in a shared album — add yours to it too.
+              </p>
+              <a
+                href={event.photoAlbumUrl}
+                target="_blank"
+                // noreferrer as well as noopener, for the same reason as the map
+                // link: the invitation URL is the guest's credential and must
+                // not travel to the album host as a referrer.
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold"
+                style={{ backgroundColor: "var(--ev-accent)", color: "var(--ev-accent-text)" }}
+              >
+                <Images className="size-4" />
+                Open the photo album
+              </a>
+            </section>
+          ) : null}
 
           {event.guestbook.enabled ? (
             <section className="mt-10">
