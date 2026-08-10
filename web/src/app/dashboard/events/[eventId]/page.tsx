@@ -28,6 +28,7 @@ import {
   listGuests,
   markResponsesSeen,
   presignDownload,
+  previewLink,
   publishEvent,
   sendInvitations,
   uploadCoverImage,
@@ -72,6 +73,7 @@ export default function EventDetailPage() {
   const [addingGuests, setAddingGuests] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const seenClearedRef = useRef(false);
   // Captured on first load and held for the session: the server value is
@@ -166,6 +168,24 @@ export default function EventDetailPage() {
       }
     } finally {
       setPublishing(false);
+    }
+  }
+
+  async function onPreview() {
+    setPreviewing(true);
+    setError(null);
+    try {
+      const { url } = await previewLink(eventId);
+      // Opened after the await, so the popup blocker sees a window.open that
+      // isn't in the click handler's own tick. Falling back to same-tab
+      // navigation matters more than the new tab does — a blocked preview
+      // looks exactly like a broken button.
+      const opened = window.open(url, "_blank", "noopener,noreferrer");
+      if (!opened) window.location.href = url;
+    } catch {
+      setError("Couldn't open a preview just now.");
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -308,14 +328,28 @@ export default function EventDetailPage() {
 
           <div className="flex flex-wrap gap-2">
             {event.status !== "published" ? (
-              <Button onClick={onPublish} disabled={publishing}>
-                {publishing ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Send className="size-4" />
-                )}
-                Publish
-              </Button>
+              <>
+                {/* Checking the design used to mean publishing and hoping
+                    nobody opened the link in between. The preview link is
+                    minted per click, scoped to this event and dead in two
+                    hours. */}
+                <Button variant="outline" disabled={previewing} onClick={onPreview}>
+                  {previewing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Eye className="size-4" />
+                  )}
+                  Preview
+                </Button>
+                <Button onClick={onPublish} disabled={publishing}>
+                  {publishing ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Send className="size-4" />
+                  )}
+                  Publish
+                </Button>
+              </>
             ) : (
               <a href={invitationUrl} target="_blank" rel="noopener noreferrer">
                 <Button variant="outline">
@@ -467,7 +501,7 @@ export default function EventDetailPage() {
           <p className="text-sm text-slate-500">
             {event.coverImageKey
               ? "Replacing it deletes the old one."
-              : "Optional. JPEG, PNG, WebP or AVIF, up to 10MB."}
+              : "Optional — until you add one, the design's own artwork fills the top of the invitation. JPEG, PNG, WebP or AVIF, up to 10MB."}
           </p>
         </CardContent>
       </Card>

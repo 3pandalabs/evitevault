@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { browserTimeZone, timeZones, zonedWallTimeToUtc } from "@/lib/datetime";
+import { ART_CHOICES, ART_LABELS, CoverArt, type ArtPalette } from "@/lib/coverArt";
+import { cn } from "@/lib/utils";
 import { TemplatePicker } from "./template-picker";
 
 // Wall-clock strings, not instants: every date field here is what a
@@ -32,6 +34,8 @@ export type EventFormValues = {
   guestbookEnabled: boolean;
   showGuestList: boolean;
   capacity: string;
+  /** Cover artwork override; null keeps whatever the design ships with. */
+  art: string | null;
   photoAlbumUrl: string;
 };
 
@@ -91,6 +95,9 @@ export function EventForm({
   const [showGuestList, setShowGuestList] = useState(initial?.showGuestList ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? "");
   const [photoAlbumUrl, setPhotoAlbumUrl] = useState(initial?.photoAlbumUrl ?? "");
+  const [art, setArt] = useState<string | null>(initial?.art ?? null);
+
+  const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -140,6 +147,9 @@ export function EventForm({
         guestPhotosEnabled: guestbookEnabled,
         showGuestList,
         photoAlbumUrl: photoAlbumUrl.trim() || null,
+        // An empty object rather than null: null would also be the way to clear
+        // every other per-event override, and this form only owns the artwork.
+        themeOverrides: art ? { art } : {},
       });
     } catch {
       setError(failureMessage);
@@ -288,13 +298,48 @@ export function EventForm({
         <CardHeader>
           <CardTitle>Design</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           <TemplatePicker
             templates={templates}
             value={templateId}
             onChange={setTemplateId}
             sampleTitle={title}
           />
+
+          {/* Artwork is separate from the design so a host can keep the
+              typography and colours they like and still swap the picture — the
+              two used to be one decision, which meant changing the artwork
+              meant changing the whole invitation. */}
+          {selectedTemplate ? (
+            <div className="space-y-2 border-t border-slate-100 pt-5">
+              <div>
+                <Label>Cover artwork</Label>
+                <p className="text-xs text-slate-500">
+                  Drawn in this design&apos;s own colours. Upload a photo on the event page
+                  afterwards and it takes the artwork&apos;s place.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                <ArtTile
+                  label="Design's own"
+                  art={selectedTemplate.theme.art ?? "plain"}
+                  palette={selectedTemplate.theme.palette}
+                  selected={art === null}
+                  onClick={() => setArt(null)}
+                />
+                {ART_CHOICES.map((a) => (
+                  <ArtTile
+                    key={a}
+                    label={ART_LABELS[a]}
+                    art={a}
+                    palette={selectedTemplate.theme.palette}
+                    selected={art === a}
+                    onClick={() => setArt(a)}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -423,6 +468,38 @@ export function EventForm({
         </Link>
       </div>
     </form>
+  );
+}
+
+function ArtTile({
+  label,
+  art,
+  palette,
+  selected,
+  onClick,
+}: {
+  label: string;
+  art: string;
+  palette: ArtPalette;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      title={label}
+      className={cn(
+        "overflow-hidden rounded-lg border-2 text-left transition",
+        selected ? "border-slate-900" : "border-slate-200 hover:border-slate-300",
+      )}
+    >
+      <div className="h-12">
+        <CoverArt art={art} palette={palette} />
+      </div>
+      <p className="truncate px-1.5 py-1 text-[11px] text-slate-600">{label}</p>
+    </button>
   );
 }
 

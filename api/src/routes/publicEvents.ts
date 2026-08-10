@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
+import { verifyPreviewToken } from "../auth/jwt.js";
 import { db } from "../db/index.js";
 import {
   eventTemplates,
@@ -54,6 +55,25 @@ async function loadPublishedEvent(slug: string): Promise<EventWithTemplate | nul
     .leftJoin(eventTemplates, eq(eventTemplates.id, events.templateId))
     .leftJoin(users, eq(users.id, events.hostId))
     .where(and(eq(events.slug, slug), eq(events.status, "published")))
+    .limit(1);
+
+  return row ?? null;
+}
+
+// Same lookup without the status filter — for the preview path only, where the
+// caller has already proved with a signed token that they are the host of this
+// particular event. Never call it without that check.
+async function loadEventBySlug(slug: string): Promise<EventWithTemplate | null> {
+  const [row] = await db
+    .select({
+      event: events,
+      templateTheme: eventTemplates.theme,
+      hostName: users.displayName,
+    })
+    .from(events)
+    .leftJoin(eventTemplates, eq(eventTemplates.id, events.templateId))
+    .leftJoin(users, eq(users.id, events.hostId))
+    .where(eq(events.slug, slug))
     .limit(1);
 
   return row ?? null;
@@ -205,18 +225,33 @@ export async function publicEventRoutes(app: FastifyInstance) {
   // --- the invitation -------------------------------------------------------
   app.get(
     "/public/events/:slug",
-    { schema: { params: slugParams, querystring: tokenQuery } },
+    { schema: { params: slugParams, querystring: tokenQuery.extend({ p: z.string().max(1000).optional() }) } },
     async (req, reply) => {
       const { slug } = req.params as z.infer<typeof slugParams>;
-      const { t } = req.query as z.infer<typeof tokenQuery>;
+      const { t, p } = req.query as z.infer<typeof tokenQuery> & { p?: string };
 
-      const row = await loadPublishedEvent(slug);
+      // The one route where an unpublished event may be served, and only to a
+      // caller holding a signed, event-scoped, two-hour preview token minted by
+      // the event's own host. Everything else about the response is identical —
+      // the point of a preview is to be the real page, not a mock-up of it.
+      const preview = p ? verifyPreviewToken(p) : null;
+      const row = preview ? await loadEventBySlug(slug) : await loadPublishedEvent(slug);
       if (!row) return reply.code(404).send({ error: "not_found" });
+
+      // A token for one event must not unlock another. Without this check any
+      // host could preview every draft on the platform by pairing their own
+      // token with someone else's slug.
+      const previewing = preview !== null && preview.eventId === row.event.id;
+      if (!previewing && row.event.status !== "published") {
+        return reply.code(404).send({ error: "not_found" });
+      }
 
       const guest = await loadGuestByToken(row.event.id, t);
 
-      recordView(req, row.event.id, guest?.id ?? null);
-      if (guest) {
+      // A host checking their own draft is not a guest visit, and counting it
+      // would put views on the analytics card before anyone was invited.
+      if (!previewing) recordView(req, row.event.id, guest?.id ?? null);
+      if (guest && !previewing) {
         const now = new Date();
         db.update(guests)
           .set({ firstViewedAt: guest.firstViewedAt ?? now, lastViewedAt: now })
@@ -224,7 +259,10 @@ export async function publicEventRoutes(app: FastifyInstance) {
           .catch((err) => req.log.warn({ err }, "guest view timestamps not updated"));
       }
 
-      return toPublicEvent(row, guest);
+      const body = await toPublicEvent(row, guest);
+      // Tells the page to put a banner up and stop pretending the RSVP button
+      // does anything. Absent (rather than false) on a normal guest visit.
+      return previewing ? { ...body, preview: { status: row.event.status } } : body;
     },
   );
 

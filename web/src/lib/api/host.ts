@@ -161,6 +161,9 @@ export type Template = {
     palette: { bg: string; surface: string; text: string; muted: string; accent: string; accentText: string };
     fonts: { heading: string; body: string };
     layout: string;
+    // The design's built-in cover artwork (lib/coverArt.tsx). Optional: a
+    // template row seeded before artwork existed simply has none.
+    art?: string;
   };
 };
 
@@ -185,6 +188,10 @@ export type EventInput = {
   guestPhotosEnabled?: boolean;
   showGuestList?: boolean;
   photoAlbumUrl?: string | null;
+  // Per-event tweaks merged over the chosen template. Only the cover artwork is
+  // editable today; an empty object clears the override and restores the
+  // design's own artwork.
+  themeOverrides?: { art?: string } | null;
 };
 
 export const listTemplates = () => hostFetch<{ templates: Template[] }>("/templates");
@@ -202,6 +209,14 @@ export const publishEvent = (id: string) =>
   hostFetch<EventSummary>(`/events/${id}/publish`, { method: "POST" });
 
 export const deleteEvent = (id: string) => hostFetch<void>(`/events/${id}`, { method: "DELETE" });
+
+// A link that shows a draft exactly as guests will see it. The token inside is
+// event-scoped and expires in two hours, so fetch one each time rather than
+// storing it — it is a button, not a share link.
+export const previewLink = (id: string) =>
+  hostFetch<{ url: string; expiresInSeconds: number }>(`/events/${id}/preview-link`, {
+    method: "POST",
+  });
 
 // Clears the "new responses" marker. Called after the detail page has rendered,
 // so the host sees what was new before it's marked read.
