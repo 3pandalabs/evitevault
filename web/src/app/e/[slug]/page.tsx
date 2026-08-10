@@ -5,21 +5,25 @@ import { AddToCalendar } from "./add-to-calendar";
 import { Guestbook } from "./guestbook";
 import { RsvpForm } from "./rsvp-form";
 import { fetchGuestbook, fetchPublicEvent } from "@/lib/api/public";
+import { CoverArt } from "@/lib/coverArt";
 import { googleFontsHref, themeStyle } from "@/lib/theme";
 import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
 
 // Next 15+ passes params and searchParams as promises.
 type PageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ t?: string }>;
+  searchParams: Promise<{ t?: string; p?: string }>;
 };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  // No token here on purpose — metadata is what gets embedded in a link preview
-  // when the invitation is forwarded, and a personalised card would leak the
-  // original recipient's name into a group chat.
-  const event = await fetchPublicEvent(slug);
+  const { p: previewToken } = await searchParams;
+  // No guest token here on purpose — metadata is what gets embedded in a link
+  // preview when the invitation is forwarded, and a personalised card would
+  // leak the original recipient's name into a group chat. The preview token IS
+  // passed: without it a host previewing a draft gets "Invitation not found" in
+  // their browser tab while looking at the invitation itself.
+  const event = await fetchPublicEvent(slug, undefined, previewToken);
   if (!event) return { title: "Invitation not found" };
 
   return {
@@ -38,9 +42,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function InvitationPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { t: token } = await searchParams;
+  const { t: token, p: previewToken } = await searchParams;
 
-  const event = await fetchPublicEvent(slug, token);
+  const event = await fetchPublicEvent(slug, token, previewToken);
   if (!event) notFound();
 
   const posts = event.guestbook.enabled ? await fetchGuestbook(slug) : [];
@@ -51,6 +55,16 @@ export default async function InvitationPage({ params, searchParams }: PageProps
     <>
       {/* Only the two families this event actually uses are requested. */}
       <link rel="stylesheet" href={googleFontsHref(event.theme)} />
+
+      {/* Sits above the invitation rather than inside it: the page below has to
+          look exactly like what a guest gets, and a banner woven into the
+          layout would be part of what the host is trying to judge. */}
+      {event.preview ? (
+        <div className="sticky top-0 z-50 bg-amber-500 px-4 py-2.5 text-center text-sm font-semibold text-amber-950">
+          Preview — this invitation is a {event.preview.status}. Guests who open the link get
+          nothing until you publish it.
+        </div>
+      ) : null}
 
       <main className="ev-themed min-h-screen" style={style}>
         {/* Cover art. Deliberately a plain <img>, not next/image: the src is a
@@ -81,7 +95,18 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               </div>
             ) : null}
           </div>
-        ) : null}
+        ) : (
+          /* No photograph uploaded — the design's own artwork fills the hero
+             instead of leaving the invitation to open on bare text. Drawn from
+             the same palette, so it can never clash with the template. */
+          <div className="relative h-40 w-full sm:h-56">
+            <CoverArt
+              art={event.theme.art}
+              palette={event.theme.palette}
+              className="absolute inset-0"
+            />
+          </div>
+        )}
 
         <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
           {!isPhotoLayout ? (

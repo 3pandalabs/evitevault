@@ -1,8 +1,10 @@
 import { and, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { signPreviewToken } from "../auth/jwt.js";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
+import { env } from "../env.js";
 import { eventTemplates, eventViews, events, guests } from "../db/schema.js";
 import { toCsv } from "../lib/csv.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
@@ -181,6 +183,30 @@ export async function eventRoutes(app: FastifyInstance) {
         .returning({ responsesSeenAt: events.responsesSeenAt });
 
       return { responsesSeenAt: updated.responsesSeenAt };
+    },
+  );
+
+  // Mints a link that shows a draft invitation exactly as a guest will see it.
+  //
+  // A draft has no other way to be looked at: /e/:slug serves published events
+  // only, and the dashboard's summary is not the invitation. Publishing to
+  // check the design and unpublishing afterwards is the workaround this
+  // removes — and it is a bad one, because the link is usually already out.
+  //
+  // The token is scoped to this event and expires in two hours, so it is a
+  // thing you click now, not a second, quieter way to share an invitation.
+  app.post(
+    "/events/:eventId/preview-link",
+    { schema: { params: z.object({ eventId: z.string().uuid() }) } },
+    async (req, reply) => {
+      const { eventId } = req.params as { eventId: string };
+      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      if (!event) return;
+
+      return {
+        url: `${env.WEB_ORIGIN}/e/${event.slug}?p=${signPreviewToken(event.id)}`,
+        expiresInSeconds: 2 * 60 * 60,
+      };
     },
   );
 

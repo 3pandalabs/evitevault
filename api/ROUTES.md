@@ -26,6 +26,7 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | H | GET | `/events/:eventId` | |
 | H | PATCH | `/events/:eventId` | Replacing the cover deletes the old R2 object |
 | H | POST | `/events/:eventId/publish` | Rejects an event with no title/date |
+| H | POST | `/events/:eventId/preview-link` | Signed, event-scoped, 2-hour token; `/e/:slug?p=…` then serves the draft as guests will see it |
 | H | DELETE | `/events/:eventId` | Guests, guestbook, announcements and views cascade |
 | H | GET | `/events/:eventId/analytics` | RSVP tally, views, unique visitors, views-by-day, response rate |
 | H | GET | `/events/:eventId/guests.csv` | Formula-injection-safe, UTF-8 BOM for Excel |

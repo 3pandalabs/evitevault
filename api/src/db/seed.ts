@@ -50,6 +50,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "lora" },
       layout: "classic",
+      art: "rings",
     },
   },
   {
@@ -69,6 +70,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "classic",
+      art: "marigold",
     },
   },
   {
@@ -88,6 +90,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "dm-sans" },
       layout: "poster",
+      art: "mandala",
     },
   },
   {
@@ -107,6 +110,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "inter" },
       layout: "classic",
+      art: "petals",
     },
   },
   {
@@ -126,6 +130,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "classic",
+      art: "mandala",
     },
   },
   {
@@ -145,6 +150,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "inter" },
       layout: "minimal",
+      art: "plain",
     },
   },
 
@@ -166,6 +172,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "dm-sans" },
       layout: "classic",
+      art: "stars",
     },
   },
   {
@@ -185,6 +192,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "classic",
+      art: "marigold",
     },
   },
   {
@@ -204,6 +212,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "inter" },
       layout: "minimal",
+      art: "stars",
     },
   },
 
@@ -225,6 +234,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "dm-sans" },
       layout: "poster",
+      art: "confetti",
     },
   },
   {
@@ -244,6 +254,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "dm-sans" },
       layout: "poster",
+      art: "balloons",
     },
   },
   {
@@ -263,6 +274,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "dm-sans" },
       layout: "classic",
+      art: "balloons",
     },
   },
   {
@@ -282,6 +294,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "inter" },
       layout: "poster",
+      art: "stars",
     },
   },
   {
@@ -301,6 +314,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "space-grotesk" },
       layout: "poster",
+      art: "confetti",
     },
   },
 
@@ -322,6 +336,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "poster",
+      art: "diyas",
     },
   },
   {
@@ -341,6 +356,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "dm-sans" },
       layout: "poster",
+      art: "confetti",
     },
   },
   {
@@ -360,6 +376,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "lora", body: "lora" },
       layout: "classic",
+      art: "mandala",
     },
   },
 
@@ -381,6 +398,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "classic",
+      art: "home",
     },
   },
   {
@@ -400,6 +418,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "inter", body: "inter" },
       layout: "minimal",
+      art: "home",
     },
   },
 
@@ -421,6 +440,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "inter" },
       layout: "classic",
+      art: "petals",
     },
   },
   {
@@ -440,6 +460,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "dm-sans" },
       layout: "poster",
+      art: "stars",
     },
   },
   {
@@ -459,6 +480,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "dm-sans" },
       layout: "poster",
+      art: "palms",
     },
   },
   {
@@ -478,6 +500,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "inter" },
       layout: "minimal",
+      art: "stripes",
     },
   },
 
@@ -499,6 +522,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "inter", body: "inter" },
       layout: "minimal",
+      art: "stripes",
     },
   },
   {
@@ -518,6 +542,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "dm-sans", body: "inter" },
       layout: "minimal",
+      art: "stripes",
     },
   },
 
@@ -539,6 +564,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "space-grotesk", body: "inter" },
       layout: "photo",
+      art: "plain",
     },
   },
 ];

@@ -31,6 +31,9 @@ export type PublicEvent = {
     };
     fonts: { heading: string; body: string };
     layout: "classic" | "poster" | "minimal" | "photo";
+    // Built-in cover artwork, drawn client-side in this palette when the host
+    // has not uploaded a photo of their own.
+    art: string;
   };
   rsvp: {
     deadline: string | null;
@@ -49,6 +52,9 @@ export type PublicEvent = {
     attendees: { name: string; plusOnes: number }[] | null;
   };
   calendar: { icsUrl: string; googleUrl: string };
+  // Present only when the page was opened through a host preview link, which
+  // is the one way an unpublished invitation is ever served.
+  preview?: { status: string };
   you: {
     id: string;
     name: string;
@@ -73,8 +79,17 @@ export type GuestbookPost = {
 // `cache: "no-store"` throughout: an invitation shows a live RSVP count and
 // presigned image URLs that expire in ten minutes. A cached render would show
 // a stale headcount and, worse, broken images.
-export async function fetchPublicEvent(slug: string, token?: string): Promise<PublicEvent | null> {
-  const qs = token ? `?t=${encodeURIComponent(token)}` : "";
+export async function fetchPublicEvent(
+  slug: string,
+  token?: string,
+  previewToken?: string,
+): Promise<PublicEvent | null> {
+  const params = new URLSearchParams();
+  if (token) params.set("t", token);
+  // The only way an unpublished invitation is served. Signed, event-scoped and
+  // two hours old at most — see the API's /events/:id/preview-link.
+  if (previewToken) params.set("p", previewToken);
+  const qs = params.toString() ? `?${params}` : "";
   const res = await fetch(`${API_URL}/public/events/${encodeURIComponent(slug)}${qs}`, {
     cache: "no-store",
   });

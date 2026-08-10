@@ -21,6 +21,30 @@ export const FONT_CHOICES = [
 
 export const LAYOUTS = ["classic", "poster", "minimal", "photo"] as const;
 
+// Built-in cover artwork, drawn as SVG in the host's chosen palette rather than
+// shipped as image files: a photograph would need a licence, a CDN and a
+// per-template asset pipeline, where a pattern in the template's own colours
+// costs nothing and can never clash with it. An event with no uploaded photo
+// renders its template's artwork instead of a blank hero.
+//
+// An allowlist for the same reason the fonts are one — the name selects a
+// component in web/src/lib/coverArt.tsx, and anything outside this list would
+// render nothing.
+export const COVER_ART = [
+  "plain",
+  "marigold",
+  "diyas",
+  "mandala",
+  "rings",
+  "petals",
+  "stars",
+  "confetti",
+  "balloons",
+  "home",
+  "palms",
+  "stripes",
+] as const;
+
 export const paletteSchema = z.object({
   bg: hexColor,
   surface: hexColor,
@@ -37,6 +61,10 @@ export const themeSchema = z.object({
     body: z.enum(FONT_CHOICES),
   }),
   layout: z.enum(LAYOUTS),
+  // Optional so every template written before artwork existed still parses —
+  // themes are jsonb rows, not code, and a required key here would make the
+  // whole stored theme invalid and silently fall back to DEFAULT_THEME.
+  art: z.enum(COVER_ART).optional(),
 });
 
 // Every key optional — an event stores only what it changes from its template.
@@ -45,6 +73,7 @@ export const themeOverridesSchema = z
     palette: paletteSchema.partial(),
     fonts: z.object({ heading: z.enum(FONT_CHOICES), body: z.enum(FONT_CHOICES) }).partial(),
     layout: z.enum(LAYOUTS),
+    art: z.enum(COVER_ART),
   })
   .partial();
 
@@ -62,6 +91,7 @@ export const DEFAULT_THEME: Theme = {
   },
   fonts: { heading: "playfair", body: "inter" },
   layout: "classic",
+  art: "plain",
 };
 
 // Resolved once on the server and sent to the client already merged, so the
@@ -77,5 +107,7 @@ export function resolveTheme(templateTheme: unknown, overrides: unknown): Theme 
     palette: { ...resolvedBase.palette, ...(o.palette ?? {}) },
     fonts: { ...resolvedBase.fonts, ...(o.fonts ?? {}) },
     layout: o.layout ?? resolvedBase.layout,
+    // Event override, then the template's own artwork, then nothing decorative.
+    art: o.art ?? resolvedBase.art ?? "plain",
   };
 }
