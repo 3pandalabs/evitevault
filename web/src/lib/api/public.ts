@@ -18,6 +18,8 @@ export type PublicEvent = {
   timezone: string;
   location: { name: string | null; address: string | null; mapUrl: string | null };
   coverImageUrl: string | null;
+  // Set once the host has an album to point guests at, usually after the day.
+  photoAlbumUrl: string | null;
   theme: {
     palette: {
       bg: string;

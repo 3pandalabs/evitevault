@@ -32,6 +32,7 @@ export type EventFormValues = {
   guestbookEnabled: boolean;
   showGuestList: boolean;
   capacity: string;
+  photoAlbumUrl: string;
 };
 
 // Sensible default: 7pm a week out, rounded, so the form opens on a plausible
@@ -89,6 +90,7 @@ export function EventForm({
   const [guestbookEnabled, setGuestbookEnabled] = useState(initial?.guestbookEnabled ?? true);
   const [showGuestList, setShowGuestList] = useState(initial?.showGuestList ?? false);
   const [capacity, setCapacity] = useState(initial?.capacity ?? "");
+  const [photoAlbumUrl, setPhotoAlbumUrl] = useState(initial?.photoAlbumUrl ?? "");
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +139,7 @@ export function EventForm({
         guestbookEnabled,
         guestPhotosEnabled: guestbookEnabled,
         showGuestList,
+        photoAlbumUrl: photoAlbumUrl.trim() || null,
       });
     } catch {
       setError(failureMessage);
@@ -388,6 +391,46 @@ export function EventForm({
               placeholder="No limit"
               className="max-w-32"
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Deliberately a link the host pastes rather than a Google account
+          connection. Google Photos' API only lets an app see media it uploaded
+          itself, so an album created from here would sit empty next to the one
+          the host is actually filling from their phone. Making the album is
+          three taps in the Photos app; sending it to everyone who came is the
+          part that's tedious, and that's what the event page does. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Photos afterwards</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="album-url">Shared photo album link</Label>
+            <Input
+              id="album-url"
+              type="url"
+              maxLength={2000}
+              value={photoAlbumUrl}
+              onChange={(e) => setPhotoAlbumUrl(e.target.value)}
+              placeholder="https://photos.app.goo.gl/…"
+            />
+            <p className="text-xs text-slate-500">
+              In Google Photos, create an album, turn on{" "}
+              <span className="font-medium">Share &rarr; Collaborate</span> so guests can add their
+              own pictures, copy the link and paste it here. Any album link works — iCloud, Drive,
+              anything else. It appears on the invitation, and you can email it to your guests from
+              the event page.
+            </p>
+            <a
+              href="https://photos.google.com/albums"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs font-medium text-amber-700 underline underline-offset-4"
+            >
+              Open Google Photos albums &rarr;
+            </a>
           </div>
         </CardContent>
       </Card>

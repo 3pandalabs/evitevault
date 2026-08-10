@@ -39,8 +39,15 @@ import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
-import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
+import {
+  formatEventDate,
+  formatEventTime,
+  formatRelative,
+  formatTimestamp,
+  formatTimeZoneLabel,
+} from "@/lib/utils";
 import { DeleteEventButton } from "../delete-event-button";
+import { PhotoAlbumCard } from "./photo-album";
 import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
 
@@ -491,6 +498,15 @@ export default function EventDetailPage() {
         </CardContent>
       </Card>
 
+      <PhotoAlbumCard
+        eventId={eventId}
+        albumUrl={event.photoAlbumUrl ?? null}
+        recipientCounts={{
+          all: guests.filter((g) => g.email).length,
+          attending: guests.filter((g) => g.email && g.rsvpStatus === "attending").length,
+        }}
+      />
+
       {error ? (
         <p role="alert" className="text-sm text-red-600">
           {error}
@@ -544,6 +560,7 @@ export default function EventDetailPage() {
                   <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
                     <th className="pb-2 pr-4 font-medium">Name</th>
                     <th className="pb-2 pr-4 font-medium">RSVP</th>
+                    <th className="pb-2 pr-4 font-medium">Replied</th>
                     <th className="pb-2 pr-4 font-medium">Party</th>
                     <th className="pb-2 pr-4 font-medium">Notes</th>
                     <th className="pb-2 font-medium">Link</th>
@@ -567,6 +584,26 @@ export default function EventDetailPage() {
                       </td>
                       <td className="py-3 pr-4">
                         <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
+                      </td>
+                      {/* When they answered, not merely that they did. A host
+                          chasing replies needs to tell "said yes months ago"
+                          from "said yes an hour ago", and the date is what a
+                          later argument about who confirmed first turns on.
+                          It moves when a guest changes their answer, so it
+                          always reads as the current reply's time. */}
+                      <td className="py-3 pr-4 whitespace-nowrap">
+                        {g.respondedAt ? (
+                          <>
+                            <div title={new Date(g.respondedAt).toLocaleString()}>
+                              {formatTimestamp(g.respondedAt, event.timezone)}
+                            </div>
+                            <div className="text-xs text-slate-500">
+                              {formatRelative(g.respondedAt)}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="py-3 pr-4">
                         {g.rsvpStatus === "attending" ? (

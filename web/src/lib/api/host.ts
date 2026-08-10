@@ -99,6 +99,8 @@ export type EventSummary = {
   // Also only on the full row. Determines whether a scanned QR can actually
   // lead to an RSVP, or only to a "this invitation is personal" message.
   allowPublicRsvp?: boolean;
+  // Also only on the full row. The album link the host shares after the event.
+  photoAlbumUrl?: string | null;
   status: "draft" | "published" | "cancelled" | "archived";
   capacity: number | null;
   invited: number;
@@ -182,6 +184,7 @@ export type EventInput = {
   guestbookEnabled?: boolean;
   guestPhotosEnabled?: boolean;
   showGuestList?: boolean;
+  photoAlbumUrl?: string | null;
 };
 
 export const listTemplates = () => hostFetch<{ templates: Template[] }>("/templates");
@@ -237,6 +240,20 @@ export const createAnnouncement = (
     `/events/${eventId}/announcements`,
     { method: "POST", body: JSON.stringify(input) },
   );
+
+// Mails the event's photo album link — the URL comes from the saved event, not
+// from this call, so save it first. Recorded alongside announcements.
+export const sharePhotoAlbum = (
+  eventId: string,
+  input: { audience?: "all" | "attending" | "maybe"; message?: string | null },
+) =>
+  hostFetch<{
+    id: string;
+    recipientCount: number;
+    delivered: number;
+    failed: number;
+    emailConfigured: boolean;
+  }>(`/events/${eventId}/photo-album/share`, { method: "POST", body: JSON.stringify(input) });
 
 // Mints a short-lived read URL for an object the host owns. The bucket is
 // private, so a stored key is not a URL — it has to be exchanged for one every
