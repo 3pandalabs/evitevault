@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { browserTimeZone, timeZones, zonedWallTimeToUtc } from "@/lib/datetime";
-import { cn } from "@/lib/utils";
+import { TemplatePicker } from "./template-picker";
 
 // Wall-clock strings, not instants: every date field here is what a
 // `datetime-local` input holds, read in `timezone`. The conversion to absolute
@@ -289,42 +289,12 @@ export function EventForm({
           <CardTitle>Design</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {templates.map((t) => {
-              const selected = templateId === t.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTemplateId(t.id)}
-                  aria-pressed={selected}
-                  className={cn(
-                    "rounded-xl border-2 p-3 text-left transition",
-                    selected ? "border-slate-900" : "border-slate-200 hover:border-slate-300",
-                  )}
-                >
-                  {/* A swatch strip is enough to choose by, and avoids
-                      shipping six preview images for a scaffold. */}
-                  <div
-                    className="mb-2 flex h-14 items-center justify-center rounded-lg text-xs"
-                    style={{ backgroundColor: t.theme.palette.bg, color: t.theme.palette.text }}
-                  >
-                    <span
-                      className="rounded px-2 py-1"
-                      style={{
-                        backgroundColor: t.theme.palette.accent,
-                        color: t.theme.palette.accentText,
-                      }}
-                    >
-                      Aa
-                    </span>
-                  </div>
-                  <p className="text-sm font-medium">{t.name}</p>
-                  <p className="mt-0.5 text-xs text-slate-500">{t.description}</p>
-                </button>
-              );
-            })}
-          </div>
+          <TemplatePicker
+            templates={templates}
+            value={templateId}
+            onChange={setTemplateId}
+            sampleTitle={title}
+          />
         </CardContent>
       </Card>
 

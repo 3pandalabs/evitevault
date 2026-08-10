@@ -14,6 +14,7 @@ import {
   Pencil,
   Plus,
   Send,
+  TriangleAlert,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -348,7 +349,12 @@ export default function EventDetailPage() {
               </Button>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">
+            /* Loud on purpose. A host who thinks their invitation is out, when
+               it is actually a draft whose link 404s, finds out from a guest —
+               usually too late. This is the one state on the page worth
+               shouting about. */
+            <p className="flex items-center gap-2 text-sm font-bold text-red-600">
+              <TriangleAlert className="size-4 shrink-0" />
               This is a draft — the link doesn&apos;t work for guests until you publish it.
             </p>
           )}
