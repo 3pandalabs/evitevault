@@ -402,6 +402,27 @@ export default function EventDetailPage() {
         </div>
       </header>
 
+      {/* The card image is flattened once and never re-rendered, so an edit to
+          the title, date or place leaves it showing the old ones — in every
+          chat it was forwarded to, and in the link preview, silently, while
+          this page and the invitation both look correct. Amber rather than red:
+          nothing is broken, but it is wrong, and only the host can fix it. */}
+      {event.cardStale && (
+        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <TriangleAlert className="size-4 shrink-0 text-amber-700" />
+          <p className="flex-1 text-sm text-amber-900">
+            Your saved invitation card is out of date — this event has changed since it was made.
+            Link previews and anything already shared still show the old details.
+          </p>
+          <Link href={`/dashboard/events/${eventId}/design`}>
+            <Button size="sm" variant="outline">
+              <Palette className="size-4" />
+              Update the card
+            </Button>
+          </Link>
+        </div>
+      )}
+
       {event.status === "published" ? (
         <Card>
           <CardHeader>
