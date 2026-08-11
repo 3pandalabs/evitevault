@@ -9,6 +9,7 @@ import {
   isAllowedImageType,
   presignDownload,
   presignUpload,
+  shareCardKey,
 } from "../plugins/r2.js";
 
 export async function storageRoutes(app: FastifyInstance) {
@@ -35,6 +36,32 @@ export async function storageRoutes(app: FastifyInstance) {
       }
 
       const key = coverImageKey(eventId, extForType(contentType));
+      return { key, uploadUrl: await presignUpload(key, contentType) };
+    },
+  );
+
+  // The flattened card the designer renders in the browser. Same shape as the
+  // cover presign above and deliberately so — the bytes go straight from the
+  // canvas to R2 without passing through Fastify, which is what keeps a 3MB
+  // export off the API's event loop.
+  app.post(
+    "/events/:eventId/card/presign-upload",
+    {
+      schema: {
+        params: z.object({ eventId: z.string().uuid() }),
+        body: z.object({ contentType: z.string().max(100) }),
+      },
+    },
+    async (req, reply) => {
+      const { eventId } = req.params as { eventId: string };
+      const { contentType } = req.body as { contentType: string };
+      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+
+      if (!isAllowedImageType(contentType)) {
+        return reply.code(400).send({ error: "unsupported_content_type" });
+      }
+
+      const key = shareCardKey(eventId, extForType(contentType));
       return { key, uploadUrl: await presignUpload(key, contentType) };
     },
   );

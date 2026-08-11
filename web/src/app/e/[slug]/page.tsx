@@ -26,13 +26,24 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const event = await fetchPublicEvent(slug, undefined, previewToken);
   if (!event) return { title: "Invitation not found" };
 
+  // The designed card first: it is the composition the host approved, with the
+  // title and date burned in, so a WhatsApp preview says something even before
+  // anyone taps. The bare cover photo is the fallback for events whose host
+  // never opened the designer.
+  //
+  // Both are presigned URLs and expire in ten minutes. That is survivable here
+  // and only here: a crawler fetches the image within seconds of following the
+  // link and caches its own copy, so the expiry outlives the one request that
+  // matters. Do not reuse this pattern for a URL a person is expected to keep.
+  const previewImage = event.cardImageUrl ?? event.coverImageUrl;
+
   return {
     title: `${event.title} · RsvpVault`,
     description: event.description ?? undefined,
     openGraph: {
       title: event.title,
       description: event.description ?? undefined,
-      images: event.coverImageUrl ? [event.coverImageUrl] : undefined,
+      images: previewImage ? [previewImage] : undefined,
     },
     // An invitation is unlisted by design: the slug is the only credential, so
     // it must never end up in a search index.

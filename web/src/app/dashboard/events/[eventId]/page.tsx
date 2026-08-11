@@ -11,6 +11,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  Palette,
   Pencil,
   Plus,
   Send,
@@ -362,6 +363,12 @@ export default function EventDetailPage() {
               <Button variant="outline">
                 <Pencil className="size-4" />
                 Edit
+              </Button>
+            </Link>
+            <Link href={`/dashboard/events/${eventId}/design`}>
+              <Button variant="outline">
+                <Palette className="size-4" />
+                Design card
               </Button>
             </Link>
             <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>

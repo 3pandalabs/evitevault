@@ -18,6 +18,9 @@ export type PublicEvent = {
   timezone: string;
   location: { name: string | null; address: string | null; mapUrl: string | null };
   coverImageUrl: string | null;
+  // The flattened card from the designer, when the host has saved one. Used as
+  // the link-preview image; the page itself renders live HTML, not this.
+  cardImageUrl: string | null;
   // Set once the host has an album to point guests at, usually after the day.
   photoAlbumUrl: string | null;
   theme: {

@@ -138,6 +138,11 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
       mapUrl: event.locationMapUrl,
     },
     coverImageUrl: event.coverImageKey ? await presignDownload(event.coverImageKey) : null,
+    // The flattened designer card, used as the link-preview image. Presigned
+    // like every other object here, which means the URL expires — see the note
+    // in web/src/app/e/[slug]/page.tsx about why that is survivable for a
+    // crawler and not for anything a guest is expected to keep.
+    cardImageUrl: event.cardImageKey ? await presignDownload(event.cardImageKey) : null,
     // Host-supplied and http(s)-validated on the way in (routes/events.ts).
     // Safe to hand to every visitor: it is the same link the host mails out,
     // and an album's own sharing settings decide what it opens onto.

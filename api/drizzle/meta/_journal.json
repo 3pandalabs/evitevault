@@ -43,6 +43,13 @@
       "when": 1786372075228,
       "tag": "0005_event_photo_album",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786457792864,
+      "tag": "0006_event_card_image",
+      "breakpoints": true
     }
   ]
 }

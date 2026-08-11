@@ -149,6 +149,11 @@ export const events = pgTable(
     locationMapUrl: text("location_map_url"),
 
     coverImageKey: text("cover_image_key"),
+    // The flattened invitation card the host exported from the designer: the
+    // link-preview image, and the file they send to WhatsApp. Derived entirely
+    // from this row plus `theme_overrides.card`, so it is safe to drop and
+    // re-render; null simply means they never opened the designer.
+    cardImageKey: text("card_image_key"),
     templateId: uuid("template_id").references(() => eventTemplates.id, { onDelete: "set null" }),
     // Per-event overrides merged over the template's theme. Same shape,
     // every key optional.
