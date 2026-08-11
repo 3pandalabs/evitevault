@@ -1,6 +1,7 @@
 "use client";
 
 import { Download, ImageUp, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import {
@@ -127,6 +128,7 @@ export function CardEditor({
   // "https://" is four words nobody types and a line of the card it doesn't
   // earn.
   const qrUrl = useMemo(() => invitationUrl(event.slug), [event.slug]);
+  const hasMessage = Boolean(content.message?.trim());
 
   // The stored cover image is the card's photo — one photo per event, used by
   // the invitation page and the card alike. Exchanged for a short-lived read
@@ -418,14 +420,35 @@ export function CardEditor({
             onChange={(align) => patch({ align })}
           />
 
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          {/* Named after the field it actually reads, and disabled when that
+              field is empty. As "Include the event message" over an event with
+              no description, this was a checkbox that visibly did nothing — the
+              toggle was working, there was simply no text for it to show. */}
+          <label
+            className={cn(
+              "flex items-start gap-2 text-sm",
+              hasMessage ? "text-slate-700" : "text-slate-400",
+            )}
+          >
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300"
-              checked={design.showMessage}
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+              checked={design.showMessage && hasMessage}
+              disabled={!hasMessage}
               onChange={(e) => patch({ showMessage: e.target.checked })}
             />
-            Include the event message
+            <span>
+              Include the event description
+              {!hasMessage && (
+                <span className="block text-xs text-slate-500">
+                  This event has no description yet. Add one in{" "}
+                  <Link href={`/dashboard/events/${event.id}/edit`} className="underline">
+                    Edit
+                  </Link>{" "}
+                  and it will appear here.
+                </span>
+              )}
+            </span>
           </label>
 
           <label className="flex items-start gap-2 text-sm text-slate-700">
