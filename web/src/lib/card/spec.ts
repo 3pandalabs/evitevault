@@ -120,6 +120,45 @@ export function resolveCardDesign(
   };
 }
 
+/**
+ * The colour to draw the QR modules in.
+ *
+ * The code is always drawn on a white quiet-zone panel — that panel is what
+ * makes it scannable over a photograph — so the module colour has to contrast
+ * with *white*, not with the theme's background. Taking `palette.text` on
+ * trust is what produced a blank white square on Sangeet Night, whose ink is
+ * `#fdf4ff` because it sits on dark aubergine everywhere else on the card.
+ *
+ * So: use the theme's own colours when they are dark enough to scan, and fall
+ * back to near-black when they aren't. Threshold is 7:1 rather than the 4.5:1
+ * of text contrast — a QR reader is working from a phone camera at an angle,
+ * often off a screen, and there is no upside to a marginal code.
+ */
+export function qrInkFor(palette: Pick<CardPalette, "text" | "accent">): string {
+  for (const candidate of [palette.text, palette.accent]) {
+    if (contrastWithWhite(candidate) >= 7) return candidate;
+  }
+  return "#111827";
+}
+
+/** WCAG relative luminance. Accepts #rgb and #rrggbb. */
+function relativeLuminance(hex: string): number {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  if (full.length !== 6) return 0;
+
+  const channel = (i: number) => {
+    const c = parseInt(full.slice(i * 2, i * 2 + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+}
+
+/** Exported for the test that guards the invariant qrInkFor exists to hold. */
+export function contrastWithWhite(hex: string): number {
+  return 1.05 / (relativeLuminance(hex) + 0.05);
+}
+
 /** Wall-clock date and time in the event's own zone, not the viewer's. */
 export function cardDateLines(
   startsAt: string,
