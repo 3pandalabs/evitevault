@@ -1,7 +1,6 @@
 "use client";
 
 import { Download, ImageUp, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import {
@@ -31,7 +30,7 @@ import {
 import { ART_CHOICES, ART_LABELS, CoverArt } from "@/lib/coverArt";
 import { ALL_FONTS } from "@/lib/fontStacks";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { CardCanvas } from "./card-canvas";
 
@@ -48,10 +47,16 @@ const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
  *
  * Two panes: the card on the left, the controls on the right, everything
  * redrawing as it is typed. What it edits is deliberately narrow — this screen
- * owns *composition*, and the event's own fields (title, date, place, message)
- * stay on the event form. The card reads them; it never keeps its own copy, so
- * a host who fixes a typo on the event form doesn't have to remember to come
- * back here and fix it again.
+ * owns *composition*, and the event's own fields (title, date, place) stay on
+ * the event form. The card reads them; it never keeps its own copy, so a host
+ * who fixes a typo on the event form doesn't have to remember to come back here
+ * and fix it again.
+ *
+ * The description is the one exception, editable here because it is the field
+ * hosts most often write *for* the card and bouncing to another screen for one
+ * sentence is a worse answer than a textarea. It is still the event's own
+ * column, saved through the same endpoint — an edit here changes the invitation
+ * page too, which is the point.
  *
  * Saving does two separate things, in this order:
  *   1. PATCH themeOverrides — the design, the thing worth keeping;
@@ -81,6 +86,12 @@ export function CardEditor({
   const [accent, setAccent] = useState<string>(
     storedOverrides.palette?.accent ?? template?.theme.palette.accent ?? "#b45309",
   );
+
+  // The event's own description, edited in place. Note this is the *event's*
+  // field, not a card-local copy — the same string the invitation page renders,
+  // saved back to the same column. Editing it from here is a convenience, not a
+  // second home for it, which is the distinction the whole card design rests on.
+  const [description, setDescription] = useState((event.description as string | null) ?? "");
 
   const [photoSrc, setPhotoSrc] = useState<string | null>(null);
   const [hasPhoto, setHasPhoto] = useState(Boolean(event.coverImageKey));
@@ -119,16 +130,17 @@ export function CardEditor({
       dateLine,
       timeLine,
       locationName: event.locationName ?? null,
-      message: (event.description as string | null) ?? null,
+      message: description.trim() || null,
       url: displayUrl(event.slug),
     };
-  }, [event]);
+  }, [event, description]);
 
   // The QR resolves to the real link; the card prints the trimmed one, because
   // "https://" is four words nobody types and a line of the card it doesn't
   // earn.
   const qrUrl = useMemo(() => invitationUrl(event.slug), [event.slug]);
   const hasMessage = Boolean(content.message?.trim());
+  const descriptionDirty = description.trim() !== ((event.description as string | null) ?? "").trim();
 
   // The stored cover image is the card's photo — one photo per event, used by
   // the invitation page and the card alike. Exchanged for a short-lived read
@@ -248,7 +260,14 @@ export function CardEditor({
     setBusy("save");
     setError(null);
     try {
-      await updateEvent(event.id, { themeOverrides: overridesToSave() });
+      // One PATCH, so an edited description and the design it was written for
+      // can't half-land. Sent only when it actually changed — this endpoint is
+      // shared with the event form, and a no-op write here would still bump
+      // updated_at and look like an edit in any history built on it.
+      await updateEvent(event.id, {
+        themeOverrides: overridesToSave(),
+        ...(descriptionDirty ? { description: description.trim() || null } : {}),
+      });
 
       const { blob, contentType } = await renderExport();
       await uploadCardImage(event.id, blob, contentType);
@@ -420,36 +439,43 @@ export function CardEditor({
             onChange={(align) => patch({ align })}
           />
 
-          {/* Named after the field it actually reads, and disabled when that
-              field is empty. As "Include the event message" over an event with
-              no description, this was a checkbox that visibly did nothing — the
-              toggle was working, there was simply no text for it to show. */}
-          <label
-            className={cn(
-              "flex items-start gap-2 text-sm",
-              hasMessage ? "text-slate-700" : "text-slate-400",
-            )}
-          >
-            <input
-              type="checkbox"
-              className="mt-0.5 h-4 w-4 rounded border-slate-300"
-              checked={design.showMessage && hasMessage}
-              disabled={!hasMessage}
-              onChange={(e) => patch({ showMessage: e.target.checked })}
-            />
-            <span>
-              Include the event description
-              {!hasMessage && (
-                <span className="block text-xs text-slate-500">
-                  This event has no description yet. Add one in{" "}
-                  <Link href={`/dashboard/events/${event.id}/edit`} className="underline">
-                    Edit
-                  </Link>{" "}
-                  and it will appear here.
-                </span>
+          {/* Named after the field it actually reads, and editable in place —
+              sending someone to another screen to write one sentence and come
+              back is a worse answer than a textarea. */}
+          <div className="space-y-2">
+            <label
+              className={cn(
+                "flex items-center gap-2 text-sm",
+                hasMessage ? "text-slate-700" : "text-slate-400",
               )}
-            </span>
-          </label>
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300"
+                checked={design.showMessage && hasMessage}
+                disabled={!hasMessage}
+                onChange={(e) => patch({ showMessage: e.target.checked })}
+              />
+              Include the event description
+            </label>
+
+            <Textarea
+              value={description}
+              maxLength={5000}
+              rows={3}
+              placeholder="Join us for an evening of…"
+              onChange={(e) => setDescription(e.target.value)}
+            />
+            <p className="text-xs text-slate-500">
+              {descriptionDirty ? (
+                <span className="text-amber-700">
+                  Unsaved — “Save card” updates the invitation page too.
+                </span>
+              ) : (
+                "This is the event's own description, shared with the invitation page."
+              )}
+            </p>
+          </div>
 
           <label className="flex items-start gap-2 text-sm text-slate-700">
             <input
