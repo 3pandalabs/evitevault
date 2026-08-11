@@ -102,6 +102,10 @@ export type EventSummary = {
   allowPublicRsvp?: boolean;
   // Also only on the full row. The album link the host shares after the event.
   photoAlbumUrl?: string | null;
+  // Also only on the full row. True when the saved card image no longer matches
+  // the event — the image is flattened at export and never re-rendered, so it
+  // goes stale silently while the invitation page stays correct.
+  cardStale?: boolean;
   status: "draft" | "published" | "cancelled" | "archived";
   capacity: number | null;
   invited: number;

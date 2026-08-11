@@ -5,7 +5,8 @@ import { signPreviewToken } from "../auth/jwt.js";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { env } from "../env.js";
-import { eventTemplates, eventViews, events, guests } from "../db/schema.js";
+import { eventTemplates, eventViews, events, guests, type Event } from "../db/schema.js";
+import { cardSourceHash as hashCardSource } from "../lib/cardSource.js";
 import { toCsv } from "../lib/csv.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
 import { themeOverridesSchema } from "../lib/theme.js";
@@ -60,6 +61,19 @@ const eventPatch = eventBody.partial().extend({
 function keyBelongsToEvent(key: string | null | undefined, eventId: string): boolean {
   if (!key) return true;
   return eventIdForKey(key) === eventId;
+}
+
+/**
+ * Whether the saved card image no longer matches the event it depicts.
+ *
+ * An event with no card is never stale — there is nothing to be wrong. Nor is
+ * one whose hash is null: that is a card exported before this column existed,
+ * and warning a host about a card that may well be fine is worse than staying
+ * quiet until their next save fills the hash in.
+ */
+function isCardStale(event: Event): boolean {
+  if (!event.cardImageKey || !event.cardSourceHash) return false;
+  return event.cardSourceHash !== hashCardSource(event);
 }
 
 export async function eventRoutes(app: FastifyInstance) {
@@ -163,7 +177,11 @@ export async function eventRoutes(app: FastifyInstance) {
 
       // responsesSeenAt is returned alongside so the client can mark which
       // individual rows are new BEFORE calling /responses-seen to clear it.
-      return { ...event, newResponses: tally?.newResponses ?? 0 };
+      return {
+        ...event,
+        newResponses: tally?.newResponses ?? 0,
+        cardStale: isCardStale(event),
+      };
     },
   );
 
@@ -237,9 +255,19 @@ export async function eventRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: "ends_before_starts" });
       }
 
+      // The fingerprint is written in the same statement as the key, from the
+      // row as it will be *after* this update — the designer sends the design
+      // and the image in one PATCH, so hashing `existing` would record the
+      // state the card was drawn from one save too late and report every fresh
+      // card as stale.
+      const cardSourceHash =
+        body.cardImageKey !== undefined && body.cardImageKey !== null
+          ? hashCardSource({ ...existing, ...body })
+          : undefined;
+
       const [updated] = await db
         .update(events)
-        .set({ ...body, updatedAt: new Date() })
+        .set({ ...body, cardSourceHash, updatedAt: new Date() })
         .where(and(eq(events.id, eventId), eq(events.hostId, req.userId!)))
         .returning();
 

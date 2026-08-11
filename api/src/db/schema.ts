@@ -154,6 +154,10 @@ export const events = pgTable(
     // from this row plus `theme_overrides.card`, so it is safe to drop and
     // re-render; null simply means they never opened the designer.
     cardImageKey: text("card_image_key"),
+    // Fingerprint of the event fields the card was drawn from, written when the
+    // image is. Stale when it no longer matches the row — see lib/cardSource.ts
+    // for why this exists rather than a comparison against updated_at.
+    cardSourceHash: text("card_source_hash"),
     templateId: uuid("template_id").references(() => eventTemplates.id, { onDelete: "set null" }),
     // Per-event overrides merged over the template's theme. Same shape,
     // every key optional.
