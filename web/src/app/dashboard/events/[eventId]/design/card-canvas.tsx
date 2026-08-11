@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoverArt } from "@/lib/coverArt";
-import { ensureCardFonts, loadImage, rasterizeSvg } from "@/lib/card/assets";
+import { ensureCardFonts, loadImage, loadQrCode, rasterizeSvg } from "@/lib/card/assets";
 import { drawCardToCanvas, photoOverflow, type CardAssets, type CardFonts } from "@/lib/card/render";
 import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "@/lib/card/spec";
 import { cn } from "@/lib/utils";
@@ -27,6 +27,7 @@ export function CardCanvas({
   content,
   art,
   photoSrc,
+  qrUrl,
   onPhotoPan,
   className,
 }: {
@@ -36,6 +37,8 @@ export function CardCanvas({
   content: CardContent;
   art: string;
   photoSrc: string | null;
+  /** The full https:// link the QR code resolves to — not the trimmed one printed on the card. */
+  qrUrl: string;
   onPhotoPan?: (offset: { offsetX: number; offsetY: number }) => void;
   className?: string;
 }) {
@@ -50,17 +53,23 @@ export function CardCanvas({
   const [loadedPhoto, setLoadedPhoto] = useState<{ src: string; img: HTMLImageElement } | null>(null);
   const [failedPhotoSrc, setFailedPhotoSrc] = useState<string | null>(null);
   const [loadedArt, setLoadedArt] = useState<{ key: string; img: HTMLImageElement } | null>(null);
+  const [loadedQr, setLoadedQr] = useState<{ key: string; img: HTMLImageElement } | null>(null);
   const [readyFonts, setReadyFonts] = useState<string | null>(null);
 
   const artKey = `${art}|${design.ratio}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
+  // Full bleed puts the code on a white panel over a photo, where the theme's
+  // ink can be anything; a near-black keeps it scannable there.
+  const qrInk = design.frame === "full" ? "#111827" : palette.text;
+  const qrKey = `${qrUrl}|${qrInk}`;
 
   const assets: CardAssets = useMemo(
     () => ({
       photo: loadedPhoto?.src === photoSrc ? loadedPhoto.img : null,
       art: loadedArt?.key === artKey ? loadedArt.img : null,
+      qr: loadedQr?.key === qrKey ? loadedQr.img : null,
     }),
-    [loadedPhoto, photoSrc, loadedArt, artKey],
+    [loadedPhoto, photoSrc, loadedArt, artKey, loadedQr, qrKey],
   );
   const photoError = Boolean(photoSrc) && failedPhotoSrc === photoSrc;
   const fontsReady = readyFonts === fontKey;
@@ -103,6 +112,20 @@ export function CardCanvas({
       cancelled = true;
     };
   }, [artKey, design.ratio]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadQrCode(qrUrl, qrInk)
+      .then((img) => {
+        if (!cancelled) setLoadedQr({ key: qrKey, img });
+      })
+      .catch(() => {
+        /* The printed URL still gets people there; no error UI for this. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrUrl, qrInk, qrKey]);
 
   useEffect(() => {
     let cancelled = false;

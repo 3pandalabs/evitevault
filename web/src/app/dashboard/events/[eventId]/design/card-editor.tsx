@@ -12,7 +12,7 @@ import {
   type Template,
   type ThemeOverrides,
 } from "@/lib/api/host";
-import { ensureCardFonts, loadImage, rasterizeSvg } from "@/lib/card/assets";
+import { ensureCardFonts, loadImage, loadQrCode, rasterizeSvg } from "@/lib/card/assets";
 import { renderCardToBlob, type CardFonts } from "@/lib/card/render";
 import {
   CARD_SIZES,
@@ -119,9 +119,14 @@ export function CardEditor({
       timeLine,
       locationName: event.locationName ?? null,
       message: (event.description as string | null) ?? null,
-      url: invitationUrl(event.slug),
+      url: displayUrl(event.slug),
     };
   }, [event]);
+
+  // The QR resolves to the real link; the card prints the trimmed one, because
+  // "https://" is four words nobody types and a line of the card it doesn't
+  // earn.
+  const qrUrl = useMemo(() => invitationUrl(event.slug), [event.slug]);
 
   // The stored cover image is the card's photo — one photo per event, used by
   // the invitation page and the card alike. Exchanged for a short-lived read
@@ -210,9 +215,12 @@ export function CardEditor({
 
     const { width, height } = CARD_SIZES[design.ratio];
     const artSvg = document.getElementById("card-export-art")?.querySelector("svg");
-    const [photo, artImg] = await Promise.all([
+    const [photo, artImg, qr] = await Promise.all([
       photoSrc ? loadImage(photoSrc).catch(() => null) : Promise.resolve(null),
       artSvg ? rasterizeSvg(artSvg as SVGSVGElement, width, height).catch(() => null) : Promise.resolve(null),
+      design.showQr
+        ? loadQrCode(qrUrl, design.frame === "full" ? "#111827" : palette.text).catch(() => null)
+        : Promise.resolve(null),
     ]);
 
     return renderCardToBlob({
@@ -220,9 +228,9 @@ export function CardEditor({
       palette,
       fonts,
       content,
-      assets: { photo, art: artImg },
+      assets: { photo, art: artImg, qr },
     });
-  }, [design, palette, fonts, content, photoSrc]);
+  }, [design, palette, fonts, content, photoSrc, qrUrl]);
 
   function overridesToSave(): ThemeOverrides {
     return {
@@ -298,6 +306,7 @@ export function CardEditor({
             content={content}
             art={art}
             photoSrc={photoSrc}
+            qrUrl={qrUrl}
             onPhotoPan={(offset) => patch({ photo: { ...design.photo, ...offset } })}
           />
           <p className="mt-3 text-center text-sm text-slate-500">
@@ -417,6 +426,22 @@ export function CardEditor({
               onChange={(e) => patch({ showMessage: e.target.checked })}
             />
             Include the event message
+          </label>
+
+          <label className="flex items-start gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-slate-300"
+              checked={design.showQr}
+              onChange={(e) => patch({ showQr: e.target.checked })}
+            />
+            <span>
+              Show a QR code
+              <span className="block text-xs text-slate-500">
+                Scanning it opens the invitation and the RSVP form — worth keeping if the card gets
+                printed or forwarded as a screenshot.
+              </span>
+            </span>
           </label>
 
           <Choices
@@ -578,8 +603,12 @@ function Slider({
 function invitationUrl(slug: string): string {
   const origin =
     typeof window !== "undefined" ? window.location.origin : "https://evitevault.3pandalabs.com";
-  // Printed on the card as the thing someone types, so it drops the scheme.
-  return `${origin.replace(/^https?:\/\//, "")}/e/${slug}`;
+  return `${origin}/e/${slug}`;
+}
+
+/** The same link as printed on the card: no scheme, because nobody types it. */
+function displayUrl(slug: string): string {
+  return invitationUrl(slug).replace(/^https?:\/\//, "");
 }
 
 function uploadMessage(err: ApiError): string {

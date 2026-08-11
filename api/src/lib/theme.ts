@@ -89,6 +89,10 @@ export const cardSchema = z.object({
   // label ("You're invited", "Save the date") with no meaning off the card.
   eyebrow: z.string().max(40).default("You're invited"),
   showMessage: z.boolean().default(true),
+  // A forwarded screenshot is a dead end without a way back to the invitation.
+  // The URL is printed either way; the QR is what makes it work when the card
+  // is on paper or on someone else's phone screen.
+  showQr: z.boolean().default(true),
 });
 
 export const paletteSchema = z.object({
@@ -141,6 +145,7 @@ export const DEFAULT_CARD: CardDesign = {
   overlay: 0.35,
   eyebrow: "You're invited",
   showMessage: true,
+  showQr: true,
 };
 
 export const DEFAULT_THEME: Theme = {

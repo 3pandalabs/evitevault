@@ -4,6 +4,7 @@
 // template's SVG artwork turned into a bitmap, and fonts that are actually
 // loaded before the first stroke of text.
 
+import QRCode from "qrcode";
 import { FONT_STACKS, googleFontsHrefFor } from "../fontStacks";
 
 /**
@@ -53,6 +54,28 @@ export function rasterizeSvg(
 
   const markup = new XMLSerializer().serializeToString(clone);
   return loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`);
+}
+
+/**
+ * The invitation's QR code, ready to draw.
+ *
+ * Same settings as the standalone QR panel on the event page: error correction
+ * M, because these end up printed, stuck to walls and photographed at an angle,
+ * and the URL is short enough that the redundancy costs no useful density.
+ *
+ * Rendered transparent (`light: "#0000"`) so the card can paint its own quiet
+ * zone in the right place; 512px so it stays crisp at 2× export scale. `dark`
+ * takes the theme's ink rather than pure black — still far past the contrast a
+ * scanner needs, and it stops the code reading as a sticker someone dropped on
+ * the design.
+ */
+export function loadQrCode(url: string, dark: string): Promise<HTMLImageElement> {
+  return QRCode.toDataURL(url, {
+    errorCorrectionLevel: "M",
+    margin: 0,
+    width: 512,
+    color: { dark, light: "#0000" },
+  }).then(loadImage);
 }
 
 // The family name as CSS knows it, pulled off the front of the stack so the

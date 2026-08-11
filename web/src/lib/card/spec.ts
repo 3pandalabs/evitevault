@@ -23,6 +23,7 @@ export type CardDesign = {
   overlay: number;
   eyebrow: string;
   showMessage: boolean;
+  showQr: boolean;
 };
 
 export type CardPalette = {
@@ -67,6 +68,7 @@ export const DEFAULT_CARD: CardDesign = {
   overlay: 0.35,
   eyebrow: "You're invited",
   showMessage: true,
+  showQr: true,
 };
 
 // 1080 wide throughout: the width WhatsApp, Instagram and iMessage all

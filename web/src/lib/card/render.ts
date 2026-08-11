@@ -28,6 +28,12 @@ export type CardAssets = {
   photo: CanvasImageSource | null;
   /** The template's SVG cover artwork, rasterised. Fills the hero when there is no photo. */
   art: CanvasImageSource | null;
+  /**
+   * The invitation's QR code, pre-rendered with a transparent background so the
+   * card can paint its own quiet zone. Generated outside the renderer because a
+   * QR is a pure function of the URL and `qrcode` already does it well.
+   */
+  qr: CanvasImageSource | null;
 };
 
 export type CardInput = {
@@ -59,8 +65,11 @@ export function drawCard(ctx: CanvasRenderingContext2D, input: CardInput) {
   drawHero(ctx, input, hero, W, H);
 
   // Text sits below the hero, or over the lower half of a full-bleed photo.
+  // The footer measures itself first so the stack is centred in what is
+  // actually left, not in the space a card without a QR code would have had.
+  const footerH = footerHeight(input, W, H);
   const top = fullBleed ? H * 0.44 : hero.y + hero.h + H * 0.045;
-  drawTextStack(ctx, input, { top, bottom: H - H * 0.085, W, H });
+  drawTextStack(ctx, input, { top, bottom: H - footerH, W, H });
   drawFooter(ctx, input, W, H);
 }
 
@@ -417,17 +426,55 @@ function drawTextStack(
   ctx.restore();
 }
 
+// The footer is the only part of the card laid out from the bottom up, so its
+// height has to be known before the text above it can be centred.
+const URL_SIZE = 0.0165;
+const BOTTOM_GAP = 0.035;
+const QR_SIZE = 0.115;
+
+function footerHeight(input: CardInput, W: number, H: number): number {
+  const base = H * BOTTOM_GAP + H * URL_SIZE * 1.5;
+  const qr = input.design.showQr && input.assets.qr ? W * QR_SIZE + H * 0.022 : 0;
+  return base + qr;
+}
+
 function drawFooter(ctx: CanvasRenderingContext2D, input: CardInput, W: number, H: number) {
-  const { design, palette, fonts, content } = input;
+  const { design, palette, fonts, content, assets } = input;
   const onPhoto = design.frame === "full";
+  const pad = W * 0.1;
+  const urlSize = H * URL_SIZE;
+  const urlBaseline = H - H * BOTTOM_GAP;
 
   ctx.save();
-  ctx.font = `500 ${H * 0.0165}px ${fontStack(fonts.body)}`;
+
+  if (design.showQr && assets.qr) {
+    const s = W * QR_SIZE;
+    const x =
+      design.align === "left" ? pad : design.align === "right" ? W - pad - s : (W - s) / 2;
+    const y = urlBaseline - urlSize * 1.6 - s;
+
+    // A white panel under the code, always — not for looks but for scanning.
+    // The quiet zone is part of the QR specification, and a code drawn straight
+    // onto a photograph or a coloured background is one a phone gives up on.
+    const quiet = s * 0.07;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    roundRectPath(
+      ctx,
+      { x: x - quiet, y: y - quiet, w: s + quiet * 2, h: s + quiet * 2 },
+      [s * 0.08, s * 0.08, s * 0.08, s * 0.08],
+    );
+    ctx.fill();
+    ctx.drawImage(assets.qr, x, y, s, s);
+  }
+
+  ctx.font = `500 ${urlSize}px ${fontStack(fonts.body)}`;
   ctx.fillStyle = onPhoto ? "rgba(255,255,255,0.75)" : palette.muted;
-  ctx.textAlign = "center";
+  ctx.textAlign = design.align === "center" ? "center" : design.align;
   ctx.textBaseline = "alphabetic";
-  setTracking(ctx, H * 0.0165 * 0.08);
-  ctx.fillText(content.url, W / 2, H - H * 0.035, W * 0.86);
+  setTracking(ctx, urlSize * 0.08);
+  const anchorX = design.align === "left" ? pad : design.align === "right" ? W - pad : W / 2;
+  ctx.fillText(content.url, anchorX, urlBaseline, W * 0.86);
   ctx.restore();
 }
 
