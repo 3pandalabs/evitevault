@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoverArt } from "@/lib/coverArt";
 import { ensureCardFonts, loadImage, loadQrCode, rasterizeSvg } from "@/lib/card/assets";
 import { drawCardToCanvas, photoOverflow, type CardAssets, type CardFonts } from "@/lib/card/render";
-import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "@/lib/card/spec";
+import {
+  CARD_SIZES,
+  qrInkFor,
+  type CardContent,
+  type CardDesign,
+  type CardPalette,
+} from "@/lib/card/spec";
 import { cn } from "@/lib/utils";
 
 /**
@@ -58,9 +64,7 @@ export function CardCanvas({
 
   const artKey = `${art}|${design.ratio}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
-  // Full bleed puts the code on a white panel over a photo, where the theme's
-  // ink can be anything; a near-black keeps it scannable there.
-  const qrInk = design.frame === "full" ? "#111827" : palette.text;
+  const qrInk = qrInkFor(palette);
   const qrKey = `${qrUrl}|${qrInk}`;
 
   const assets: CardAssets = useMemo(

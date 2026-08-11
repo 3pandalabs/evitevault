@@ -19,6 +19,7 @@ import {
   FRAME_LABELS,
   RATIO_LABELS,
   cardDateLines,
+  qrInkFor,
   resolveCardDesign,
   type CardContent,
   type CardDesign,
@@ -232,9 +233,7 @@ export function CardEditor({
     const [photo, artImg, qr] = await Promise.all([
       photoSrc ? loadImage(photoSrc).catch(() => null) : Promise.resolve(null),
       artSvg ? rasterizeSvg(artSvg as SVGSVGElement, width, height).catch(() => null) : Promise.resolve(null),
-      design.showQr
-        ? loadQrCode(qrUrl, design.frame === "full" ? "#111827" : palette.text).catch(() => null)
-        : Promise.resolve(null),
+      design.showQr ? loadQrCode(qrUrl, qrInkFor(palette)).catch(() => null) : Promise.resolve(null),
     ]);
 
     return renderCardToBlob({
