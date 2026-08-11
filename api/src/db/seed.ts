@@ -5,7 +5,7 @@ import "dotenv/config";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { eventTemplates } from "./schema.js";
-import type { Theme } from "../lib/theme.js";
+import type { CardDesign, Theme } from "../lib/theme.js";
 
 type SeedTemplate = {
   key: string;
@@ -13,7 +13,9 @@ type SeedTemplate = {
   description: string;
   category: string;
   sortOrder: number;
-  theme: Theme;
+  // Card composition is added from CARDS below rather than written here — see
+  // the comment on that map.
+  theme: Omit<Theme, "card">;
 };
 
 // Categories are the occasion, not the mood — "wedding", not "formal". They are
@@ -569,6 +571,68 @@ const TEMPLATES: SeedTemplate[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Card compositions, one per template.
+//
+// Kept in a map rather than inline in each theme so all twenty-five can be read
+// against each other — the point of these is that they *differ*, and that is
+// impossible to check when they are three lines apart in twenty-five separate
+// objects.
+//
+// Only what differs from DEFAULT_CARD is listed. Everything omitted is filled
+// in by cardSchema's defaults when the stored theme is parsed, so a knob added
+// later needs no re-seed to reach templates that don't care about it.
+//
+// Before this, every template produced an identically composed card: choosing
+// "Marigold Mandap" over "Cocktail Noir" changed the palette, the fonts and the
+// artwork, and then laid them out exactly the same way. The frame and the
+// eyebrow are what make the choice legible on the card itself.
+// ---------------------------------------------------------------------------
+const CARDS: Record<string, Partial<CardDesign>> = {
+  // Wedding — arches, because that is the shape of the stationery this imitates.
+  "classic-cream": { frame: "arch", eyebrow: "Together with our families" },
+  "marigold-mandap": { frame: "arch", eyebrow: "You are cordially invited" },
+  "sangeet-night": { frame: "circle", eyebrow: "Sangeet" },
+  "mehendi-green": { frame: "arch", eyebrow: "Mehendi ceremony" },
+  "emerald-nikah": { frame: "arch", eyebrow: "Nikah" },
+  // The one wedding design whose whole job is the photograph.
+  "save-the-date": { frame: "full", overlay: 0.45, eyebrow: "Save the date" },
+
+  // Baby — circles read softer, and these are almost always built around one
+  // photograph of one person.
+  "baby-pastel": { frame: "circle", eyebrow: "A little one is on the way" },
+  "godh-bharai": { frame: "arch", eyebrow: "Godh Bharai" },
+  "namkaran-day": { frame: "circle", eyebrow: "Naming ceremony" },
+
+  // Birthday — rounded and loud.
+  confetti: { frame: "rounded", eyebrow: "It's a party" },
+  "balloon-pop": { frame: "circle", eyebrow: "Come celebrate" },
+  "first-birthday": { frame: "circle", eyebrow: "Turning one" },
+  "milestone-gold": { frame: "arch", eyebrow: "A milestone birthday" },
+  "retro-disco": { frame: "full", overlay: 0.5, eyebrow: "Let's dance" },
+
+  // Festival.
+  "diwali-diyas": { frame: "arch", eyebrow: "Diwali celebrations" },
+  "holi-colours": { frame: "rounded", eyebrow: "Happy Holi" },
+  "puja-saffron": { frame: "arch", eyebrow: "Puja invitation" },
+
+  // Housewarming.
+  "griha-pravesh": { frame: "arch", eyebrow: "Griha Pravesh" },
+  "new-home-minimal": { frame: "rounded", eyebrow: "We've moved" },
+
+  // Party.
+  "garden-party": { frame: "rounded", eyebrow: "Join us" },
+  midnight: { frame: "full", overlay: 0.55, eyebrow: "You're invited" },
+  "tropical-punch": { frame: "rounded", eyebrow: "Poolside" },
+  "cocktail-noir": { frame: "full", overlay: 0.55, eyebrow: "Cocktails" },
+
+  // Business — left-aligned, which is the single change that stops a work
+  // invitation reading like a wedding one.
+  "minimal-slate": { frame: "rounded", align: "left", eyebrow: "You're invited" },
+  "boardroom-blue": { frame: "rounded", align: "left", eyebrow: "Invitation" },
+
+  "photo-first": { frame: "full", overlay: 0.45 },
+};
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required to seed");
@@ -576,17 +640,26 @@ if (!connectionString) throw new Error("DATABASE_URL is required to seed");
 const pool = new Pool({ connectionString });
 const db = drizzle(pool);
 
+// A template with no entry in CARDS keeps the product defaults rather than
+// failing the seed — a missing composition is a design that hasn't been chosen
+// yet, not a broken row.
+const missingCards = TEMPLATES.filter((t) => !CARDS[t.key]).map((t) => t.key);
+if (missingCards.length) {
+  console.warn(`No card composition for: ${missingCards.join(", ")} — using defaults.`);
+}
+
 for (const t of TEMPLATES) {
+  const theme = { ...t.theme, card: CARDS[t.key] };
   await db
     .insert(eventTemplates)
-    .values({ ...t, isSystem: true, createdBy: null })
+    .values({ ...t, theme, isSystem: true, createdBy: null })
     .onConflictDoUpdate({
       target: eventTemplates.key,
       set: {
         name: t.name,
         description: t.description,
         category: t.category,
-        theme: t.theme,
+        theme,
         sortOrder: t.sortOrder,
       },
     });
