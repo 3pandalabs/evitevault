@@ -19,7 +19,13 @@
 // produces a 380px preview and a 2160px export with identical layout.
 
 import { fontStack } from "../fontStacks";
-import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "./spec";
+import {
+  CARD_SIZES,
+  type CardContent,
+  type CardDesign,
+  type CardPalette,
+  type CardRatio,
+} from "./spec";
 
 export type CardFonts = { heading: string; body: string };
 
@@ -102,15 +108,28 @@ function heroRect(design: CardDesign, W: number, H: number): Rect {
   if (design.frame === "full") return { x: 0, y: 0, w: W, h: H };
 
   const margin = W * 0.075;
+  const h = H * HERO_HEIGHT[design.ratio];
+
   if (design.frame === "circle") {
-    const d = W - margin * 3.2;
-    return { x: (W - d) / 2, y: margin * 1.4, w: d, h: d };
+    // Bounded by the hero's height budget, not just the card's width — a circle
+    // sized purely off the width is 821 units tall on a 4:5 card and leaves the
+    // text a third of the room the other frames get.
+    const d = Math.min(W - margin * 3.2, h);
+    return { x: (W - d) / 2, y: margin * 1.2, w: d, h: d };
   }
-  // Arch and rounded share a rect; only the corner radii differ. Slightly
-  // shorter on a story card so the taller text column doesn't run off the end.
-  const h = design.ratio === "9:16" ? H * 0.42 : H * 0.5;
+  // Arch and rounded share a rect; only the corner radii differ.
   return { x: margin, y: margin, w: W - margin * 2, h };
 }
+
+// The hero's share of the card. Was a flat 50%, which is what left the text
+// stack overflowing into the footer on 4:5 — the most common ratio and the
+// default. Every value here is "what is left over after the type fits", not a
+// composition preference.
+const HERO_HEIGHT: Record<CardRatio, number> = {
+  "4:5": 0.44,
+  "1:1": 0.4,
+  "9:16": 0.38,
+};
 
 function drawHero(ctx: CanvasRenderingContext2D, input: CardInput, r: Rect, W: number, H: number) {
   const { design, palette, assets } = input;
@@ -240,11 +259,28 @@ type Block =
   | { kind: "text"; lines: string[]; size: number; lineHeight: number; font: string; color: string; gap: number; tracking: number }
   | { kind: "rule"; gap: number; color: string; width: number };
 
-function drawTextStack(
+// How far the type may shrink before dropping the message is the better trade.
+// Below about 70% the date and place stop being readable at the size these are
+// actually looked at — a thumbnail in a chat list.
+const MIN_TEXT_SCALE = 0.7;
+
+/**
+ * Builds the stack at a given scale, optionally without the message.
+ *
+ * Separate from drawing because the layout has to be *measured* before it can
+ * be placed: the caller tries this at successively smaller scales until the
+ * result fits the space between the hero and the footer. Wrapping changes with
+ * size — a title that took two lines at full size may take one at 0.8 — so the
+ * blocks genuinely have to be rebuilt each time rather than scaled after the
+ * fact.
+ */
+function buildBlocks(
   ctx: CanvasRenderingContext2D,
   input: CardInput,
-  box: { top: number; bottom: number; W: number; H: number },
-) {
+  box: { W: number; H: number },
+  scale: number,
+  includeMessage: boolean,
+): Block[] {
   const { design, palette, fonts, content } = input;
   const { W, H } = box;
   const onPhoto = design.frame === "full";
@@ -258,12 +294,17 @@ function drawTextStack(
   const heading = fontStack(fonts.heading);
   const body = fontStack(fonts.body);
 
+  // Type sizes and the gaps between blocks shrink together, so a tight card
+  // reads as a smaller version of the same design rather than the same type
+  // crammed into less room.
+  const s = (v: number) => H * v * scale;
+
   const blocks: Block[] = [];
 
   if (design.eyebrow.trim()) {
     blocks.push(
       textBlock(ctx, design.eyebrow.toUpperCase(), {
-        size: H * 0.021,
+        size: s(0.021),
         weight: 500,
         family: body,
         color: accent,
@@ -281,31 +322,31 @@ function drawTextStack(
   // deliberate. Everything else keeps its size and truncates.
   blocks.push(
     fittedTextBlock(ctx, content.title, {
-      startSize: H * (design.ratio === "1:1" ? 0.062 : 0.068),
-      minSize: H * 0.032,
+      startSize: s(design.ratio === "1:1" ? 0.058 : 0.064),
+      minSize: s(0.03),
       weight: 600,
       family: heading,
       color: ink,
       maxWidth: contentW,
       maxLines: 3,
       lineHeight: 1.15,
-      gap: H * 0.022,
+      gap: s(0.02),
       tracking: 0,
     }),
   );
 
-  blocks.push({ kind: "rule", gap: H * 0.028, color: accent, width: W * 0.11 });
+  blocks.push({ kind: "rule", gap: s(0.024), color: accent, width: W * 0.11 });
 
   blocks.push(
     textBlock(ctx, content.dateLine, {
-      size: H * 0.027,
+      size: s(0.025),
       weight: 500,
       family: body,
       color: ink,
       maxWidth: contentW,
       maxLines: 2,
       lineHeight: 1.35,
-      gap: H * 0.028,
+      gap: s(0.024),
       tracking: 0.02,
     }),
   );
@@ -313,14 +354,14 @@ function drawTextStack(
   if (content.timeLine) {
     blocks.push(
       textBlock(ctx, content.timeLine, {
-        size: H * 0.024,
+        size: s(0.022),
         weight: 400,
         family: body,
         color: inkMuted,
         maxWidth: contentW,
         maxLines: 1,
         lineHeight: 1.35,
-        gap: H * 0.008,
+        gap: s(0.008),
         tracking: 0.06,
       }),
     );
@@ -329,14 +370,14 @@ function drawTextStack(
   if (content.locationName) {
     blocks.push(
       textBlock(ctx, content.locationName, {
-        size: H * 0.024,
+        size: s(0.022),
         weight: 400,
         family: body,
         color: inkMuted,
         maxWidth: contentW,
         maxLines: 2,
         lineHeight: 1.35,
-        gap: H * 0.014,
+        gap: s(0.013),
         tracking: 0,
       }),
     );
@@ -345,46 +386,100 @@ function drawTextStack(
   if (content.hostName) {
     blocks.push(
       textBlock(ctx, `Hosted by ${content.hostName}`, {
-        size: H * 0.021,
+        size: s(0.019),
         weight: 400,
         family: body,
         color: inkMuted,
         maxWidth: contentW,
         maxLines: 1,
         lineHeight: 1.3,
-        gap: H * 0.018,
+        gap: s(0.016),
         tracking: 0,
       }),
     );
   }
 
-  if (design.showMessage && content.message?.trim()) {
+  if (includeMessage && design.showMessage && content.message?.trim()) {
     blocks.push(
       textBlock(ctx, content.message.trim(), {
-        size: H * 0.02,
+        size: s(0.019),
         weight: 400,
         family: body,
         color: inkMuted,
         maxWidth: contentW * 0.92,
         maxLines: 4,
         lineHeight: 1.5,
-        gap: H * 0.026,
+        gap: s(0.022),
         tracking: 0,
       }),
     );
   }
 
-  const total = blocks.reduce((sum, b) => sum + blockHeight(b) + b.gap, 0);
-  const available = box.bottom - box.top;
-  let y = box.top + Math.max(0, (available - total) / 2);
+  return blocks;
+}
 
-  // Anchor to the top when it doesn't fit rather than centring the overflow —
-  // losing the message off the bottom beats losing the title off the top.
+function stackHeight(blocks: Block[]): number {
+  return blocks.reduce((sum, b) => sum + blockHeight(b) + b.gap, 0);
+}
+
+function drawTextStack(
+  ctx: CanvasRenderingContext2D,
+  input: CardInput,
+  box: { top: number; bottom: number; W: number; H: number },
+) {
+  const { design } = input;
+  const { W, H } = box;
+  const onPhoto = design.frame === "full";
+  const pad = W * 0.1;
+  const available = box.bottom - box.top;
+
+  // Shrink to fit, rather than overflowing into the footer.
+  //
+  // The previous version anchored an oversized stack to the top and let it run
+  // off the bottom, on the theory that losing the message beat losing the
+  // title. On a 4:5 card that theory is wrong in practice: the hero takes half
+  // the height, so a perfectly ordinary event — title, date, time, place, host
+  // — measures about 474 units against 299 available and lands squarely on top
+  // of the QR code. Nothing is dropped silently now; it is scaled until it fits.
+  let scale = 1;
+  let includeMessage = true;
+  let blocks = buildBlocks(ctx, input, box, scale, includeMessage);
+
+  for (let i = 0; i < 8; i++) {
+    const total = stackHeight(blocks);
+    if (total <= available) break;
+
+    if (scale > MIN_TEXT_SCALE) {
+      // Proportional step, nudged past the target so a stack whose wrapping
+      // changes on the way down still converges inside the iteration budget.
+      scale = Math.max(MIN_TEXT_SCALE, scale * (available / total) * 0.98);
+    } else if (includeMessage) {
+      // Out of scale headroom. The message is the one block that is genuinely
+      // optional — it is the only thing here a guest can also read on the
+      // invitation page itself — so it goes before the type gets illegible.
+      includeMessage = false;
+      scale = 1;
+    } else {
+      break;
+    }
+    blocks = buildBlocks(ctx, input, box, scale, includeMessage);
+  }
+
+  const total = stackHeight(blocks);
+  let y = box.top + Math.max(0, (available - total) / 2);
   if (total > available) y = box.top;
 
   const anchorX = design.align === "left" ? pad : design.align === "right" ? W - pad : W / 2;
 
   ctx.save();
+  // Belt and braces. The shrink loop above should make this unreachable, but a
+  // clip is a guarantee where a calculation is only an argument — and the thing
+  // it guarantees is that text can never be painted over the QR code, which is
+  // the one element on the card that stops working entirely when obscured.
+  ctx.beginPath();
+  ctx.rect(0, box.top, W, available);
+  ctx.clip();
+
   ctx.textAlign = design.align === "center" ? "center" : design.align;
   ctx.textBaseline = "alphabetic";
   // Text over a photograph needs its own separation from the image; the scrim
