@@ -61,6 +61,7 @@ export async function deleteObject(key: string): Promise<void> {
 // authorization check is a string comparison and never a bucket listing:
 //
 //   events/<eventId>/cover/<uuid>.<ext>         host-uploaded cover art
+//   events/<eventId>/card/<uuid>.<ext>          flattened invitation cards
 //   events/<eventId>/guestbook/<uuid>.<ext>     guest-uploaded wall photos
 //   templates/<templateKey>/preview.<ext>       shipped template previews
 //
@@ -71,6 +72,14 @@ export async function deleteObject(key: string): Promise<void> {
 
 export function coverImageKey(eventId: string, ext: string): string {
   return `events/${eventId}/cover/${crypto.randomUUID()}.${ext}`;
+}
+
+// A fresh uuid per export rather than a fixed `card.png`: the key is what the
+// link-preview crawlers and every WhatsApp thread already hold, and overwriting
+// one in place would leave them serving a stale image from cache while the host
+// swears they changed it.
+export function shareCardKey(eventId: string, ext: string): string {
+  return `events/${eventId}/card/${crypto.randomUUID()}.${ext}`;
 }
 
 export function guestbookImageKey(eventId: string, ext: string): string {

@@ -84,6 +84,7 @@ bucket listing.
 
 ```
 events/<eventId>/cover/<uuid>.<ext>       host-uploaded cover art
+events/<eventId>/card/<uuid>.<ext>        flattened invitation cards (the designer)
 events/<eventId>/guestbook/<uuid>.<ext>   guest-uploaded wall photos
 ```
 

@@ -1,5 +1,6 @@
 "use client";
 
+import type { CardDesign } from "../card/spec";
 import { API_URL, ApiError } from "./browser";
 
 // The host dashboard is client-rendered and talks to the API directly from the
@@ -164,7 +165,21 @@ export type Template = {
     // The design's built-in cover artwork (lib/coverArt.tsx). Optional: a
     // template row seeded before artwork existed simply has none.
     art?: string;
+    // The template's starting card composition. Optional for the same reason.
+    card?: Partial<CardDesign>;
   };
+};
+
+// Per-event tweaks merged over the chosen template, mirroring
+// themeOverridesSchema in api/src/lib/theme.ts. Every level is partial: the
+// card designer saves the one number the host just dragged, not the whole
+// design, so two people editing different knobs don't overwrite each other.
+export type ThemeOverrides = {
+  palette?: Partial<Template["theme"]["palette"]>;
+  fonts?: Partial<Template["theme"]["fonts"]>;
+  layout?: string;
+  art?: string;
+  card?: Partial<Omit<CardDesign, "photo">> & { photo?: Partial<CardDesign["photo"]> };
 };
 
 export type EventInput = {
@@ -188,10 +203,8 @@ export type EventInput = {
   guestPhotosEnabled?: boolean;
   showGuestList?: boolean;
   photoAlbumUrl?: string | null;
-  // Per-event tweaks merged over the chosen template. Only the cover artwork is
-  // editable today; an empty object clears the override and restores the
-  // design's own artwork.
-  themeOverrides?: { art?: string } | null;
+  // An empty object clears every override and restores the design's own look.
+  themeOverrides?: ThemeOverrides | null;
 };
 
 export const listTemplates = () => hostFetch<{ templates: Template[] }>("/templates");
@@ -202,7 +215,10 @@ export const createEvent = (input: EventInput) =>
     body: JSON.stringify(input),
   });
 
-export const updateEvent = (id: string, patch: Partial<EventInput> & { coverImageKey?: string | null }) =>
+export const updateEvent = (
+  id: string,
+  patch: Partial<EventInput> & { coverImageKey?: string | null; cardImageKey?: string | null },
+) =>
   hostFetch<EventSummary>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
 export const publishEvent = (id: string) =>
@@ -241,6 +257,39 @@ export async function uploadCoverImage(eventId: string, file: File): Promise<str
   if (!put.ok) throw new ApiError(put.status, "upload_failed");
 
   await updateEvent(eventId, { coverImageKey: key });
+  return key;
+}
+
+/**
+ * Stores the flattened card the designer rendered.
+ *
+ * Same two-step as every other upload — presign, PUT straight to R2 — because
+ * a 2160×2700 export is a few megabytes and has no business travelling through
+ * Fastify. The PATCH that follows is what makes it the event's card; until then
+ * the object is just bytes in a bucket, which is also what makes the failure
+ * mode safe: a crash between the two leaves an orphan, never a broken event.
+ *
+ * The design itself is saved separately, as themeOverrides.card. This image is
+ * derived from it and can always be re-rendered.
+ */
+export async function uploadCardImage(
+  eventId: string,
+  blob: Blob,
+  contentType: string,
+): Promise<string> {
+  const { key, uploadUrl } = await hostFetch<{ key: string; uploadUrl: string }>(
+    `/events/${eventId}/card/presign-upload`,
+    { method: "POST", body: JSON.stringify({ contentType }) },
+  );
+
+  const put = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: { "content-type": contentType },
+    body: blob,
+  });
+  if (!put.ok) throw new ApiError(put.status, "upload_failed");
+
+  await updateEvent(eventId, { cardImageKey: key });
   return key;
 }
 

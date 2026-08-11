@@ -33,6 +33,7 @@ const eventBody = z.object({
   locationAddress: z.string().max(500).nullish(),
   locationMapUrl: httpUrl.nullish(),
   coverImageKey: z.string().max(300).nullish(),
+  cardImageKey: z.string().max(300).nullish(),
   templateId: z.string().uuid().nullish(),
   themeOverrides: themeOverridesSchema.nullish(),
   rsvpDeadline: z.coerce.date().nullish(),
@@ -52,11 +53,11 @@ const eventPatch = eventBody.partial().extend({
   status: z.enum(["draft", "published", "cancelled", "archived"]).optional(),
 });
 
-// Rejects a cover image key the caller doesn't own. Keys are minted by
+// Rejects an image key the caller doesn't own. Keys are minted by
 // /storage/presign-upload, but nothing stops a client sending an arbitrary
 // string here, and an unchecked key would let one host point at another
 // event's object.
-function coverKeyBelongsToEvent(key: string | null | undefined, eventId: string): boolean {
+function keyBelongsToEvent(key: string | null | undefined, eventId: string): boolean {
   if (!key) return true;
   return eventIdForKey(key) === eventId;
 }
@@ -220,8 +221,11 @@ export async function eventRoutes(app: FastifyInstance) {
       const existing = await loadOwnedEvent(eventId, req.userId!, reply);
       if (!existing) return;
 
-      if (!coverKeyBelongsToEvent(body.coverImageKey, eventId)) {
+      if (!keyBelongsToEvent(body.coverImageKey, eventId)) {
         return reply.code(400).send({ error: "invalid_cover_image_key" });
+      }
+      if (!keyBelongsToEvent(body.cardImageKey, eventId)) {
+        return reply.code(400).send({ error: "invalid_card_image_key" });
       }
 
       // Cross-field check the DB constraint can't do on a partial update: the
@@ -239,16 +243,20 @@ export async function eventRoutes(app: FastifyInstance) {
         .where(and(eq(events.id, eventId), eq(events.hostId, req.userId!)))
         .returning();
 
-      // Replacing the cover leaves the old object orphaned in R2 otherwise.
-      // Best-effort: a failed delete must not fail the update.
-      if (
-        body.coverImageKey !== undefined &&
-        existing.coverImageKey &&
-        existing.coverImageKey !== body.coverImageKey
-      ) {
-        deleteObject(existing.coverImageKey).catch((err) =>
-          req.log.warn({ err, key: existing.coverImageKey }, "orphaned cover image not deleted"),
-        );
+      // Replacing an image leaves the old object orphaned in R2 otherwise, and
+      // the card is re-exported every time the host nudges the design — one
+      // orphan per save adds up fast. Best-effort: a failed delete must not
+      // fail the update.
+      for (const [field, previous] of [
+        ["coverImageKey", existing.coverImageKey],
+        ["cardImageKey", existing.cardImageKey],
+      ] as const) {
+        const next = body[field];
+        if (next !== undefined && previous && previous !== next) {
+          deleteObject(previous).catch((err) =>
+            req.log.warn({ err, key: previous }, `orphaned ${field} object not deleted`),
+          );
+        }
       }
 
       return updated;
@@ -292,9 +300,10 @@ export async function eventRoutes(app: FastifyInstance) {
       // Guests, guestbook posts, announcements and views all cascade in the DB.
       await db.delete(events).where(eq(events.id, eventId));
 
-      if (event.coverImageKey) {
-        deleteObject(event.coverImageKey).catch((err) =>
-          req.log.warn({ err }, "cover image not deleted for removed event"),
+      for (const key of [event.coverImageKey, event.cardImageKey]) {
+        if (!key) continue;
+        deleteObject(key).catch((err) =>
+          req.log.warn({ err, key }, "image not deleted for removed event"),
         );
       }
       return reply.code(204).send();
