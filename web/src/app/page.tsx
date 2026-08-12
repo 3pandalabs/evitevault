@@ -1,4 +1,4 @@
-import { CalendarCheck, ImageIcon, MessageCircle } from "lucide-react";
+import { CalendarCheck, ImageIcon, Images, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { GradientBackdrop } from "@/components/GradientBackdrop";
 import { Wordmark } from "@/components/Wordmark";
@@ -24,9 +24,14 @@ export default function HomePage() {
         <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 sm:text-5xl">
           RsvpVault
         </h1>
+        {/* Deliberately spans the whole arc, not just the invitation. The
+            after-the-day half — one album link sent to everyone who came — is
+            the part hosts otherwise chase round a group chat for a week, and
+            nobody looking for it would guess an invitation product had it. */}
         <p className="mt-4 max-w-xl text-lg leading-8 text-zinc-600">
-          Design an invitation, share one link, and watch the RSVPs come in — no app for your
-          guests to install, no account for them to create.
+          Design an invitation, share one link, and watch the RSVPs come in. When the party&apos;s
+          over, send the whole guest list a photo album so everyone&apos;s pictures end up in one
+          place — no app for your guests to install, no account for them to create.
         </p>
 
         <div className="mt-8 flex gap-3">
@@ -38,7 +43,9 @@ export default function HomePage() {
           </Link>
         </div>
 
-        <ul className="mt-16 grid gap-8 sm:grid-cols-3">
+        {/* Two-up on tablets rather than three-across with one stranded on its
+            own row, which is what a fourth card did to the old sm:grid-cols-3. */}
+        <ul className="mt-16 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <Feature icon={CalendarCheck} title="Real-time RSVPs">
             Track going, maybe and declined, plus-ones, and dietary notes as they arrive.
           </Feature>
@@ -47,6 +54,10 @@ export default function HomePage() {
           </Feature>
           <Feature icon={MessageCircle} title="Guestbook">
             Guests leave messages and photos on the invitation itself.
+          </Feature>
+          <Feature icon={Images} title="Photos after the day">
+            Send one shared album to everyone who came — or to your whole guest list — and get
+            back the pictures they took.
           </Feature>
         </ul>
       </main>
