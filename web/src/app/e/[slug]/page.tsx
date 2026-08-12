@@ -225,6 +225,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               rsvp={event.rsvp}
               you={event.you}
               calendar={event.calendar}
+              timezone={event.timezone}
             />
           </section>
 

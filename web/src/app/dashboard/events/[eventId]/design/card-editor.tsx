@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, ImageUp, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
+import { Download, ExternalLink, ImageUp, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import {
@@ -32,7 +32,8 @@ import { ART_CHOICES, ART_LABELS, CoverArt } from "@/lib/coverArt";
 import { ALL_FONTS } from "@/lib/fontStacks";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/utils";
+import { ShareButtons, buildInviteMessage } from "../share";
 import { CardCanvas } from "./card-canvas";
 
 type EventRow = EventSummary & Record<string, unknown>;
@@ -136,9 +137,8 @@ export function CardEditor({
     };
   }, [event, description]);
 
-  // The QR resolves to the real link; the card prints the trimmed one, because
-  // "https://" is four words nobody types and a line of the card it doesn't
-  // earn.
+  // The QR and the printed line are now the same string — see displayUrl for
+  // why the scheme earned its place back on the card.
   const qrUrl = useMemo(() => invitationUrl(event.slug), [event.slug]);
   const hasMessage = Boolean(content.message?.trim());
   const descriptionDirty = description.trim() !== ((event.description as string | null) ?? "").trim();
@@ -334,6 +334,61 @@ export function CardEditor({
               ? "Drag the card to reposition the photo."
               : "Add a photo, or keep the template's artwork."}
           </p>
+
+          {/* The link the card prints, as an actual anchor.
+              The card is a flat image: the URL on it is pixels, and no chat app
+              can turn pixels into a tap target. So the card is the picture and
+              this is the link — sent together, the picture is what gets looked
+              at and this is what gets opened. Everything below hands the host a
+              *clickable* copy: the anchor itself, the clipboard, and the share
+              buttons, whose message body carries the full https:// URL that
+              WhatsApp, Messages and mail clients all auto-link. */}
+          <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-slate-900">Invitation link</p>
+              {event.status !== "published" ? (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  Draft
+                </span>
+              ) : null}
+            </div>
+
+            <a
+              href={qrUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 flex items-start gap-1.5 break-all text-sm text-slate-700 underline underline-offset-4 hover:text-slate-900"
+            >
+              {qrUrl}
+              <ExternalLink className="mt-0.5 size-3.5 shrink-0" />
+            </a>
+
+            {event.status === "published" ? (
+              <>
+                <div className="mt-3">
+                  <ShareButtons
+                    compact
+                    url={qrUrl}
+                    subject={event.title}
+                    message={buildInviteMessage({
+                      title: event.title,
+                      whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`,
+                      url: qrUrl,
+                      hostName: (event.hostDisplayName as string | null) ?? null,
+                    })}
+                  />
+                </div>
+                <p className="mt-3 text-xs text-slate-500">
+                  Send the card image and this link together — the text on the card can&apos;t be
+                  tapped, this can.
+                </p>
+              </>
+            ) : (
+              <p className="mt-3 text-xs text-amber-700">
+                This link won&apos;t work for guests until you publish the event.
+              </p>
+            )}
+          </div>
         </div>
 
         {/* A second copy of the artwork at export size, kept out of the preview
@@ -654,9 +709,18 @@ function invitationUrl(slug: string): string {
   return `${origin}/e/${slug}`;
 }
 
-/** The same link as printed on the card: no scheme, because nobody types it. */
+/**
+ * The link as printed on the card — the full `https://…`, scheme included.
+ *
+ * It used to be trimmed on the grounds that nobody types "https://". But the
+ * card gets forwarded as an image into WhatsApp and iMessage, and what those
+ * clients do with a screenshot is run OCR over it and offer the text they find
+ * as a tappable link — which only works on something they can recognise as a
+ * URL. The scheme is the strongest signal there is, and it is one line of the
+ * card either way.
+ */
 function displayUrl(slug: string): string {
-  return invitationUrl(slug).replace(/^https?:\/\//, "");
+  return invitationUrl(slug);
 }
 
 function uploadMessage(err: ApiError): string {
