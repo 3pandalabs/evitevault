@@ -41,6 +41,12 @@ export type PublicEvent = {
   rsvp: {
     deadline: string | null;
     closed: boolean;
+    // The event's effective finish: the host's `endsAt`, or `startsAt` + 3
+    // hours when they never set one. Decided by the API — never recomputed
+    // here, where the guest's own clock would be the input.
+    endedAt: string;
+    ended: boolean;
+    closedReason: "event_ended" | "deadline" | null;
     atCapacity: boolean;
     allowPlusOnes: boolean;
     maxPlusOnes: number;

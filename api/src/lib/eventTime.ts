@@ -1,5 +1,6 @@
 /**
- * Event date/time formatting for outbound email.
+ * Event date/time: when an event is over, and how its times are written in
+ * outbound email.
  *
  * Deliberately mirrors `web/src/lib/utils.ts`: an invitation email and the
  * invitation page it links to must not disagree about what time the party
@@ -9,6 +10,36 @@
  * says 7 PM must say 7 PM to everyone, which is why the zone is named
  * explicitly rather than converted away.
  */
+
+/**
+ * How long an event is assumed to run when the host never gave an end time.
+ *
+ * `events.ends_at` is optional and most hosts leave it blank, so without a
+ * fallback an event would keep accepting RSVPs forever — guests "confirming"
+ * attendance at a party that finished last month, landing in a headcount the
+ * host stopped looking at. Three hours is the span of an ordinary dinner,
+ * birthday or house party, and erring long is the safe direction: a late
+ * arrival can still say they're coming, and the deadline only ever closes
+ * something that has already happened.
+ */
+export const DEFAULT_EVENT_DURATION_MS = 3 * 60 * 60 * 1000;
+
+/** The moment an event is over: the host's own end time, or start + 3 hours. */
+export function eventEndsAt(event: { startsAt: Date; endsAt: Date | null }): Date {
+  return event.endsAt ?? new Date(event.startsAt.getTime() + DEFAULT_EVENT_DURATION_MS);
+}
+
+/**
+ * Whether the event is in the past. The API is the only place this is decided —
+ * a guest's clock is not to be trusted with it, and the invitation page reads
+ * the answer off the response rather than recomputing it.
+ */
+export function hasEventEnded(
+  event: { startsAt: Date; endsAt: Date | null },
+  now: Date = new Date(),
+): boolean {
+  return eventEndsAt(event).getTime() <= now.getTime();
+}
 
 export function formatEventDate(at: Date, timeZone: string): string {
   return new Intl.DateTimeFormat("en-GB", {

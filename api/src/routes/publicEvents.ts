@@ -15,6 +15,7 @@ import {
   type Guest,
 } from "../db/schema.js";
 import { currentHour, visitorHash } from "../lib/analytics.js";
+import { eventEndsAt, hasEventEnded } from "../lib/eventTime.js";
 import { buildIcs, googleCalendarUrl } from "../lib/ics.js";
 import { buildRsvpConfirmationEmail } from "../lib/emails/rsvpConfirmation.js";
 import { mailerConfigured, sendMail } from "../lib/mailer.js";
@@ -116,8 +117,13 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
       ).map((g) => ({ name: g.name.split(" ")[0], plusOnes: g.plusOnes }))
     : null;
 
-  const rsvpClosed =
+  // Two separate reasons a response can no longer be accepted, kept apart so
+  // the page can say which one it is. "The host stopped collecting replies" and
+  // "the party is over" are not the same message to a guest.
+  const ended = hasEventEnded(event);
+  const deadlinePassed =
     event.rsvpDeadline !== null && event.rsvpDeadline.getTime() < Date.now();
+  const rsvpClosed = ended || deadlinePassed;
   const atCapacity =
     event.capacity !== null && (tally?.headcount ?? 0) >= event.capacity;
 
@@ -151,6 +157,14 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
     rsvp: {
       deadline: event.rsvpDeadline,
       closed: rsvpClosed,
+      // The event's effective finish — the host's own end time, or start + 3h
+      // when they never set one. Sent so the page can name the moment rather
+      // than just asserting it's passed.
+      endedAt: eventEndsAt(event),
+      ended,
+      // Which of the two closed it. `ended` wins: once the day is gone, an
+      // earlier RSVP deadline is the less interesting fact.
+      closedReason: ended ? ("event_ended" as const) : deadlinePassed ? ("deadline" as const) : null,
       atCapacity,
       allowPlusOnes: event.allowPlusOnes,
       maxPlusOnes: event.maxPlusOnes,
@@ -313,6 +327,15 @@ export async function publicEventRoutes(app: FastifyInstance) {
       const row = await loadPublishedEvent(slug);
       if (!row) return reply.code(404).send({ error: "not_found" });
       const event = row.event;
+
+      // Checked before the deadline, and before anything is written: a reply to
+      // an event that already happened is never recorded, whatever the host
+      // configured. Enforced here and not only in the UI — the page's own guard
+      // is cosmetic, and a stale tab left open across the event would otherwise
+      // post straight past it.
+      if (hasEventEnded(event)) {
+        return reply.code(409).send({ error: "event_ended" });
+      }
 
       if (event.rsvpDeadline && event.rsvpDeadline.getTime() < Date.now()) {
         return reply.code(409).send({ error: "rsvp_closed" });

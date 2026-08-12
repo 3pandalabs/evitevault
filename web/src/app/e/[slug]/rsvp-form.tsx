@@ -1,16 +1,23 @@
 "use client";
 
-import { CalendarPlus, Check, HelpCircle, Loader2, Pencil, X } from "lucide-react";
+import { CalendarOff, CalendarPlus, Check, HelpCircle, Loader2, Pencil, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, submitRsvp, type RsvpResult } from "@/lib/api/browser";
 import type { PublicEvent } from "@/lib/api/public";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, formatEventDate, formatEventTime } from "@/lib/utils";
 import { Confetti } from "./confetti";
 
 type Status = "attending" | "declined" | "maybe";
+
+// Raw statuses read badly quoted back at someone ("recorded as declined").
+const STATUS_LABELS: Record<string, string> = {
+  attending: "Going",
+  maybe: "Maybe",
+  declined: "Can't make it",
+};
 
 const CHOICES: { value: Status; label: string; icon: typeof Check }[] = [
   { value: "attending", label: "Going", icon: Check },
@@ -21,6 +28,9 @@ const CHOICES: { value: Status; label: string; icon: typeof Check }[] = [
 const ERROR_COPY: Record<string, string> = {
   at_capacity: "This event just reached capacity.",
   rsvp_closed: "RSVPs for this event have closed.",
+  // The tab was open across the end of the event and the answer arrived too
+  // late. Says what happened rather than "try again", which would be a lie.
+  event_ended: "This event has already ended, so your response wasn't recorded.",
   already_invited:
     "That email address already has an invitation. Please use the personal link you were sent.",
   email_already_used: "Another guest is already using that email address.",
@@ -35,12 +45,16 @@ export function RsvpForm({
   rsvp,
   you,
   calendar,
+  timezone,
 }: {
   slug: string;
   token?: string;
   rsvp: PublicEvent["rsvp"];
   you: PublicEvent["you"];
   calendar: PublicEvent["calendar"];
+  /** The event's own zone, so "ended at" is written on the same clock as the
+      rest of the invitation rather than the reader's. */
+  timezone: string;
 }) {
   const router = useRouter();
 
@@ -68,6 +82,34 @@ export function RsvpForm({
   // Timestamp doubling as a replay key for the confetti burst; null means no
   // burst. Set only when an answer *becomes* "attending" — see onSubmit.
   const [celebrate, setCelebrate] = useState<number | null>(null);
+
+  // The event itself is over. Checked before the deadline branch below, so a
+  // guest arriving a week late is told the party has happened rather than the
+  // less useful "the host closed replies" — and never sees a live form. The API
+  // refuses the write regardless; this is what makes the page honest about it.
+  if (rsvp.ended) {
+    return (
+      <div className="ev-surface rounded-2xl p-6 text-center shadow-sm">
+        <div
+          className="mx-auto mb-3 flex size-9 items-center justify-center rounded-full"
+          style={{ backgroundColor: "var(--ev-accent)", color: "var(--ev-accent-text)" }}
+        >
+          <CalendarOff className="size-4" />
+        </div>
+        <p className="font-medium">This event has ended</p>
+        <p className="ev-muted mt-1 text-sm">
+          It finished on {formatEventDate(rsvp.endedAt, timezone)} at{" "}
+          {formatEventTime(rsvp.endedAt, timezone)}, so responses are no longer being collected.
+        </p>
+        {responded ? (
+          <p className="ev-muted mt-2 text-sm">
+            Your response was recorded as &ldquo;{STATUS_LABELS[you.rsvpStatus] ?? you.rsvpStatus}
+            &rdquo;.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
 
   if (rsvp.closed) {
     return (
