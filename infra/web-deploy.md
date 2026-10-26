@@ -8,7 +8,7 @@ cd web
 npm run cf:deploy        # opennextjs-cloudflare build && … deploy
 ```
 
-`wrangler.jsonc` declares `evitevault.3pandalabs.com` as a custom domain, so
+`wrangler.jsonc` declares `rsvpvault.3pandalabs.com` as a custom domain, so
 wrangler creates and maintains the DNS record itself — do not also add a manual
 record for it in the Cloudflare dashboard.
 
@@ -32,7 +32,7 @@ Set in `wrangler.jsonc` `vars` (none of these are secret):
 
 ```
 NEXT_PUBLIC_API_URL   https://api.evitevault.3pandalabs.com
-NEXT_PUBLIC_SITE_URL  https://evitevault.3pandalabs.com
+NEXT_PUBLIC_SITE_URL  https://rsvpvault.3pandalabs.com
 INTERNAL_API_URL      https://api-internal.evitevault.3pandalabs.com
 ```
 
@@ -49,7 +49,43 @@ API's.
 ## Verify
 
 ```bash
-curl -sI https://evitevault.3pandalabs.com | head -1
+curl -sI https://rsvpvault.3pandalabs.com | head -1
 # an invitation, once one is published:
-curl -s https://evitevault.3pandalabs.com/e/<slug> | head -c 200
+curl -s https://rsvpvault.3pandalabs.com/e/<slug> | head -c 200
 ```
+
+```bash
+# the two SEO surfaces Next.js generates from src/app/{robots,sitemap}.ts
+curl -s https://rsvpvault.3pandalabs.com/robots.txt | grep -i sitemap
+curl -s https://rsvpvault.3pandalabs.com/sitemap.xml
+```
+
+Cloudflare injects its own managed block into `/robots.txt` — the
+Content-Signal preamble and the AI-crawler `Disallow` list. It merges with what
+the Worker returns rather than replacing it, which is why the grep above exists:
+if the `Sitemap:` line stops surviving that merge, nothing breaks, but
+discovery then rests entirely on the Search Console submission below.
+
+## Search engine indexing
+
+Being crawlable is not being indexed. Up to 2026-10-26 the site was fully
+crawlable — `200` to Googlebot, `Allow: /`, no `noindex` — and absent from
+Google anyway, because nothing had ever told Google it existed: no Search
+Console property, no sitemap, and one inbound link from an apex site that was
+itself unindexed.
+
+One-time, in the dashboard:
+
+1. **Search Console → Add property → Domain** (not URL prefix) → `3pandalabs.com`.
+   A domain property covers every app subdomain, present and future, so this is
+   the last time any 3PandaLabs app needs this step.
+2. Add the `google-site-verification` TXT record it gives you to **Cloudflare
+   DNS for `3pandalabs.com`**. Verification is usually minutes.
+3. **Sitemaps → Add a new sitemap** → `https://rsvpvault.3pandalabs.com/sitemap.xml`.
+4. **URL Inspection** → the site root → **Request indexing**. This is the step
+   that actually gets a brand-new hostname crawled; everything else is
+   preparation for it.
+
+Then wait. A new hostname with no link history takes days to weeks to appear,
+and "Request indexing" is a nudge, not a guarantee. Check progress under
+**Pages** in Search Console rather than by running `site:` searches, which lag.

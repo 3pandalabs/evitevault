@@ -8,15 +8,28 @@ RentVault (`3pandalabs/nrighar`) and ReceiptCash.
 The product is **RsvpVault** (one word, camel case) in all user-facing copy —
 renamed from "EviteVault" on 2026-07-28.
 
-**The rename was user-facing copy only.** Every internal identifier is still
-lowercase `evitevault` and stays that way: repo name, database, the
-`evitevault_app` Postgres role, R2 buckets (`evitevault-media`,
-`evitevault-backups`), Coolify resources, hostnames
-(`evitevault.3pandalabs.com`, `api.evitevault.3pandalabs.com`), and the
-`app: "evitevault"` key in `api/src/routes/metrics.ts` that `3pandalabs/admin`
-reads. This is the same split RentVault made when it stopped being NRIGhar —
-see that repo's CLAUDE.md. Renaming identifiers buys nothing and breaks the
-admin dashboard, DNS, backups and the Coolify wiring all at once.
+**The rename is user-facing copy only, with two deliberate exceptions.** Every
+internal identifier is still lowercase `evitevault` and stays that way: repo
+name, database, the `evitevault_app` Postgres role, R2 buckets
+(`evitevault-media`, `evitevault-backups`), Coolify resources, the API
+hostnames (`api.evitevault.3pandalabs.com`,
+`api-internal.evitevault.3pandalabs.com`), and the `app: "evitevault"` key in
+`api/src/routes/metrics.ts` that `3pandalabs/admin` reads. This is the same
+split RentVault made when it stopped being NRIGhar — see that repo's CLAUDE.md.
+Renaming identifiers buys nothing and breaks the admin dashboard, DNS, backups
+and the Coolify wiring all at once.
+
+The exceptions are the two things a stranger reads:
+
+1. **The sender address** is `invitations@rsvpvault.3pandalabs.com` (switched
+   2026-07-28) — guests read the from-line. See `infra/email-setup.md`.
+2. **The public web hostname** is `rsvpvault.3pandalabs.com` (switched
+   2026-10-26) — people type it, link it, and search for it. A domain that
+   spells a name the site itself never uses cannot be found: nothing on the
+   page said "evitevault", so neither name matched anything. The API hosts did
+   *not* move with it, deliberately — `api.rsvpvault.3pandalabs.com` is a
+   two-label subdomain that Universal SSL `*.3pandalabs.com` does not cover,
+   and the payoff for renaming a host only visible in devtools is zero.
 
 So: when adding user-visible text, say RsvpVault; when adding config or
 infrastructure, match the existing `evitevault` identifiers. Do not introduce

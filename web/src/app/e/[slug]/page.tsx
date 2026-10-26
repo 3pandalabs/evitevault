@@ -38,7 +38,10 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const previewImage = event.cardImageUrl ?? event.coverImageUrl;
 
   return {
-    title: `${event.title} · RsvpVault`,
+    // Just the event name: the root layout's title template appends " · RsvpVault"
+    // for us. Spelling the suffix out here too would render "Birthday · RsvpVault
+    // · RsvpVault" in the tab and in every link preview.
+    title: event.title,
     description: event.description ?? undefined,
     openGraph: {
       title: event.title,

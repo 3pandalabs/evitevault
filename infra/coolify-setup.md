@@ -42,8 +42,8 @@ Coolify → project → **New Resource → Application → Public Repository**
 | `DATABASE_URL` | `postgres://evitevault_app:<pw>@fj1trumhdfozqharrsx1frm9:5432/evitevault` | yes |
 | `JWT_SECRET` | `openssl rand -hex 32` | yes |
 | `ANALYTICS_SALT` | `openssl rand -hex 32` | yes |
-| `CORS_ORIGINS` | `https://evitevault.3pandalabs.com` | no |
-| `WEB_ORIGIN` | `https://evitevault.3pandalabs.com` | no |
+| `CORS_ORIGINS` | `https://rsvpvault.3pandalabs.com` | no |
+| `WEB_ORIGIN` | `https://rsvpvault.3pandalabs.com` | no |
 | `PORT` | `8080` | no |
 | `R2_ACCOUNT_ID` | `f688cc57abfb9e1ef72a57f4841e0e73` | no |
 | `R2_ACCESS_KEY_ID` | from `r2-setup.md` | yes |

@@ -50,7 +50,12 @@ export function buildIcs(ev: IcsInput): string {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:${ev.id}@evitevault.3pandalabs.com`,
+    // An ICS UID must never change for an event that has already been sent:
+    // a calendar that already holds this UID treats a new one as a *second*
+    // event rather than an update. The domain half moved to rsvpvault on
+    // 2026-10-26, which was only safe because no invitation had gone out yet.
+    // It is frozen now — do not "tidy" it again.
+    `UID:${ev.id}@rsvpvault.3pandalabs.com`,
     `DTSTAMP:${toUtcStamp(new Date())}`,
     `DTSTART:${toUtcStamp(ev.startsAt)}`,
     `DTEND:${toUtcStamp(end)}`,
@@ -58,7 +63,7 @@ export function buildIcs(ev: IcsInput): string {
     ev.description ? `DESCRIPTION:${escapeText(ev.description)}` : null,
     location ? `LOCATION:${escapeText(location)}` : null,
     `URL:${escapeText(ev.url)}`,
-    ev.organizerName ? `ORGANIZER;CN=${escapeText(ev.organizerName)}:MAILTO:noreply@evitevault.3pandalabs.com` : null,
+    ev.organizerName ? `ORGANIZER;CN=${escapeText(ev.organizerName)}:MAILTO:noreply@rsvpvault.3pandalabs.com` : null,
     "END:VEVENT",
     "END:VCALENDAR",
   ].filter((l): l is string => l !== null);

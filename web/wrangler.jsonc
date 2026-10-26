@@ -19,15 +19,21 @@
   // itself — do NOT also add a manual record for this hostname in the
   // Cloudflare dashboard. (The two api.* records are a different case: they
   // point at the Hetzner box, not at a Worker, so they are managed by hand.)
+  //
+  // Changing this pattern does NOT detach the previous custom domain from the
+  // Worker: `evitevault.3pandalabs.com` has to be removed by hand in the
+  // dashboard (Workers && Pages → evitevault-web → Settings → Domains).
+  // Leaving it attached would serve the whole site on two hostnames, which
+  // splits whatever Google indexes between them.
   "routes": [
     {
-      "pattern": "evitevault.3pandalabs.com",
+      "pattern": "rsvpvault.3pandalabs.com",
       "custom_domain": true
     }
   ],
   "vars": {
     "NEXT_PUBLIC_API_URL": "https://api.evitevault.3pandalabs.com",
-    "NEXT_PUBLIC_SITE_URL": "https://evitevault.3pandalabs.com",
+    "NEXT_PUBLIC_SITE_URL": "https://rsvpvault.3pandalabs.com",
     // DNS-only (grey cloud) hostname for the same origin. Server-side code in
     // this Worker must use it instead of NEXT_PUBLIC_API_URL: Cloudflare blocks
     // a same-account Worker fetching another proxied hostname

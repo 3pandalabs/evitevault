@@ -705,7 +705,7 @@ function Slider({
 
 function invitationUrl(slug: string): string {
   const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://evitevault.3pandalabs.com";
+    typeof window !== "undefined" ? window.location.origin : "https://rsvpvault.3pandalabs.com";
   return `${origin}/e/${slug}`;
 }
 

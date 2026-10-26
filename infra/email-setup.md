@@ -7,7 +7,7 @@ sends through.
 
 **Status: live and delivering** (confirmed 2026-07-28 — invitation, RSVP
 confirmation, announcement and password-reset mail all arriving at an external
-address). `evitevault.3pandalabs.com` is onboarded as the sending domain and
+address). `rsvpvault.3pandalabs.com` is onboarded as the sending domain and
 `MAILER_URL`/`MAILER_TOKEN` are set on `evitevault-api` in Coolify, so
 "Remaining setup" below is history, not a to-do.
 

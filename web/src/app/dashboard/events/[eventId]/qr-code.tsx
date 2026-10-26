@@ -36,7 +36,7 @@ export function EventQrCode({ url, slug }: { url: string; slug: string }) {
 
   async function download(format: "png" | "svg") {
     const a = document.createElement("a");
-    a.download = `evitevault-${slug.slice(0, 8)}.${format}`;
+    a.download = `rsvpvault-${slug.slice(0, 8)}.${format}`;
 
     if (format === "png") {
       // 1024px so it stays crisp when scaled up for print. A QR scanned from a
