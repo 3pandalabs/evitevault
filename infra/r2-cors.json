@@ -2,7 +2,7 @@
   "rules": [
     {
       "allowed": {
-        "origins": ["https://evitevault.3pandalabs.com", "http://localhost:3000"],
+        "origins": ["https://rsvpvault.3pandalabs.com", "http://localhost:3000"],
         "methods": ["PUT", "GET"],
         "headers": ["content-type"]
       },

@@ -58,7 +58,7 @@ never reaches the API at all:
 
 ```
 Access to fetch at 'https://evitevault-media.<account>.r2.cloudflarestorage.com/...'
-from origin 'https://evitevault.3pandalabs.com' has been blocked by CORS policy
+from origin 'https://rsvpvault.3pandalabs.com' has been blocked by CORS policy
 ```
 
 The policy lives in `infra/r2-cors.json` and is applied with:

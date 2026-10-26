@@ -16,7 +16,7 @@ DNS records and one Worker.
 
 | Host | Cloudflare | Points at | Why |
 |---|---|---|---|
-| `evitevault.3pandalabs.com` | Worker custom domain | `evitevault-web` | |
+| `rsvpvault.3pandalabs.com` | Worker custom domain | `evitevault-web` | |
 | `api.evitevault.3pandalabs.com` | **Proxied** (orange) | `167.233.223.241` | Public API. Must be proxied — the Hetzner firewall only admits Cloudflare IPs on 80/443 |
 | `api-internal.evitevault.3pandalabs.com` | **DNS only** (grey) | `167.233.223.241` | Server-side calls from the Worker. See the orange-to-orange note below |
 
