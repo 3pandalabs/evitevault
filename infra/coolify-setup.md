@@ -39,11 +39,40 @@ Coolify → project → **New Resource → Application → Public Repository**
   build fails with "no such file or directory".
 - **Ports Exposes:** `8080`. Coolify defaults to `3000`, which builds fine and
   then serves nothing but bad gateways.
-- **Domains:** `https://api.rsvpvault.3pandalabs.com,https://api-internal.rsvpvault.3pandalabs.com`
-  — **include the `https://` scheme on both**. A bare hostname generates a
-  broken Traefik rule (the domain lands in the path matcher with an empty Host),
-  no certificate is ever requested, and Traefik silently serves its default
-  self-signed cert.
+- **Domains:** `https://api.rsvpvault.3pandalabs.com` and
+  `https://api-internal.rsvpvault.3pandalabs.com`.
+
+  Current Coolify shows these as a **list of rows with an "+ Add Domain"
+  button**, one row per hostname, each displaying `HTTP → HTTPS · Port 8080 ·
+  Indexable` plus re-check / settings / delete icons. Older versions took a
+  single comma-separated field; both are the same underlying setting, so a
+  comma-separated value is still what the API and older docs show.
+
+  **Include the `https://` scheme on every row.** A bare hostname generates a
+  broken Traefik rule — the domain lands in the path matcher with an empty Host
+  — no certificate is ever requested, and Traefik silently serves its default
+  self-signed cert, which from outside is indistinguishable from a missing
+  Cloudflare edge certificate.
+
+  Set the port to `8080` on each row, matching **Ports Exposes**.
+
+  A row reading **"Not checked"** is not an error: that is Coolify's own DNS
+  validation never having been run (the circular-arrow icon runs it). It says
+  nothing about whether the domain works.
+
+### Changing domains later
+
+Add the new rows first and **leave the old ones in place** until the new ones
+are verified — they are the rollback, and Traefik is happy to serve all of them
+at once. Then **redeploy**: domains are compiled into Traefik labels, which are
+only regenerated on deploy, so an added domain does nothing until you do. The
+deploy is also what requests the Let's Encrypt certificate for the new names
+via DNS-01.
+
+While Traefik is still getting that certificate, a proxied hostname answers
+`526` rather than `200`. That is the expected intermediate state and clears in
+a minute or two; `000` instead means the Cloudflare DNS record is missing or
+not proxied, which is a different problem on a different layer.
 
 ## 3. Environment variables
 
