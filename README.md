@@ -4,7 +4,7 @@ Digital invitations and event management — hosts design an invitation, share o
 link, and track RSVPs in real time. A 3PandaLabs product.
 
 - **Web:** https://rsvpvault.3pandalabs.com
-- **API:** https://api.evitevault.3pandalabs.com
+- **API:** https://api.rsvpvault.3pandalabs.com
 
 ## Layout
 

@@ -8,28 +8,39 @@ RentVault (`3pandalabs/nrighar`) and ReceiptCash.
 The product is **RsvpVault** (one word, camel case) in all user-facing copy —
 renamed from "EviteVault" on 2026-07-28.
 
-**The rename is user-facing copy only, with two deliberate exceptions.** Every
-internal identifier is still lowercase `evitevault` and stays that way: repo
-name, database, the `evitevault_app` Postgres role, R2 buckets
-(`evitevault-media`, `evitevault-backups`), Coolify resources, the API
-hostnames (`api.evitevault.3pandalabs.com`,
-`api-internal.evitevault.3pandalabs.com`), and the `app: "evitevault"` key in
-`api/src/routes/metrics.ts` that `3pandalabs/admin` reads. This is the same
-split RentVault made when it stopped being NRIGhar — see that repo's CLAUDE.md.
-Renaming identifiers buys nothing and breaks the admin dashboard, DNS, backups
-and the Coolify wiring all at once.
+**The split is: every DNS name says `rsvpvault`, everything else says
+`evitevault`.** That is the whole rule, and the dividing line is not taste —
+it is what breaks when you get it wrong.
 
-The exceptions are the two things a stranger reads:
+Identifiers that stay lowercase `evitevault`, permanently: repo name, database,
+the `evitevault_app` Postgres role, R2 buckets (`evitevault-media`,
+`evitevault-backups`), Coolify resources, and the `app: "evitevault"` key in
+`api/src/routes/metrics.ts` that `3pandalabs/admin` reads. Renaming those buys
+nothing and breaks the admin dashboard, backups and the Coolify wiring at once.
+This is the same split RentVault made when it stopped being NRIGhar — see that
+repo's CLAUDE.md.
 
-1. **The sender address** is `invitations@rsvpvault.3pandalabs.com` (switched
+Names that are `rsvpvault`:
+
+1. **The sender address**, `invitations@rsvpvault.3pandalabs.com` (switched
    2026-07-28) — guests read the from-line. See `infra/email-setup.md`.
-2. **The public web hostname** is `rsvpvault.3pandalabs.com` (switched
-   2026-10-26) — people type it, link it, and search for it. A domain that
-   spells a name the site itself never uses cannot be found: nothing on the
-   page said "evitevault", so neither name matched anything. The API hosts did
-   *not* move with it, deliberately — `api.rsvpvault.3pandalabs.com` is a
-   two-label subdomain that Universal SSL `*.3pandalabs.com` does not cover,
-   and the payoff for renaming a host only visible in devtools is zero.
+2. **The public web hostname**, `rsvpvault.3pandalabs.com` (2026-10-26) —
+   people type it, link it and search for it. A domain spelling a name the site
+   itself never uses cannot be found: nothing on the page said "evitevault", so
+   neither name matched anything and the site was absent from Google for three
+   months.
+3. **Both API hostnames**, `api.rsvpvault.3pandalabs.com` and
+   `api-internal.rsvpvault.3pandalabs.com` (2026-10-27) — and this one is a TLS
+   constraint, not a naming preference. **All hostnames for one app must share
+   a first label.** Cloudflare issues the per-app edge certificate for
+   `<label>.3pandalabs.com` + `*.<label>.3pandalabs.com`; that inner wildcard is
+   the only thing covering a two-label `api.<app>` name, and it lives only while
+   the first-label hostname has a DNS record. The API hosts were left under
+   `evitevault` during the web rename on the reasoning that nobody reads them —
+   which was true and irrelevant. Deleting `evitevault.3pandalabs.com` revoked
+   the wildcard with it, and the API was unreachable at the edge for a day:
+   `curl` exit 35, HTTP 000, and nothing whatsoever in the origin's logs,
+   because requests never reached the origin.
 
 So: when adding user-visible text, say RsvpVault; when adding config or
 infrastructure, match the existing `evitevault` identifiers. Do not introduce
@@ -96,7 +107,7 @@ These cost real hours on `nrighar`; they apply verbatim here.
   (Node-only `async_hooks`). Auth is enforced in layouts plus the API's own
   `requireAuth` — the API is the real boundary.
 - Server-side Worker code must call the API over `INTERNAL_API_URL`
-  (`api-internal.evitevault.3pandalabs.com`, DNS-only), not the proxied public
+  (`api-internal.rsvpvault.3pandalabs.com`, DNS-only), not the proxied public
   hostname — Cloudflare blocks same-account "orange-to-orange" fetches before
   any WAF rule can allow them. `INTERNAL_API_URL` is intentionally not
   `NEXT_PUBLIC_`-prefixed so browser bundles fall back to the public host.
