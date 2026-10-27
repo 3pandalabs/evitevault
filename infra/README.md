@@ -17,8 +17,16 @@ DNS records and one Worker.
 | Host | Cloudflare | Points at | Why |
 |---|---|---|---|
 | `rsvpvault.3pandalabs.com` | Worker custom domain | `evitevault-web` | |
-| `api.evitevault.3pandalabs.com` | **Proxied** (orange) | `167.233.223.241` | Public API. Must be proxied — the Hetzner firewall only admits Cloudflare IPs on 80/443 |
-| `api-internal.evitevault.3pandalabs.com` | **DNS only** (grey) | `167.233.223.241` | Server-side calls from the Worker. See the orange-to-orange note below |
+| `api.rsvpvault.3pandalabs.com` | **Proxied** (orange) | `167.233.223.241` | Public API. Must be proxied — the Hetzner firewall only admits Cloudflare IPs on 80/443 |
+| `api-internal.rsvpvault.3pandalabs.com` | **DNS only** (grey) | `167.233.223.241` | Server-side calls from the Worker. See the orange-to-orange note below |
+| `evitevault.3pandalabs.com` | **Proxied** (orange), AAAA `100::` | nothing | Retired host. A Redirect Rule 301s it, path and query intact, to `rsvpvault.3pandalabs.com`, so old invitation links and printed QR codes keep working |
+
+All three live hostnames share the `rsvpvault` first label on purpose: the edge
+certificate Cloudflare issues per app covers `<label>.3pandalabs.com` plus
+`*.<label>.3pandalabs.com`, and that inner wildcard is what makes a two-label
+`api.<app>` name work at all. Split the API off under a different first label
+and it depends on a certificate for a hostname nothing else needs — which is
+how the API went dark for a day on 2026-10-26.
 
 The grey-cloud record is the one exception to "every hostname on the box must be
 proxied": a Cloudflare Worker cannot fetch a proxied hostname on the same

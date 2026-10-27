@@ -20,11 +20,16 @@
   // Cloudflare dashboard. (The two api.* records are a different case: they
   // point at the Hetzner box, not at a Worker, so they are managed by hand.)
   //
-  // Changing this pattern does NOT detach the previous custom domain from the
-  // Worker: `evitevault.3pandalabs.com` has to be removed by hand in the
-  // dashboard (Workers && Pages → evitevault-web → Settings → Domains).
-  // Leaving it attached would serve the whole site on two hostnames, which
-  // splits whatever Google indexes between them.
+  // Changing this pattern DELETES the previous custom domain's DNS record.
+  // That is more consequential than it sounds: Cloudflare's per-app edge
+  // certificate is issued for `<first-label>.3pandalabs.com` +
+  // `*.<first-label>.3pandalabs.com`, keyed to the existence of that
+  // first-label hostname. Deleting `evitevault.3pandalabs.com` on 2026-10-26
+  // therefore took the inner wildcard with it and killed TLS for
+  // `api.evitevault.3pandalabs.com` — the API was unreachable at the edge for
+  // a day, with nothing in the origin's logs, because requests never got
+  // there. Hence the api hosts below now live under the same first label as
+  // this one; keep them that way.
   "routes": [
     {
       "pattern": "rsvpvault.3pandalabs.com",
@@ -32,7 +37,7 @@
     }
   ],
   "vars": {
-    "NEXT_PUBLIC_API_URL": "https://api.evitevault.3pandalabs.com",
+    "NEXT_PUBLIC_API_URL": "https://api.rsvpvault.3pandalabs.com",
     "NEXT_PUBLIC_SITE_URL": "https://rsvpvault.3pandalabs.com",
     // DNS-only (grey cloud) hostname for the same origin. Server-side code in
     // this Worker must use it instead of NEXT_PUBLIC_API_URL: Cloudflare blocks
@@ -41,6 +46,6 @@
     // intermittently 403s from here. Deliberately not NEXT_PUBLIC_-prefixed, so
     // Next.js inlines it as undefined in the browser bundle and real browser
     // requests fall through to the public host. See src/lib/api/public.ts.
-    "INTERNAL_API_URL": "https://api-internal.evitevault.3pandalabs.com"
+    "INTERNAL_API_URL": "https://api-internal.rsvpvault.3pandalabs.com"
   }
 }

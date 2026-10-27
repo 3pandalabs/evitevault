@@ -10,12 +10,22 @@ Cloudflare → DNS → Records on the `3pandalabs.com` zone:
 
 | Type | Name | Content | Proxy |
 |---|---|---|---|
-| A | `api.evitevault` | `167.233.223.241` | **Proxied** (orange) |
-| A | `api-internal.evitevault` | `167.233.223.241` | **DNS only** (grey) |
+| A | `api.rsvpvault` | `167.233.223.241` | **Proxied** (orange) |
+| A | `api-internal.rsvpvault` | `167.233.223.241` | **DNS only** (grey) |
 
 The grey-cloud record is required, not an oversight — see `README.md` on
 orange-to-orange. Everything else on this box must be orange, because the
 Hetzner firewall `nrighar-coolify-fw` only admits Cloudflare's ranges on 80/443.
+
+**Both names must sit under the same first label as the web host**
+(`rsvpvault`), and that is a TLS constraint rather than a tidiness preference.
+Cloudflare issues the per-app edge certificate for
+`<first-label>.3pandalabs.com` + `*.<first-label>.3pandalabs.com`; the inner
+wildcard is the only thing covering a two-label `api.<app>` name, and it exists
+only while the first-label hostname has a DNS record. These records previously
+sat under `evitevault`, and deleting `evitevault.3pandalabs.com` during the
+2026-10-26 rename revoked that wildcard and took the public API offline at the
+edge for a day. See [[cloudflare_two_label_subdomain_certs]] in the notes.
 
 ## 2. Create the application
 
@@ -29,7 +39,7 @@ Coolify → project → **New Resource → Application → Public Repository**
   build fails with "no such file or directory".
 - **Ports Exposes:** `8080`. Coolify defaults to `3000`, which builds fine and
   then serves nothing but bad gateways.
-- **Domains:** `https://api.evitevault.3pandalabs.com,https://api-internal.evitevault.3pandalabs.com`
+- **Domains:** `https://api.rsvpvault.3pandalabs.com,https://api-internal.rsvpvault.3pandalabs.com`
   — **include the `https://` scheme on both**. A bare hostname generates a
   broken Traefik rule (the domain lands in the path matcher with an empty Host),
   no certificate is ever requested, and Traefik silently serves its default
@@ -61,9 +71,27 @@ Do **not** set `MIGRATION_DATABASE_URL`.
 ## 4. Deploy and verify
 
 ```bash
-curl -s https://api.evitevault.3pandalabs.com/health          # {"ok":true}
-curl -s https://api-internal.evitevault.3pandalabs.com/health # {"ok":true}
+curl -s https://api.rsvpvault.3pandalabs.com/health          # {"ok":true}
+curl -s https://api-internal.rsvpvault.3pandalabs.com/health # {"ok":true}
 ```
+
+The grey-cloud one times out from anywhere that is not Cloudflare, including a
+dev laptop — that is the Hetzner firewall working, not a fault. Check it from
+the box with a `Host:` header instead.
+
+An edge-level TLS failure on the proxied name (`curl` exit 35, HTTP 000,
+nothing in the Traefik log) is a missing Cloudflare certificate, not a broken
+origin, and the two are separate layers: Traefik's own Let's Encrypt cert lands
+in `/data/coolify/proxy/acme.json` and can be perfectly valid while the edge
+has nothing. Diagnose the edge with:
+
+```bash
+echo | openssl s_client -connect api.rsvpvault.3pandalabs.com:443 \
+  -servername api.rsvpvault.3pandalabs.com 2>&1 | openssl x509 -noout -ext subjectAltName
+```
+
+Empty output means no edge certificate. Compare with a working sibling such as
+`api.nrighar.3pandalabs.com`.
 
 The invitation templates need no manual step: migrations *and* the template
 seed both run at container start (`api/Dockerfile` CMD), so a deploy ships the

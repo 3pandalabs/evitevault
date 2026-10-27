@@ -31,9 +31,9 @@ Both were learned the hard way on RentVault; the reasoning is in
 Set in `wrangler.jsonc` `vars` (none of these are secret):
 
 ```
-NEXT_PUBLIC_API_URL   https://api.evitevault.3pandalabs.com
+NEXT_PUBLIC_API_URL   https://api.rsvpvault.3pandalabs.com
 NEXT_PUBLIC_SITE_URL  https://rsvpvault.3pandalabs.com
-INTERNAL_API_URL      https://api-internal.evitevault.3pandalabs.com
+INTERNAL_API_URL      https://api-internal.rsvpvault.3pandalabs.com
 ```
 
 `INTERNAL_API_URL` is what server-side code uses. It is not `NEXT_PUBLIC_`
