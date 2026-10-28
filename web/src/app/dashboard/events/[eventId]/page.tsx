@@ -161,8 +161,28 @@ export default function EventDetailPage() {
   async function onPublish() {
     setPublishing(true);
     setError(null);
+    setAddResult(null);
+    setFailedGuests([]);
     try {
-      await publishEvent(eventId);
+      const res = await publishEvent(eventId);
+
+      // Publishing is now also a send, so say what went out. Silence here is
+      // what let an event go live with a full guest list and no invitations:
+      // every step reported success and none of them had sent anything.
+      const inv = res.invitations;
+      if (inv && inv.attempted > 0) {
+        if (!inv.emailConfigured) {
+          setAddResult(
+            "Published. Email isn't set up yet, so no invitations went out — share the link or QR code.",
+          );
+        } else {
+          const failed = inv.failed > 0 ? ` ${inv.failed} didn't go out.` : "";
+          setAddResult(`Published and emailed ${inv.delivered} guest${inv.delivered === 1 ? "" : "s"}.${failed}`);
+          setFailedGuests(inv.failedGuests ?? []);
+        }
+      } else {
+        setAddResult("Published. Your invitation link is live.");
+      }
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.code === "incomplete_event") {

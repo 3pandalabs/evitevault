@@ -3,37 +3,14 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
-import { guests, rsvpLog, type Event, type Guest } from "../db/schema.js";
-import { buildInvitationEmail } from "../lib/emails/invitation.js";
-import { mailerConfigured, sendMail, type SendResult } from "../lib/mailer.js";
+import { guests, rsvpLog } from "../db/schema.js";
+import {
+  markDelivered,
+  recipientsByAddress,
+  sendInvitations,
+} from "../lib/invitations.js";
+import { mailerConfigured } from "../lib/mailer.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
-
-// Building each message renders a QR PNG, so this is a little more than string
-// concatenation — but still far cheaper than the send itself, which is what the
-// mailer batches.
-async function sendInvitations(
-  event: Event,
-  recipients: Guest[],
-  log: (msg: string) => void,
-): Promise<SendResult> {
-  const withEmail = recipients.filter((g) => g.email);
-  if (withEmail.length === 0)
-    return { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
-
-  const messages = await Promise.all(withEmail.map((g) => buildInvitationEmail(event, g)));
-  return sendMail(messages, log);
-}
-
-// Maps the addresses a send reported as failed back onto the guest rows it was
-// given. Compared case-insensitively because the address that comes back is
-// whatever the provider echoed, which is not reliably the casing we sent.
-function recipientsByAddress(recipients: Guest[], addresses: string[]) {
-  if (addresses.length === 0) return [];
-  const wanted = new Set(addresses.map((a) => a.toLowerCase()));
-  return recipients
-    .filter((g) => g.email && wanted.has(g.email.toLowerCase()))
-    .map((g) => ({ id: g.id, name: g.name, email: g.email! }));
-}
 
 const eventParams = z.object({ eventId: z.string().uuid() });
 const guestParams = eventParams.extend({ guestId: z.string().uuid() });
@@ -94,6 +71,12 @@ export async function guestRoutes(app: FastifyInstance) {
         params: eventParams,
         body: z.object({
           guests: z.array(guestInput).min(1).max(500),
+          // Accepted and ignored. It used to stamp invitedAt at insert time,
+          // which made the guest list claim people had been written to before
+          // anything was sent — and for a draft event, nothing ever was. The
+          // column is now set from the send result instead. Kept in the schema
+          // so an older client posting it still gets a 200 rather than a
+          // validation error.
           markInvited: z.boolean().default(false),
           // Defaults on: a host adding a guest with an email address means to
           // invite them. Set false to build a list quietly and send later.
@@ -129,7 +112,12 @@ export async function guestRoutes(app: FastifyInstance) {
           name: g.name,
           email: g.email?.toLowerCase() ?? null,
           phone: g.phone ?? null,
-          invitedAt: markInvited ? new Date() : null,
+          // Never stamped here, whatever `markInvited` says. invitedAt means
+          // "mail reached this person", and at insert time nothing has been
+          // attempted: the event may be a draft (which sends nothing at all),
+          // the guest may have no address, or the send may fail. It is set
+          // below, from the send result. See markInvited's own comment.
+          invitedAt: null,
         }));
 
       const inserted = await db
@@ -144,17 +132,25 @@ export async function guestRoutes(app: FastifyInstance) {
       // Only for a published event. Emailing an invitation whose link 404s is
       // worse than not emailing at all — and unlike the link, an email can't be
       // taken back once it's out.
+      //
+      // Adding to a DRAFT therefore sends nothing, which used to mean nobody
+      // was ever invited: the usual order is create, paste the guest list,
+      // then publish, and publishing sent nothing either. Publishing now picks
+      // up whoever this skipped — see the publish route.
       const mailed =
         sendInvites && event.status === "published"
           ? await sendInvitations(event, inserted, (m) => req.log.info({ eventId }, m))
           : { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
+
+      const failedGuests = recipientsByAddress(inserted, mailed.failedRecipients);
+      await markDelivered(eventId, inserted, failedGuests);
 
       return reply.code(201).send({
         added: inserted.length,
         skipped: input.length - inserted.length,
         emailed: mailed.delivered,
         emailsFailed: mailed.failed + mailed.skipped,
-        failedGuests: recipientsByAddress(inserted, mailed.failedRecipients),
+        failedGuests,
         // So the dashboard can say "added, but email isn't set up" rather than
         // implying invitations went out.
         emailConfigured: mailerConfigured(),
@@ -207,20 +203,7 @@ export async function guestRoutes(app: FastifyInstance) {
       );
 
       const failedGuests = recipientsByAddress(recipients, result.failedRecipients);
-      const failedIds = new Set(failedGuests.map((g) => g.id));
-      const deliveredIds = recipients.map((r) => r.id).filter((id) => !failedIds.has(id));
-
-      // Mark invited only the guests mail actually reached. The previous
-      // version stamped every recipient the moment anything at all went out,
-      // so a send that stopped halfway through the list recorded forty people
-      // as invited who had received nothing — and `invitedAt` is what a host
-      // reads to answer "did we ever write to them?".
-      if (deliveredIds.length > 0) {
-        await db
-          .update(guests)
-          .set({ invitedAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(guests.eventId, eventId), inArray(guests.id, deliveredIds)));
-      }
+      await markDelivered(eventId, recipients, failedGuests);
 
       return {
         recipients: recipients.length,

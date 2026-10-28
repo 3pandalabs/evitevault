@@ -225,8 +225,22 @@ export const updateEvent = (
 ) =>
   hostFetch<EventSummary>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
+// Publishing also sends the invitations nobody else would have: guests added
+// while the event was still a draft were never mailed, because the add route
+// only sends for a published event. `invitations` reports what went out, so
+// the dashboard can say so rather than leaving the host to guess.
 export const publishEvent = (id: string) =>
-  hostFetch<EventSummary>(`/events/${id}/publish`, { method: "POST" });
+  hostFetch<
+    EventSummary & {
+      invitations?: {
+        attempted: number;
+        delivered: number;
+        failed: number;
+        failedGuests: FailedGuest[];
+        emailConfigured: boolean;
+      };
+    }
+  >(`/events/${id}/publish`, { method: "POST" });
 
 export const deleteEvent = (id: string) => hostFetch<void>(`/events/${id}`, { method: "DELETE" });
 
