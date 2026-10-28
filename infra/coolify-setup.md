@@ -112,9 +112,23 @@ the box with a `Host:` header instead.
 Compare it against the merge commit on `main`; if it lags, the deploy did not
 take, whatever the dashboard says. `startedAt` catches the cases a SHA cannot —
 a rebuild of the same commit, or a container quietly crash-looping and
-restarting under you, both of which leave `commit` unchanged. A `commit` of
-`unknown` in production means Coolify stopped passing `SOURCE_COMMIT` as a
-build argument; fix that rather than the default in the Dockerfile.
+restarting under you, both of which leave `commit` unchanged.
+
+It comes from **`SOURCE_COMMIT`, which Coolify injects into the container's
+runtime environment** next to its `COOLIFY_*` variables. It is not a Docker
+build argument — an earlier attempt to bake it in at build time produced
+`unknown`, because nothing passes it to `docker build`. A `commit` of `unknown`
+in production therefore means Coolify stopped injecting it, which you can check
+without the web terminal:
+
+```bash
+ssh root@167.233.223.241 \
+  "docker exec \$(docker ps --filter name=<app-uuid> --format '{{.Names}}' | head -1) \
+   env | grep -E '^(SOURCE_COMMIT|COOLIFY_)'"
+```
+
+Print variable **names** rather than values if you widen that grep — this
+container's environment holds `JWT_SECRET`, the R2 keys and `MAILER_TOKEN`.
 
 An edge-level TLS failure on the proxied name (`curl` exit 35, HTTP 000,
 nothing in the Traefik log) is a missing Cloudflare certificate, not a broken

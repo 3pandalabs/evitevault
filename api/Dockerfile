@@ -10,18 +10,10 @@ FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Which commit this image was built from, surfaced by GET /health.
-#
-# Coolify passes SOURCE_COMMIT as a build argument for git-sourced builds, so
-# this needs no configuration there. A plain `docker build` with no --build-arg
-# gets "unknown" and starts normally: a diagnostic string is not worth refusing
-# to boot over. If production ever reports "unknown", the build arg stopped
-# arriving — fix that rather than the default.
-#
-# Declared in the runtime stage, not the build stage, so changing commit does
-# not invalidate the npm-install layers above it.
-ARG SOURCE_COMMIT=unknown
-ENV GIT_COMMIT=$SOURCE_COMMIT
+# No build argument for the commit SHA, deliberately. Coolify injects
+# SOURCE_COMMIT into the container's RUNTIME environment, not into the build,
+# so src/env.ts reads it from there — see the comment on GIT_COMMIT. An
+# ARG/ENV pair here looked right and silently produced "unknown".
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist

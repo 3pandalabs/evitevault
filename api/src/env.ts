@@ -51,15 +51,24 @@ export const env = {
   // it isn't duplicated here and can't drift.
   EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "RsvpVault",
 
-  // The commit this image was built from, baked in at build time by the
-  // Dockerfile (Coolify passes SOURCE_COMMIT as a build arg). Reported by
-  // GET /health so "is the deployed thing the thing I merged?" is answerable
-  // with one curl instead of a dashboard login — twice in two days that
-  // question had no answer from outside the box.
+  // The commit this deployment was built from, reported by GET /health so that
+  // "is the deployed thing the thing I merged?" is answerable with one curl
+  // instead of a dashboard login.
   //
-  // Optional, and "unknown" is a legitimate value: a local `docker build` with
-  // no build arg should start normally rather than refuse to boot over a
-  // diagnostic string. If /health reports "unknown" in production, the build
-  // arg is not arriving — that is the thing to fix, not this default.
-  GIT_COMMIT: process.env.GIT_COMMIT ?? "unknown",
+  // `SOURCE_COMMIT` is injected by Coolify into the container's RUNTIME
+  // environment, alongside its COOLIFY_* variables — not as a Docker build
+  // argument, which is where an earlier version of this looked and found
+  // nothing. Verified on the box: the running container has
+  // SOURCE_COMMIT=a37b3080…, matching the merge commit exactly.
+  //
+  // Runtime is also the better source of the two. A build argument is frozen
+  // into the image, so a deployment that reuses a cached image would keep
+  // reporting the commit that image was built from; the runtime variable
+  // always describes the deployment actually running.
+  //
+  // GIT_COMMIT stays as a manual override for environments that are not
+  // Coolify — a local `docker run -e GIT_COMMIT=…`, or another platform. And
+  // "unknown" remains a legitimate value: nothing should refuse to boot over a
+  // diagnostic string.
+  GIT_COMMIT: process.env.SOURCE_COMMIT || process.env.GIT_COMMIT || "unknown",
 };
