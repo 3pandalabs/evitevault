@@ -30,7 +30,20 @@ app.setSerializerCompiler(serializerCompiler);
 await app.register(cors, { origin: env.CORS_ORIGINS, credentials: true });
 await app.register(authPlugin);
 
-app.get("/health", async () => ({ ok: true }));
+// `ok` is what the container health check reads and its shape must not change.
+//
+// The other two answer a question that was unanswerable from outside the box:
+// which build is actually running. `commit` is baked into the image at build
+// time; `startedAt` is this process's start, so a redeploy is visible even when
+// the commit is unchanged — a rebuild of the same SHA, or a crash-loop
+// restarting under you, both of which look identical otherwise.
+//
+// Public on purpose, like the rest of /health. The repository is public, so a
+// commit SHA discloses nothing that isn't already on GitHub, and needing a
+// credential to answer "is my deploy live?" is what made this worth adding.
+const startedAt = new Date().toISOString();
+
+app.get("/health", async () => ({ ok: true, commit: env.GIT_COMMIT, startedAt }));
 
 // Feeds the rolling requests-per-hour figure behind GET /metrics. Both ops
 // endpoints are excluded so dashboard polling and container health checks don't

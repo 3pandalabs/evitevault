@@ -50,4 +50,16 @@ export const env = {
   // Display name only. The from ADDRESS lives in the gateway's APP_SENDERS, so
   // it isn't duplicated here and can't drift.
   EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "RsvpVault",
+
+  // The commit this image was built from, baked in at build time by the
+  // Dockerfile (Coolify passes SOURCE_COMMIT as a build arg). Reported by
+  // GET /health so "is the deployed thing the thing I merged?" is answerable
+  // with one curl instead of a dashboard login — twice in two days that
+  // question had no answer from outside the box.
+  //
+  // Optional, and "unknown" is a legitimate value: a local `docker build` with
+  // no build arg should start normally rather than refuse to boot over a
+  // diagnostic string. If /health reports "unknown" in production, the build
+  // arg is not arriving — that is the thing to fix, not this default.
+  GIT_COMMIT: process.env.GIT_COMMIT ?? "unknown",
 };

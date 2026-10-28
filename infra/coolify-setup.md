@@ -100,13 +100,21 @@ Do **not** set `MIGRATION_DATABASE_URL`.
 ## 4. Deploy and verify
 
 ```bash
-curl -s https://api.rsvpvault.3pandalabs.com/health          # {"ok":true}
+curl -s https://api.rsvpvault.3pandalabs.com/health          # {"ok":true,"commit":"…","startedAt":"…"}
 curl -s https://api-internal.rsvpvault.3pandalabs.com/health # {"ok":true}
 ```
 
 The grey-cloud one times out from anywhere that is not Cloudflare, including a
 dev laptop — that is the Hetzner firewall working, not a fault. Check it from
 the box with a `Host:` header instead.
+
+**`commit` is how you confirm a deploy actually shipped what you merged.**
+Compare it against the merge commit on `main`; if it lags, the deploy did not
+take, whatever the dashboard says. `startedAt` catches the cases a SHA cannot —
+a rebuild of the same commit, or a container quietly crash-looping and
+restarting under you, both of which leave `commit` unchanged. A `commit` of
+`unknown` in production means Coolify stopped passing `SOURCE_COMMIT` as a
+build argument; fix that rather than the default in the Dockerfile.
 
 An edge-level TLS failure on the proxied name (`curl` exit 35, HTTP 000,
 nothing in the Traefik log) is a missing Cloudflare certificate, not a broken
