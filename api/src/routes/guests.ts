@@ -17,10 +17,22 @@ async function sendInvitations(
   log: (msg: string) => void,
 ): Promise<SendResult> {
   const withEmail = recipients.filter((g) => g.email);
-  if (withEmail.length === 0) return { delivered: 0, failed: 0, skipped: 0 };
+  if (withEmail.length === 0)
+    return { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
 
   const messages = await Promise.all(withEmail.map((g) => buildInvitationEmail(event, g)));
   return sendMail(messages, log);
+}
+
+// Maps the addresses a send reported as failed back onto the guest rows it was
+// given. Compared case-insensitively because the address that comes back is
+// whatever the provider echoed, which is not reliably the casing we sent.
+function recipientsByAddress(recipients: Guest[], addresses: string[]) {
+  if (addresses.length === 0) return [];
+  const wanted = new Set(addresses.map((a) => a.toLowerCase()));
+  return recipients
+    .filter((g) => g.email && wanted.has(g.email.toLowerCase()))
+    .map((g) => ({ id: g.id, name: g.name, email: g.email! }));
 }
 
 const eventParams = z.object({ eventId: z.string().uuid() });
@@ -135,13 +147,14 @@ export async function guestRoutes(app: FastifyInstance) {
       const mailed =
         sendInvites && event.status === "published"
           ? await sendInvitations(event, inserted, (m) => req.log.info({ eventId }, m))
-          : { delivered: 0, failed: 0, skipped: 0 };
+          : { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
 
       return reply.code(201).send({
         added: inserted.length,
         skipped: input.length - inserted.length,
         emailed: mailed.delivered,
         emailsFailed: mailed.failed + mailed.skipped,
+        failedGuests: recipientsByAddress(inserted, mailed.failedRecipients),
         // So the dashboard can say "added, but email isn't set up" rather than
         // implying invitations went out.
         emailConfigured: mailerConfigured(),
@@ -193,27 +206,30 @@ export async function guestRoutes(app: FastifyInstance) {
         req.log.info({ eventId }, m),
       );
 
-      // Mark them invited only once something actually went out, so the column
-      // reflects delivery rather than intent.
-      if (result.delivered > 0) {
+      const failedGuests = recipientsByAddress(recipients, result.failedRecipients);
+      const failedIds = new Set(failedGuests.map((g) => g.id));
+      const deliveredIds = recipients.map((r) => r.id).filter((id) => !failedIds.has(id));
+
+      // Mark invited only the guests mail actually reached. The previous
+      // version stamped every recipient the moment anything at all went out,
+      // so a send that stopped halfway through the list recorded forty people
+      // as invited who had received nothing — and `invitedAt` is what a host
+      // reads to answer "did we ever write to them?".
+      if (deliveredIds.length > 0) {
         await db
           .update(guests)
           .set({ invitedAt: new Date(), updatedAt: new Date() })
-          .where(
-            and(
-              eq(guests.eventId, eventId),
-              inArray(
-                guests.id,
-                recipients.map((r) => r.id),
-              ),
-            ),
-          );
+          .where(and(eq(guests.eventId, eventId), inArray(guests.id, deliveredIds)));
       }
 
       return {
         recipients: recipients.length,
         delivered: result.delivered,
         failed: result.failed + result.skipped,
+        // Named, not just counted, so the dashboard can offer a re-send for
+        // exactly these — the expected recovery from a daily quota, not a rare
+        // error path.
+        failedGuests,
         emailConfigured: mailerConfigured(),
       };
     },

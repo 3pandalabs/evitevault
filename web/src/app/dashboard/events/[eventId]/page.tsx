@@ -35,6 +35,7 @@ import {
   uploadCoverImage,
   type Analytics,
   type EventSummary,
+  type FailedGuest,
   type GuestRow,
 } from "@/lib/api/host";
 import { ApiError } from "@/lib/api/browser";
@@ -74,6 +75,8 @@ export default function EventDetailPage() {
   const [addingGuests, setAddingGuests] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [failedGuests, setFailedGuests] = useState<FailedGuest[]>([]);
+  const [retrying, setRetrying] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const seenClearedRef = useRef(false);
@@ -194,6 +197,7 @@ export default function EventDetailPage() {
     setResending(true);
     setError(null);
     setAddResult(null);
+    setFailedGuests([]);
     try {
       const res = await sendInvitations(eventId);
       if (!res.emailConfigured) {
@@ -201,12 +205,39 @@ export default function EventDetailPage() {
       } else {
         const failed = res.failed > 0 ? ` ${res.failed} failed.` : "";
         setAddResult(`Emailed ${res.delivered} of ${res.recipients} who hadn't replied.${failed}`);
+        setFailedGuests(res.failedGuests ?? []);
       }
       await load();
     } catch {
       setError("Couldn't send those invitations.");
     } finally {
       setResending(false);
+    }
+  }
+
+  // `includeResponded: true` on purpose. These guests were chosen by name
+  // because mail to them failed, and someone who replied in the meantime —
+  // through a link a friend forwarded, say — would otherwise be silently
+  // dropped from the retry without the host being told.
+  async function onRetryFailed() {
+    const ids = failedGuests.map((g) => g.id);
+    if (ids.length === 0) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      const res = await sendInvitations(eventId, true, ids);
+      const stillFailed = res.failedGuests ?? [];
+      setFailedGuests(stillFailed);
+      setAddResult(
+        stillFailed.length === 0
+          ? `Sent the remaining ${res.delivered}.`
+          : `Sent ${res.delivered}. ${stillFailed.length} still didn't go out.`,
+      );
+      await load();
+    } catch {
+      setError("Couldn't send those invitations.");
+    } finally {
+      setRetrying(false);
     }
   }
 
@@ -246,6 +277,7 @@ export default function EventDetailPage() {
       }
       if (res.emailsFailed > 0) parts.push(`${res.emailsFailed} email(s) failed.`);
       setAddResult(parts.join(" "));
+      setFailedGuests(res.failedGuests ?? []);
       await load();
     } catch {
       setError("Couldn't add those guests.");
@@ -563,6 +595,40 @@ export default function EventDetailPage() {
             ) : null}
           </div>
           {addResult ? <p className="text-sm text-slate-600">{addResult}</p> : null}
+
+          {/* Named, not counted. A host told "62 failed" can do nothing with
+              it; a host shown who they were can re-send to exactly those. The
+              daily send allowance makes this the ordinary way a large list
+              goes out — in two passes — rather than an error state. */}
+          {failedGuests.length > 0 ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+              <p className="text-sm font-medium text-amber-900">
+                {failedGuests.length} invitation{failedGuests.length === 1 ? "" : "s"} didn&apos;t
+                go out
+              </p>
+              <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-sm text-amber-900/80">
+                {failedGuests.map((g) => (
+                  <li key={g.id}>
+                    {g.name} <span className="text-amber-900/60">· {g.email}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-900/70">
+                There&apos;s a daily limit on how much mail can go out. If you&apos;ve just sent a
+                lot, try these again tomorrow.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-3"
+                disabled={retrying}
+                onClick={onRetryFailed}
+              >
+                {retrying ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                Try these again
+              </Button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

@@ -210,6 +210,19 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
 // Only sent when the STATUS changed. A guest nudging their party size from two
 // to three doesn't need another email, and someone toggling while they make up
 // their mind shouldn't get one per tap.
+//
+// And only to guests who are coming. A confirmation email exists to give an
+// attendee the details and a way back to the page; someone who just declined
+// has nothing to be reminded of, and mailing them a receipt for saying no is
+// closer to nagging than service. The page already told them their answer was
+// saved, which is the whole of what a decline needs.
+//
+// This is also the quota lever with the best ratio in the product. RSVP
+// confirmations are the one send path no host controls or sees — a guest list
+// shared entirely over WhatsApp, with not one invitation emailed, still spends
+// the day's allowance one confirmation at a time as replies arrive. Roughly
+// two in five responses are maybe-or-no, so skipping them stretches the number
+// of guests an event can carry by about that much, for nothing.
 function sendRsvpConfirmation(
   req: FastifyRequest,
   event: Event,
@@ -217,6 +230,7 @@ function sendRsvpConfirmation(
   previousStatus: string | null,
 ) {
   if (!guest.email || guest.rsvpStatus === previousStatus) return;
+  if (guest.rsvpStatus !== "attending") return;
   if (!mailerConfigured()) return;
 
   sendMail([buildRsvpConfirmationEmail(event, guest)], (m) =>
