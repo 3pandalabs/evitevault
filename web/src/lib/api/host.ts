@@ -344,21 +344,29 @@ export const addGuests = (id: string, guests: { name: string; email?: string | n
     skipped: number;
     emailed: number;
     emailsFailed: number;
+    failedGuests: FailedGuest[];
     emailConfigured: boolean;
   }>(`/events/${id}/guests`, {
     method: "POST",
     body: JSON.stringify({ guests, markInvited: true, sendInvites: true }),
   });
 
-export const sendInvitations = (id: string, includeResponded = false) =>
+export type FailedGuest = { id: string; name: string; email: string };
+
+// `guestIds` narrows the send to specific guests; the API still applies the
+// `includeResponded` filter on top, so a re-send aimed at named guests passes
+// `includeResponded: true` — otherwise anyone who has since replied is quietly
+// dropped from a list the host explicitly chose.
+export const sendInvitations = (id: string, includeResponded = false, guestIds?: string[]) =>
   hostFetch<{
     recipients: number;
     delivered: number;
     failed: number;
+    failedGuests: FailedGuest[];
     emailConfigured: boolean;
   }>(`/events/${id}/guests/send-invitations`, {
     method: "POST",
-    body: JSON.stringify({ includeResponded }),
+    body: JSON.stringify({ includeResponded, ...(guestIds?.length ? { guestIds } : {}) }),
   });
 
 export const updateGuest = (eventId: string, guestId: string, patch: Partial<GuestRow>) =>
