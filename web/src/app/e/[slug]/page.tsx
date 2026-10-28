@@ -269,10 +269,38 @@ export default async function InvitationPage({ params, searchParams }: PageProps
             </section>
           ) : null}
 
-          {/* No product footer here by design. The invitation belongs to the
-              host, and a guest arriving from a personal link is not an audience
-              to market to — the branding sat between them and the page's
-              actual purpose. */}
+          {/* One line, last, and deliberately quiet.
+
+              This page used to carry nothing at all, on the reasoning that the
+              invitation belongs to the host and a guest arriving from a
+              personal link is not an audience to market to. The first half of
+              that still holds and is why this is a sentence in the muted
+              colour rather than a logo, a banner or a button: nothing may sit
+              between the guest and what they came here to do.
+
+              The second half did not survive contact with the problem. An
+              invitation is seen by every guest at exactly the moment they are
+              thinking about events, which makes it the only place this product
+              is ever discovered at no cost — and with it blank, a guest who
+              liked the invitation had no way of finding out what made it. That
+              is not marketing to them; it is answering a question they
+              otherwise cannot ask.
+
+              `noreferrer` for the same reason as the map and album links: the
+              invitation URL carries the guest's token, and it has no business
+              turning up in a Referer header, ours included. */}
+          <footer className="mt-12 border-t border-black/5 pt-6 text-center">
+            <p className="ev-muted text-xs">
+              <a
+                href="https://rsvpvault.3pandalabs.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-4 hover:underline"
+              >
+                Invitation made with RsvpVault — make one for your event
+              </a>
+            </p>
+          </footer>
         </div>
       </main>
     </>
