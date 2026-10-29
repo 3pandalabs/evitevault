@@ -74,7 +74,6 @@ export default function EventDetailPage() {
   const [bulkGuests, setBulkGuests] = useState("");
   const [addingGuests, setAddingGuests] = useState(false);
   const [addResult, setAddResult] = useState<string | null>(null);
-  const [resending, setResending] = useState(false);
   const [failedGuests, setFailedGuests] = useState<FailedGuest[]>([]);
   const [retrying, setRetrying] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -203,28 +202,6 @@ export default function EventDetailPage() {
       setError("Couldn't open a preview just now.");
     } finally {
       setPreviewing(false);
-    }
-  }
-
-  async function onResend() {
-    setResending(true);
-    setError(null);
-    setAddResult(null);
-    setFailedGuests([]);
-    try {
-      const res = await sendInvitations(eventId);
-      if (!res.emailConfigured) {
-        setAddResult("Email isn't set up yet, so nothing was sent — share the link or QR code instead.");
-      } else {
-        const failed = res.failed > 0 ? ` ${res.failed} failed.` : "";
-        setAddResult(`Emailed ${res.delivered} of ${res.recipients} who hadn't replied.${failed}`);
-        setFailedGuests(res.failedGuests ?? []);
-      }
-      await load();
-    } catch {
-      setError("Couldn't send those invitations.");
-    } finally {
-      setResending(false);
     }
   }
 
@@ -645,14 +622,13 @@ export default function EventDetailPage() {
                   {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                   Add guests
                 </Button>
-                {/* Separate from adding, so a re-paste of the same list can't
-                    re-mail everyone. Only goes to guests who haven't replied. */}
-                {guests.some((g) => g.email && g.rsvpStatus === "pending" && g.invitedAt) ? (
-                  <Button size="sm" variant="outline" disabled={resending} onClick={onResend}>
-                    {resending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
-                    Email guests who haven&apos;t replied
-                  </Button>
-                ) : null}
+                {/* There is deliberately no "email the ones who haven't
+                    replied" button. A guest gets exactly one invitation, and
+                    silence is an answer the product does not get to nag at.
+                    Chasing a non-responder is what the link, WhatsApp, SMS and
+                    the QR code are for — all free, none of them a second
+                    unsolicited email. The API enforces this too, so removing
+                    the button is not the only thing holding the rule up. */}
               </div>
 
               {/* Adding a guest to a published event mails them straight away,

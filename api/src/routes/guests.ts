@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
@@ -159,9 +159,16 @@ export async function guestRoutes(app: FastifyInstance) {
     },
   );
 
-  // Re-send to guests who haven't responded — the "I don't think they got it"
-  // button. Deliberately separate from adding guests: the two are different
-  // intents, and conflating them makes a duplicate paste re-mail everyone.
+  // Sends to guests who have never been reached. NOT a re-send: a guest who
+  // already has their invitation never gets another one from here, however
+  // long they go without replying.
+  //
+  // That rule is enforced below rather than left to the caller, because it is
+  // a promise to the guest rather than a dashboard preference. One invitation
+  // per person, full stop. A host who wants to chase a non-responder has the
+  // link, WhatsApp, SMS and the QR code — none of which spend the shared daily
+  // mail allowance or put the sending domain's reputation behind a second
+  // unsolicited email to someone who did not answer the first.
   app.post(
     "/events/:eventId/guests/send-invitations",
     {
@@ -169,7 +176,9 @@ export async function guestRoutes(app: FastifyInstance) {
         params: eventParams,
         body: z
           .object({
-            // Default false so the common case can't spam people who already replied.
+            // Accepted and ignored. It used to widen the send to guests who had
+            // already replied; the uninvited-only rule below supersedes it
+            // entirely. Kept so an older client posting it still gets a 200.
             includeResponded: z.boolean().default(false),
             guestIds: z.array(z.string().uuid()).max(500).optional(),
           })
@@ -178,10 +187,10 @@ export async function guestRoutes(app: FastifyInstance) {
     },
     async (req, reply) => {
       const { eventId } = req.params as z.infer<typeof eventParams>;
-      const { includeResponded, guestIds } = req.body as {
-        includeResponded: boolean;
-        guestIds?: string[];
-      };
+      // includeResponded is accepted by the schema and not read here — see the
+      // comment on it. Destructuring it would only suggest it still does
+      // something.
+      const { guestIds } = req.body as { guestIds?: string[] };
       const event = await loadOwnedEvent(eventId, req.userId!, reply);
       if (!event) return;
 
@@ -189,8 +198,23 @@ export async function guestRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: "event_not_published" });
       }
 
-      const conditions = [eq(guests.eventId, eventId), isNotNull(guests.email)];
-      if (!includeResponded) conditions.push(eq(guests.rsvpStatus, "pending"));
+      // `invitedAt is null` is the whole rule, and it is the same filter the
+      // scheduled job uses — one definition of "still owed an invitation",
+      // applied everywhere, rather than each caller deciding for itself.
+      //
+      // It replaces a filter on RSVP status, which looked similar and was not:
+      // "hasn't replied" includes everyone who was invited and stayed quiet,
+      // so that path re-mailed people who already had their invitation.
+      //
+      // Note what this does NOT block. A guest whose send failed never had
+      // invitedAt stamped — markDelivered writes it from the send result — so
+      // the dashboard's retry for failed recipients still reaches exactly
+      // them, which is the one case where a second attempt is a first arrival.
+      const conditions = [
+        eq(guests.eventId, eventId),
+        isNotNull(guests.email),
+        isNull(guests.invitedAt),
+      ];
       if (guestIds?.length) conditions.push(inArray(guests.id, guestIds));
 
       const recipients = await db
