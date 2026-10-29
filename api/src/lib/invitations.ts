@@ -18,7 +18,7 @@ export async function sendInvitations(
 ): Promise<SendResult> {
   const withEmail = recipients.filter((g) => g.email);
   if (withEmail.length === 0)
-    return { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
+    return { delivered: 0, failed: 0, skipped: 0, failedRecipients: [], quotaExhausted: false };
 
   const messages = await Promise.all(withEmail.map((g) => buildInvitationEmail(event, g)));
   return sendMail(messages, log);

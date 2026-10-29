@@ -42,6 +42,11 @@ export type SendResult = {
   failed: number;
   skipped: number;
   failedRecipients: string[];
+  // True when the gateway refused messages because this app's daily allowance
+  // is spent, rather than because anything was wrong with them. The difference
+  // matters to the retry job: a quota rejection means stop and come back
+  // tomorrow, while a bad address means stop expecting that one to ever work.
+  quotaExhausted: boolean;
 };
 
 export function mailerConfigured(): boolean {
@@ -62,12 +67,19 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
     // Not listed as failed recipients: nothing was attempted for any of them,
     // and offering a host a re-send button for a gateway that isn't configured
     // would just fail again. The dashboard says so in words instead.
-    return { delivered: 0, failed: 0, skipped: messages.length, failedRecipients: [] };
+    return {
+      delivered: 0,
+      failed: 0,
+      skipped: messages.length,
+      failedRecipients: [],
+      quotaExhausted: false,
+    };
   }
 
   let delivered = 0;
   let failed = 0;
   const failedRecipients: string[] = [];
+  let quotaExhausted = false;
 
   for (let i = 0; i < messages.length; i += BATCH) {
     const batch = messages.slice(i, i + BATCH);
@@ -102,6 +114,7 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
         // single likeliest way a large guest list half-sends. The whole batch
         // is counted as failed because the gateway rejected the request before
         // any of it was attempted.
+        if (res.status === 429) quotaExhausted = true;
         failedRecipients.push(...batch.map((m) => m.to));
         continue;
       }
@@ -120,6 +133,12 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
         if (!r.ok) {
           log(`mail send failed for ${r.to}: ${r.error ?? "unknown"}`);
           failedRecipients.push(r.to);
+          // The gateway grants a partial reservation — it sends what today's
+          // allowance covers and marks the remainder `quota_exceeded` — so
+          // this arrives mixed in with successes on the same request rather
+          // than as a failed call. A hundred-guest list is sixty sends and
+          // forty of these.
+          if (r.error === "quota_exceeded") quotaExhausted = true;
         }
       }
 
@@ -138,5 +157,5 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
     }
   }
 
-  return { delivered, failed, skipped: 0, failedRecipients };
+  return { delivered, failed, skipped: 0, failedRecipients, quotaExhausted };
 }

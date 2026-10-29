@@ -140,7 +140,7 @@ export async function guestRoutes(app: FastifyInstance) {
       const mailed =
         sendInvites && event.status === "published"
           ? await sendInvitations(event, inserted, (m) => req.log.info({ eventId }, m))
-          : { delivered: 0, failed: 0, skipped: 0, failedRecipients: [] };
+          : { delivered: 0, failed: 0, skipped: 0, failedRecipients: [], quotaExhausted: false };
 
       const failedGuests = recipientsByAddress(inserted, mailed.failedRecipients);
       await markDelivered(eventId, inserted, failedGuests);
