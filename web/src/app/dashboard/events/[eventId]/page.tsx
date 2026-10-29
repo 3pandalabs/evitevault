@@ -175,7 +175,7 @@ export default function EventDetailPage() {
       // Publishing sends nothing — it makes the link work. Saying what happens
       // next is the point: the guest box only appears now, and a host who
       // stops here has an event nobody has heard about.
-      setAddResult("Published. Your invitation link is live — add your guests below to invite them.");
+      setAddResult("Published. Your invitation link is live — add your guests below and they'll be emailed.");
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.code === "incomplete_event") {
@@ -306,12 +306,14 @@ export default function EventDetailPage() {
 
       // Say plainly what happened to the email, rather than letting "Added 5"
       // imply five invitations went out when none did.
+      //
+      // No "publish first" branch any more: guests cannot be added to a draft,
+      // so reaching this code at all means the event is live and the add was a
+      // send. The backlog panel below picks up whatever did not make it.
       const parts = [`Added ${res.added}.`];
       if (res.skipped > 0) parts.push(`Skipped ${res.skipped} already on the list.`);
       if (!res.emailConfigured) {
         parts.push("Email isn't set up yet, so no invitations were sent — share the link or QR code.");
-      } else if (event?.status !== "published") {
-        parts.push("Publish the event to send invitations.");
       } else if (res.emailed > 0) {
         parts.push(`Emailed ${res.emailed}.`);
       }
@@ -624,8 +626,8 @@ export default function EventDetailPage() {
               find where guests go is a different failure, not a fixed one. */}
           {event.status !== "published" ? (
             <p className="text-sm text-slate-600">
-              Publish the event first, then add your guests and send their invitations. The
-              invitation link has to work before anyone receives it.
+              Publish the event first. Guests you add after that are emailed their invitation
+              straight away, so the link has to be working before anyone receives it.
             </p>
           ) : (
             <>
@@ -653,17 +655,22 @@ export default function EventDetailPage() {
                 ) : null}
               </div>
 
-              {/* Adding a guest no longer mails them. Sending is its own
-                  decision, because it is the irreversible one — but a host who
-                  adds a list and is told nothing will assume it went out, which
-                  is how this bug was reported in the first place. So this is a
-                  standing panel naming the number, not a toast that scrolls
-                  away. */}
+              {/* Adding a guest to a published event mails them straight away,
+                  so this panel is not the normal path — a non-zero count here
+                  means a send did not land: the day's mail allowance ran out
+                  mid-list, the gateway was unreachable, or an address was
+                  rejected. That is exactly when a host needs a standing
+                  statement of who is still waiting and a way to try again,
+                  rather than a toast that has already scrolled away. */}
               {uninvited.length > 0 ? (
-                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                  <p className="text-sm font-medium text-emerald-900">
-                    {uninvited.length} guest{uninvited.length === 1 ? "" : "s"} haven&apos;t been
-                    sent an invitation yet
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-900">
+                    {uninvited.length} guest{uninvited.length === 1 ? "" : "s"} still waiting for an
+                    invitation
+                  </p>
+                  <p className="mt-1 text-xs text-amber-900/70">
+                    Their invitation didn&apos;t go out. There&apos;s a daily limit on how much mail
+                    can be sent — if you&apos;ve just added a lot of guests, try again tomorrow.
                   </p>
                   <Button size="sm" className="mt-3" disabled={inviting} onClick={onSendInvitations}>
                     {inviting ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}

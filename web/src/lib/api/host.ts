@@ -355,11 +355,17 @@ export const addGuests = (id: string, guests: { name: string; email?: string | n
     emailConfigured: boolean;
   }>(`/events/${id}/guests`, {
     method: "POST",
-    // Adding a guest does not email them. Sending is the irreversible half and
-    // belongs to its own button, so that a host pasting a list to check it
-    // parsed correctly has not already mailed two hundred people. The dashboard
-    // then shows how many are waiting to be invited.
-    body: JSON.stringify({ guests, sendInvites: false }),
+    // Adding a guest to a published event invites them, immediately. Adding
+    // someone to the guest list of a live event IS the act of inviting them,
+    // and a separate confirmation step only makes sense while the invitation
+    // link might not work yet — which can no longer happen, because guests
+    // cannot be added to a draft at all.
+    //
+    // The irreversibility that argued for a second step is handled by the
+    // ordering instead: the host has already published, seen the live link,
+    // and is now typing addresses into a box on that event. Nothing about that
+    // reads as a dry run.
+    body: JSON.stringify({ guests, sendInvites: true }),
   });
 
 export type FailedGuest = { id: string; name: string; email: string };
