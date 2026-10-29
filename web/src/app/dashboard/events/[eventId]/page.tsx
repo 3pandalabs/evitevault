@@ -77,6 +77,13 @@ export default function EventDetailPage() {
   const [resending, setResending] = useState(false);
   const [failedGuests, setFailedGuests] = useState<FailedGuest[]>([]);
   const [retrying, setRetrying] = useState(false);
+  const [inviting, setInviting] = useState(false);
+
+  // Guests who can be emailed and haven't been. `invitedAt` is written from the
+  // send result, so this is "mail has not reached them" rather than "a flag was
+  // set when the row was created" — which is what it used to mean, and why the
+  // list could claim people were invited when nothing had been sent.
+  const uninvited = guests.filter((g) => g.email && !g.invitedAt);
   const [previewing, setPreviewing] = useState(false);
   const coverRef = useRef<HTMLInputElement>(null);
   const seenClearedRef = useRef(false);
@@ -164,25 +171,11 @@ export default function EventDetailPage() {
     setAddResult(null);
     setFailedGuests([]);
     try {
-      const res = await publishEvent(eventId);
-
-      // Publishing is now also a send, so say what went out. Silence here is
-      // what let an event go live with a full guest list and no invitations:
-      // every step reported success and none of them had sent anything.
-      const inv = res.invitations;
-      if (inv && inv.attempted > 0) {
-        if (!inv.emailConfigured) {
-          setAddResult(
-            "Published. Email isn't set up yet, so no invitations went out — share the link or QR code.",
-          );
-        } else {
-          const failed = inv.failed > 0 ? ` ${inv.failed} didn't go out.` : "";
-          setAddResult(`Published and emailed ${inv.delivered} guest${inv.delivered === 1 ? "" : "s"}.${failed}`);
-          setFailedGuests(inv.failedGuests ?? []);
-        }
-      } else {
-        setAddResult("Published. Your invitation link is live.");
-      }
+      await publishEvent(eventId);
+      // Publishing sends nothing — it makes the link work. Saying what happens
+      // next is the point: the guest box only appears now, and a host who
+      // stops here has an event nobody has heard about.
+      setAddResult("Published. Your invitation link is live — add your guests below to invite them.");
       await load();
     } catch (err) {
       if (err instanceof ApiError && err.code === "incomplete_event") {
@@ -232,6 +225,33 @@ export default function EventDetailPage() {
       setError("Couldn't send those invitations.");
     } finally {
       setResending(false);
+    }
+  }
+
+  // The explicit send. `includeResponded: true` because the guests are named:
+  // the filter that matters is "we have not written to them", which is already
+  // applied here, and someone who replied through a forwarded link still never
+  // got their own invitation.
+  async function onSendInvitations() {
+    const ids = uninvited.map((g) => g.id);
+    if (ids.length === 0) return;
+    setInviting(true);
+    setError(null);
+    setFailedGuests([]);
+    try {
+      const res = await sendInvitations(eventId, true, ids);
+      if (!res.emailConfigured) {
+        setAddResult("Email isn't set up yet, so nothing was sent — share the link or QR code instead.");
+      } else {
+        const failed = res.failed > 0 ? ` ${res.failed} didn't go out.` : "";
+        setAddResult(`Emailed ${res.delivered} guest${res.delivered === 1 ? "" : "s"}.${failed}`);
+        setFailedGuests(res.failedGuests ?? []);
+      }
+      await load();
+    } catch {
+      setError("Couldn't send those invitations.");
+    } finally {
+      setInviting(false);
     }
   }
 
@@ -591,29 +611,69 @@ export default function EventDetailPage() {
           <CardTitle>Invite guests</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {/* One textarea rather than a repeating row form: hosts arrive with a
-              list already written down somewhere, and retyping it into
-              individual fields is the friction that stops them inviting anyone. */}
-          <Textarea
-            rows={4}
-            value={bulkGuests}
-            onChange={(e) => setBulkGuests(e.target.value)}
-            placeholder={"One per line:\nMeera Iyer, meera@example.com\nSanjay Rao"}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
-              {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
-              Add guests
-            </Button>
-            {/* Separate from adding, so a re-paste of the same list can't
-                re-mail everyone. Only goes to guests who haven't replied. */}
-            {event.status === "published" && guests.some((g) => g.email && g.rsvpStatus === "pending") ? (
-              <Button size="sm" variant="outline" disabled={resending} onClick={onResend}>
-                {resending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
-                Email guests who haven&apos;t replied
-              </Button>
-            ) : null}
-          </div>
+          {/* Guests cannot be added to a draft, and this is the fix for the
+              worst failure this product had: adding guests only ever mailed
+              them if the event was already published, so the natural order —
+              create, paste the list, publish — produced a live event with a
+              full guest list and not one invitation sent. Every step reported
+              success. Nobody was told.
+
+              Removing the entry box while the event is a draft makes that
+              sequence impossible to perform rather than merely recoverable.
+              The card itself stays, saying what unlocks it: a host who cannot
+              find where guests go is a different failure, not a fixed one. */}
+          {event.status !== "published" ? (
+            <p className="text-sm text-slate-600">
+              Publish the event first, then add your guests and send their invitations. The
+              invitation link has to work before anyone receives it.
+            </p>
+          ) : (
+            <>
+              {/* One textarea rather than a repeating row form: hosts arrive with a
+                  list already written down somewhere, and retyping it into
+                  individual fields is the friction that stops them inviting anyone. */}
+              <Textarea
+                rows={4}
+                value={bulkGuests}
+                onChange={(e) => setBulkGuests(e.target.value)}
+                placeholder={"One per line:\nMeera Iyer, meera@example.com\nSanjay Rao"}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
+                  {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+                  Add guests
+                </Button>
+                {/* Separate from adding, so a re-paste of the same list can't
+                    re-mail everyone. Only goes to guests who haven't replied. */}
+                {guests.some((g) => g.email && g.rsvpStatus === "pending" && g.invitedAt) ? (
+                  <Button size="sm" variant="outline" disabled={resending} onClick={onResend}>
+                    {resending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                    Email guests who haven&apos;t replied
+                  </Button>
+                ) : null}
+              </div>
+
+              {/* Adding a guest no longer mails them. Sending is its own
+                  decision, because it is the irreversible one — but a host who
+                  adds a list and is told nothing will assume it went out, which
+                  is how this bug was reported in the first place. So this is a
+                  standing panel naming the number, not a toast that scrolls
+                  away. */}
+              {uninvited.length > 0 ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-sm font-medium text-emerald-900">
+                    {uninvited.length} guest{uninvited.length === 1 ? "" : "s"} haven&apos;t been
+                    sent an invitation yet
+                  </p>
+                  <Button size="sm" className="mt-3" disabled={inviting} onClick={onSendInvitations}>
+                    {inviting ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                    Send {uninvited.length === 1 ? "the invitation" : `${uninvited.length} invitations`}
+                  </Button>
+                </div>
+              ) : null}
+            </>
+          )}
+
           {addResult ? <p className="text-sm text-slate-600">{addResult}</p> : null}
 
           {/* Named, not counted. A host told "62 failed" can do nothing with

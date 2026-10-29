@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gt, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { signPreviewToken } from "../auth/jwt.js";
@@ -8,8 +8,6 @@ import { env } from "../env.js";
 import { eventTemplates, eventViews, events, guests, type Event } from "../db/schema.js";
 import { cardSourceHash as hashCardSource } from "../lib/cardSource.js";
 import { toCsv } from "../lib/csv.js";
-import { markDelivered, recipientsByAddress, sendInvitations } from "../lib/invitations.js";
-import { mailerConfigured } from "../lib/mailer.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
 import { themeOverridesSchema } from "../lib/theme.js";
 import { deleteObject, eventIdForKey } from "../plugins/r2.js";
@@ -315,46 +313,18 @@ export async function eventRoutes(app: FastifyInstance) {
         .where(eq(events.id, eventId))
         .returning();
 
-      // Publishing sends the invitations nobody else was going to send.
+      // Publishing deliberately sends nothing.
       //
-      // Adding guests only mails them if the event is already published, and
-      // the natural order is the other way round: create, paste the guest
-      // list, then publish. That produced an event with a full guest list and
-      // not one invitation sent — silently, because every step reported
-      // success. Nothing downstream ever revisited it, and the dashboard
-      // compounded it by showing those guests as "invited".
+      // An earlier version of this change had it mail every uninvited guest,
+      // to fix an event going live with a full guest list and no invitations.
+      // The dashboard now prevents that differently and better: guests cannot
+      // be added until the event is published, so at this moment there is no
+      // list to mail, and sending is an explicit step the host takes next.
       //
-      // Only guests with an address and no invitedAt, so this is idempotent:
-      // publishing, unpublishing and publishing again does not re-mail anyone,
-      // and guests added later to an already-published event are mailed by the
-      // add route rather than twice by both. That depends on invitedAt meaning
-      // "mail reached them", which is what markDelivered now guarantees.
-      const pending = await db
-        .select()
-        .from(guests)
-        .where(
-          and(eq(guests.eventId, eventId), isNotNull(guests.email), isNull(guests.invitedAt)),
-        );
-
-      const mailed = await sendInvitations(updated, pending, (m) =>
-        req.log.info({ eventId }, m),
-      );
-      const failedGuests = recipientsByAddress(pending, mailed.failedRecipients);
-      await markDelivered(eventId, pending, failedGuests);
-
-      return {
-        ...updated,
-        // The dashboard says what actually went out. A publish that quietly
-        // mails thirty people should not look identical to one that mails
-        // nobody because every guest was already invited.
-        invitations: {
-          attempted: pending.length,
-          delivered: mailed.delivered,
-          failed: mailed.failed + mailed.skipped,
-          failedGuests,
-          emailConfigured: mailerConfigured(),
-        },
-      };
+      // Keeping an implicit send here as well would make publish mean two
+      // things — "the link works now" and "mail just went out, irrevocably" —
+      // which is a poor pairing for an action with a button that says Publish.
+      return updated;
     },
   );
 
