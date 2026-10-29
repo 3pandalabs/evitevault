@@ -133,6 +133,10 @@ export type GuestRow = {
   dietaryNotes: string | null;
   message: string | null;
   source: "invited" | "public";
+  // When mail actually reached them, not when the row was created. Null means
+  // this guest is still waiting for an invitation, which is what the dashboard
+  // counts.
+  invitedAt: string | null;
   inviteToken: string;
   respondedAt: string | null;
   firstViewedAt: string | null;
@@ -225,6 +229,9 @@ export const updateEvent = (
 ) =>
   hostFetch<EventSummary>(`/events/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 
+// Publishing makes the invitation link work. It sends nothing — guests can
+// only be added once an event is published, so there is no list to mail at
+// this point, and sending is the host's own next step.
 export const publishEvent = (id: string) =>
   hostFetch<EventSummary>(`/events/${id}/publish`, { method: "POST" });
 
@@ -348,7 +355,11 @@ export const addGuests = (id: string, guests: { name: string; email?: string | n
     emailConfigured: boolean;
   }>(`/events/${id}/guests`, {
     method: "POST",
-    body: JSON.stringify({ guests, markInvited: true, sendInvites: true }),
+    // Adding a guest does not email them. Sending is the irreversible half and
+    // belongs to its own button, so that a host pasting a list to check it
+    // parsed correctly has not already mailed two hundred people. The dashboard
+    // then shows how many are waiting to be invited.
+    body: JSON.stringify({ guests, sendInvites: false }),
   });
 
 export type FailedGuest = { id: string; name: string; email: string };

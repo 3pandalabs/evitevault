@@ -312,6 +312,18 @@ export async function eventRoutes(app: FastifyInstance) {
         .set({ status: "published", updatedAt: new Date() })
         .where(eq(events.id, eventId))
         .returning();
+
+      // Publishing deliberately sends nothing.
+      //
+      // An earlier version of this change had it mail every uninvited guest,
+      // to fix an event going live with a full guest list and no invitations.
+      // The dashboard now prevents that differently and better: guests cannot
+      // be added until the event is published, so at this moment there is no
+      // list to mail, and sending is an explicit step the host takes next.
+      //
+      // Keeping an implicit send here as well would make publish mean two
+      // things — "the link works now" and "mail just went out, irrevocably" —
+      // which is a poor pairing for an action with a button that says Publish.
       return updated;
     },
   );
