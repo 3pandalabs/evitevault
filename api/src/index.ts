@@ -3,6 +3,7 @@ import Fastify, { type FastifyError } from "fastify";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { authPlugin } from "./auth/plugin.js";
 import { env } from "./env.js";
+import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
 import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
@@ -92,6 +93,12 @@ await app.register(storageRoutes);
 // everything above it is behind requireAuth.
 await app.register(publicEventRoutes);
 await app.register(metricsRoutes);
+
+// Finishes guest lists the day's mail allowance could not. A hundred-guest
+// list sends sixty and rejects forty; this picks the forty up once the
+// allowance resets, instead of the host having to notice and press a button
+// again tomorrow. See jobs/pendingInvitations.ts.
+startPendingInvitationsJob((msg) => app.log.info(msg));
 
 app.listen({ port: env.PORT, host: "0.0.0.0" }).catch((err) => {
   app.log.error(err);

@@ -121,8 +121,36 @@ These cost real hours on `nrighar`; they apply verbatim here.
   runs its own DDL; migrating as `postgres` creates objects the runtime role
   cannot read (42501).
 
+## Background work: one interval, in the API container
+
+`api/src/jobs/pendingInvitations.ts` runs hourly inside the API process and
+finishes guest lists the day's mail allowance could not. The shared gateway
+caps this app at a fixed number of messages per UTC day, so a hundred-guest
+list sends sixty and rejects forty; the job picks the rest up once the
+allowance resets, instead of the host having to notice and press a button
+again tomorrow.
+
+Three properties worth preserving if you touch it:
+
+- **It cannot double-send.** It selects guests with an address and
+  `invitedAt is null`, and `invitedAt` is written from the send result. A
+  crash-loop, a restart, or two overlapping runs all converge on the same
+  answer, because a delivered guest stops matching.
+- **Soonest event first**, past events excluded. When the allowance covers only
+  part of what is waiting, this Saturday's wedding should get it before one in
+  March, and an invitation arriving after the day is worse than none.
+- **It stops the moment the gateway reports `quota_exceeded`** rather than
+  grinding through the remaining events into guaranteed rejections — which
+  would also undo the ordering, since every event would be equally rejected.
+
+A plain `setInterval`, not a cron service or a queue: this API is a single
+long-running container, so there is exactly one of these, and a second
+deployable would mean another thing to keep alive and another credential to
+hold. Missing a tick costs an hour against a quota that resets daily.
+
 ## Not used here
 
-No Temporal, no mobile app, no Supabase. If durable multi-step work appears
-later (bulk invitation email sends are the likely first case), follow the
-RentVault worker pattern rather than inventing a new one.
+No Temporal, no mobile app, no Supabase. The hourly job above is deliberately
+the small version; if durable multi-step work ever genuinely needs retries,
+visibility and backoff, follow the RentVault worker pattern rather than growing
+that interval into a queue.
