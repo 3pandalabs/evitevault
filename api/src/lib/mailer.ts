@@ -29,6 +29,10 @@ export type Mail = {
   html: string;
   text: string;
   attachments?: Attachment[];
+  // Where a reply goes instead of the sender address. The contact form sets it
+  // to the person who wrote in, so support answers them directly. The gateway
+  // passes it through as Reply-To.
+  replyTo?: string;
 };
 
 // `failedRecipients` carries the addresses behind the `failed` count, because
@@ -102,6 +106,7 @@ export async function sendMail(messages: Mail[], log: (msg: string) => void): Pr
             html: m.html,
             text: m.text,
             ...(m.attachments?.length ? { attachments: m.attachments } : {}),
+            ...(m.replyTo ? { replyTo: m.replyTo } : {}),
           })),
         }),
       });

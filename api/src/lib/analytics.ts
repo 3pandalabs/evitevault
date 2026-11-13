@@ -6,7 +6,7 @@ import { env } from "../env.js";
 // only header here that Cloudflare guarantees it overwrites on every request,
 // so it can't be spoofed by a client — X-Forwarded-For can be, since Cloudflare
 // appends rather than replaces.
-function clientIp(req: FastifyRequest): string {
+export function clientIp(req: FastifyRequest): string {
   const cf = req.headers["cf-connecting-ip"];
   if (typeof cf === "string" && cf) return cf;
   return req.ip;

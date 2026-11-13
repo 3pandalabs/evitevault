@@ -5,8 +5,10 @@ import { authPlugin } from "./auth/plugin.js";
 import { env } from "./env.js";
 import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
+import { accountRoutes } from "./routes/account.js";
 import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
+import { contactRoutes } from "./routes/contact.js";
 import { eventRoutes } from "./routes/events.js";
 import { guestbookModerationRoutes } from "./routes/guestbook.js";
 import { guestRoutes } from "./routes/guests.js";
@@ -89,9 +91,11 @@ await app.register(guestbookModerationRoutes);
 await app.register(announcementRoutes);
 await app.register(templateRoutes);
 await app.register(storageRoutes);
+await app.register(accountRoutes);
 // Anonymous by design — registered last so it's obvious in this list that
 // everything above it is behind requireAuth.
 await app.register(publicEventRoutes);
+await app.register(contactRoutes);
 await app.register(metricsRoutes);
 
 // Finishes guest lists the day's mail allowance could not. A hundred-guest
