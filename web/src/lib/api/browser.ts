@@ -104,3 +104,15 @@ export async function uploadGuestbookPhoto(slug: string, file: File): Promise<st
 
   return key;
 }
+
+export type ContactInput = {
+  name: string;
+  email: string;
+  message: string;
+  // Honeypot — hidden on the form, so only bots fill it in.
+  website?: string;
+};
+
+export function sendContact(input: ContactInput) {
+  return request<void>("/contact", { method: "POST", body: JSON.stringify(input) });
+}

@@ -17,6 +17,18 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | H | GET | `/auth/me` | |
 | H | DELETE | `/auth/sessions` | Revokes every session for the caller |
 
+## Account
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| H | POST | `/me/delete` | `{ password }` re-confirmation (403 `wrong_password`; 5 tries / 15 min per account). Deletes the host, their events (guests, RSVPs, guestbook, announcements, views), host templates, sessions and reset tokens in one transaction; R2 objects under each `events/<id>/` are swept best-effort after commit |
+
+## Contact
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| P | POST | `/contact` | `{ name, email, message, website? }` (`website` is a honeypot → silent 204). Relays one email to `SUPPORT_EMAIL` via the mailer gateway, Reply-To = sender; stores nothing. 5/hour per IP, 40/hour overall → 429; 503 `mailer_unavailable` if not delivered |
+
 ## Events (host hub)
 
 | | Method | Path | Notes |

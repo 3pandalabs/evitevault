@@ -408,3 +408,8 @@ export async function downloadGuestCsv(eventId: string, slug: string) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// Permanently deletes the signed-in host and everything they own. The password
+// is re-confirmed server-side; 403 `wrong_password` means it didn't match.
+export const deleteAccount = (password: string) =>
+  hostFetch<void>("/me/delete", { method: "POST", body: JSON.stringify({ password }) });

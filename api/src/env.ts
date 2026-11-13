@@ -51,6 +51,11 @@ export const env = {
   // it isn't duplicated here and can't drift.
   EMAIL_FROM_NAME: process.env.EMAIL_FROM_NAME ?? "RsvpVault",
 
+  // Inbox the public contact form (POST /contact) relays to. Optional: the
+  // default is the org-wide support mailbox the privacy policy and terms
+  // publish, so leaving it unset is the normal configuration.
+  SUPPORT_EMAIL: process.env.SUPPORT_EMAIL || "support@3pandalabs.com",
+
   // The commit this deployment was built from, reported by GET /health so that
   // "is the deployed thing the thing I merged?" is answerable with one curl
   // instead of a dashboard login.

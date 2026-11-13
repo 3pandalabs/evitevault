@@ -1,5 +1,11 @@
 import crypto from "node:crypto";
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../env.js";
 
@@ -96,4 +102,31 @@ export function extForType(t: AllowedImageType): string {
 export function eventIdForKey(key: string): string | null {
   const m = /^events\/([0-9a-f-]{36})\//i.exec(key);
   return m ? m[1] : null;
+}
+
+// Every object under one event's prefix — cover, card and guestbook photos,
+// including any orphan a failed upload or a replaced card left behind, which no
+// database row points at any more. Used by account deletion, where "everything
+// this host owns" must mean the bucket too, not just the rows.
+//
+// One DeleteObject per key rather than a batch DeleteObjects: the batch call
+// needs a Content-MD5/checksum header that the WHEN_REQUIRED setting above
+// would otherwise have to be reasoned about, and an event holds tens of
+// objects, not thousands. Returns how many were deleted.
+export async function deleteEventObjects(eventId: string): Promise<number> {
+  const prefix = `events/${eventId}/`;
+  let deleted = 0;
+  let token: string | undefined;
+  do {
+    const page = await r2.send(
+      new ListObjectsV2Command({ Bucket: env.R2_BUCKET, Prefix: prefix, ContinuationToken: token }),
+    );
+    for (const obj of page.Contents ?? []) {
+      if (!obj.Key) continue;
+      await deleteObject(obj.Key);
+      deleted += 1;
+    }
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return deleted;
 }

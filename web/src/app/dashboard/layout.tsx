@@ -45,16 +45,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
             <WordmarkTag />
           </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              clearTokens();
-              router.replace("/login");
-            }}
-          >
-            Sign out
-          </Button>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/delete-account"
+              className="px-2 text-sm text-slate-500 hover:text-slate-900"
+            >
+              Delete account
+            </Link>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                clearTokens();
+                router.replace("/login");
+              }}
+            >
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
