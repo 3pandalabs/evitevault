@@ -7,3 +7,16 @@ dist/
 .env
 .env.local
 .DS_Store
+
+# Android (android/, Bubblewrap TWA). Signing keys live OUTSIDE the repo
+# (C:\Users\Anil\Documents\keys); these patterns are the backstop.
+*.jks
+*.keystore
+*.aab
+*.apk
+*.idsig
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/

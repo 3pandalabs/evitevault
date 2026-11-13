@@ -49,9 +49,13 @@ a third spelling.
 ## Monorepo layout
 
 `web/` (Next.js on Cloudflare Workers) · `api/` (Fastify on Coolify/Hetzner) ·
-`infra/` (runbooks). Same shape as `3pandalabs/nrighar`, minus `app/` — there
-is no mobile client, and the guest experience is deliberately web-only so an
-invitation link works for anyone with a browser.
+`infra/` (runbooks) · `android/` (Play Store wrapper). Same shape as
+`3pandalabs/nrighar`, minus `app/` — there is no native mobile client, and the
+guest experience is deliberately web-only so an invitation link works for
+anyone with a browser. `android/` is a Bubblewrap Trusted Web Activity for
+hosts: it opens the live site full screen, so web deploys update it without a
+store release. It only works while `/.well-known/assetlinks.json` lists the
+Play signing key — see `infra/play-store/README.md` before touching either.
 
 ## Git flow
 
@@ -150,7 +154,7 @@ hold. Missing a tick costs an hour against a quota that resets daily.
 
 ## Not used here
 
-No Temporal, no mobile app, no Supabase. The hourly job above is deliberately
+No Temporal, no native mobile app (`android/` is only a TWA shell), no Supabase. The hourly job above is deliberately
 the small version; if durable multi-step work ever genuinely needs retries,
 visibility and backoff, follow the RentVault worker pattern rather than growing
 that interval into a queue.

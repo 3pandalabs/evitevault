@@ -1,0 +1,49 @@
+{
+  "packageId": "com.threepanda.rsvpvault",
+  "host": "rsvpvault.3pandalabs.com",
+  "name": "RsvpVault",
+  "launcherName": "RsvpVault",
+  "display": "standalone",
+  "themeColor": "#FFFFFF",
+  "themeColorDark": "#FFFFFF",
+  "navigationColor": "#FFFFFF",
+  "navigationColorDark": "#FFFFFF",
+  "navigationDividerColor": "#E2E8F0",
+  "navigationDividerColorDark": "#E2E8F0",
+  "backgroundColor": "#F8FAFC",
+  "enableNotifications": false,
+  "startUrl": "/dashboard",
+  "iconUrl": "https://rsvpvault.3pandalabs.com/icons/icon-512.png",
+  "maskableIconUrl": "https://rsvpvault.3pandalabs.com/icons/maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../../keys/rsvpvault-upload.jks",
+    "alias": "upload"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://rsvpvault.3pandalabs.com/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://rsvpvault.3pandalabs.com/",
+  "minSdkVersion": 24,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "upload",
+      "value": "BE:3B:5F:DC:D0:08:6B:29:C9:BE:E7:E0:EA:63:00:83:EF:D5:55:9F:00:DB:21:68:2B:C2:41:39:1B:34:88:8D"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.0.0"
+}

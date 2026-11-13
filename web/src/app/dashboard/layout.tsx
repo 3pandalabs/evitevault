@@ -29,8 +29,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // A gate on what renders, NOT a security boundary. Every dashboard request
   // carries a bearer token the API validates with requireAuth — that is what
   // actually protects the data. See CLAUDE.md for why there's no middleware.
+  //
+  // The effect re-reads the store instead of trusting `signedIn` alone. On a
+  // hard load (a refresh, a bookmarked /dashboard/... URL, or the Android app
+  // opening at its start_url) the first commit is the hydration pass, which
+  // renders with the server snapshot — always false — and this effect runs
+  // before React re-renders with the real value. Redirecting on that stale
+  // `false` sent every signed-in host to /login on every full page load.
   useEffect(() => {
-    if (!signedIn) router.replace("/login");
+    if (!signedIn && getTokens().access === null) router.replace("/login");
   }, [signedIn, router]);
 
   if (!signedIn) return null;
