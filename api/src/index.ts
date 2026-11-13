@@ -1,7 +1,10 @@
 import cors from "@fastify/cors";
+import { eq } from "drizzle-orm";
 import Fastify, { type FastifyError } from "fastify";
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
 import { authPlugin } from "./auth/plugin.js";
+import { db } from "./db/index.js";
+import { users } from "./db/schema.js";
 import { env } from "./env.js";
 import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
@@ -56,7 +59,21 @@ app.addHook("onResponse", async (req) => {
   if (req.url !== "/metrics" && req.url !== "/health") recordRequest();
 });
 
-app.setErrorHandler((err: FastifyError & { code?: string }, req, reply) => {
+app.setErrorHandler(async (err: FastifyError & { code?: string }, req, reply) => {
+  // Postgres foreign_key_violation. The case that reaches here in practice is a
+  // host whose account was deleted (POST /me/delete) still holding an access
+  // token, which stays valid for up to 15 minutes: an insert that references
+  // users.id then fails its FK. That caller is no longer anyone, so answer 401
+  // like any other dead session. The lookup runs only on this error path, so
+  // requireAuth stays free of a per-request DB read. Any other FK miss (a
+  // parent row removed mid-request) is a conflict, not a server fault.
+  if (err.code === "23503") {
+    if (req.userId) {
+      const [me] = await db.select({ id: users.id }).from(users).where(eq(users.id, req.userId)).limit(1);
+      if (!me) return reply.code(401).send({ error: "not_authenticated" });
+    }
+    return reply.code(409).send({ error: "conflict" });
+  }
   // Postgres unique_violation — e.g. a race on the per-event guest email index
   // — is a conflict, not a server fault.
   if (err.code === "23505") {

@@ -20,17 +20,22 @@ function subscribe(onChange: () => void) {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
-  const signedIn = useSyncExternalStore(
+  // null = not known yet. The server snapshot (also used for the hydration
+  // render on the client) can't see localStorage, so it must not claim
+  // "signed out": effects from the hydration render run with that value, and
+  // redirecting on it bounced every signed-in reload of /dashboard to /login
+  // before the real client snapshot arrived on the next render.
+  const signedIn = useSyncExternalStore<boolean | null>(
     subscribe,
     () => getTokens().access !== null,
-    () => false,
+    () => null,
   );
 
   // A gate on what renders, NOT a security boundary. Every dashboard request
   // carries a bearer token the API validates with requireAuth — that is what
   // actually protects the data. See CLAUDE.md for why there's no middleware.
   useEffect(() => {
-    if (!signedIn) router.replace("/login");
+    if (signedIn === false) router.replace("/login");
   }, [signedIn, router]);
 
   if (!signedIn) return null;
