@@ -25,7 +25,7 @@ Everything needed to publish RsvpVault as an Android app: a **Trusted Web Activi
 | `screenshots.md` | Shot list, captions, how to recapture |
 | `graphics/icon-512.png` | 512 × 512 hi-res icon, no alpha |
 | `graphics/feature-graphic.png` | 1024 × 500 feature graphic |
-| `screenshots/framed/`, `screenshots/raw/` | 8 phone screenshots each, 1080 × 1920 |
+| `screenshots/framed/`, `screenshots/raw/` | 9 phone screenshots each, 1080 × 1920. Play takes at most 8: upload 02–09 and skip `01-landing` (the feature graphic already carries the branding) |
 | `tools/` | `build-graphics.mjs` (Play icon, feature graphic **and** the PWA icons in `web/public/icons/`), `capture-screenshots.mjs`, `frame-screenshots.mjs` |
 
 Lines starting **CONFIRM:** in any file are decisions for the owner; they're collected at the bottom of this page.
@@ -83,7 +83,7 @@ Why: users install the copy **Google** re-signed. If assetlinks.json lists only 
 
 ### 7. Store listing and App content forms
 
-- [ ] **Main store listing:** `listing.md` text, `graphics/icon-512.png`, `graphics/feature-graphic.png`, 8 screenshots from `screenshots/framed/`.
+- [ ] **Main store listing:** `listing.md` text, `graphics/icon-512.png`, `graphics/feature-graphic.png`, 8 screenshots from `screenshots/framed/` (02–09; skip 01-landing, Play caps phone screenshots at 8).
 - [ ] **Store settings:** category Events, tags, contact email `support@3pandalabs.com`, website `https://rsvpvault.3pandalabs.com`.
 - [ ] **Privacy policy:** `https://rsvpvault.3pandalabs.com/privacy`.
 - [ ] **App access:** `app-access.md`.
