@@ -1,0 +1,4 @@
+# Raw captures are reproducible from production with tools/capture-screenshots.mjs;
+# both raw/ and framed/ are committed so the listing can be uploaded without
+# rerunning anything. Scratch files only:
+*.tmp.png
