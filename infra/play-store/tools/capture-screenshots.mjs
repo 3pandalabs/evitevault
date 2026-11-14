@@ -55,6 +55,8 @@ const SHOTS = [
   ["07-rsvp.png", { url: `/e/${party.slug}?t=${pending.inviteToken}` }, { text: "Will you be there", nth: "first", above: 120 }],
   // Past the post form, to the messages themselves (newest first).
   ["08-guestbook.png", { url: `/e/${party.slug}` }, { text: "The Johnson family", nth: "last", above: 140 }],
+  // The album link the host shares after the day, as guests see it: they add their own photos to it.
+  ["09-photo-album.png", { url: `/e/${party.slug}` }, { text: "The pictures from the day", nth: "first", above: 90 }],
 ];
 
 const browser = await chromium.launch();
