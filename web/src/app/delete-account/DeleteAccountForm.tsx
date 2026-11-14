@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ApiError } from "@/lib/api/browser";
 import { clearTokens, deleteAccount, getTokens } from "@/lib/api/host";
 
@@ -91,9 +92,8 @@ export function DeleteAccountForm() {
         <Label htmlFor="d-password" className="text-zinc-700">
           Your password
         </Label>
-        <Input
+        <PasswordInput
           id="d-password"
-          type="password"
           required
           autoComplete="current-password"
           value={password}
