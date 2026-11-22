@@ -38,15 +38,27 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const previewImage = event.cardImageUrl ?? event.coverImageUrl;
 
   return {
-    // Just the event name: the root layout's title template appends " · RsvpVault"
-    // for us. Spelling the suffix out here too would render "Birthday · RsvpVault
-    // · RsvpVault" in the tab and in every link preview.
+    // Just the event name: the root layout's title template appends " — RsvpVault"
+    // for us. Spelling the suffix out here too would render "Birthday — RsvpVault
+    // — RsvpVault" in the tab and in every link preview.
     title: event.title,
     description: event.description ?? undefined,
+    // A page-level openGraph replaces the root one wholesale, so the shared
+    // fields (site name, type, url) are restated here. Falls back to the
+    // generic /og.png share card when the event has no image of its own.
     openGraph: {
+      type: "website",
+      siteName: "RsvpVault by 3PandaLabs",
+      url: `/e/${slug}`,
       title: event.title,
       description: event.description ?? undefined,
-      images: previewImage ? [previewImage] : undefined,
+      images: previewImage ? [previewImage] : ["/og.png"],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: event.title,
+      description: event.description ?? undefined,
+      images: previewImage ? [previewImage] : ["/og.png"],
     },
     // An invitation is unlisted by design: the slug is the only credential, so
     // it must never end up in a search index.
