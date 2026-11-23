@@ -1,4 +1,4 @@
-package com.threepanda.rsvpvault;
+package com.threepandalabs.rsvpvault;
 
 
 

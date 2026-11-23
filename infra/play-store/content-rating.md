@@ -4,7 +4,7 @@
 
 **Policy → App content → Content rating → Start questionnaire.**
 
-Email for the IARC certificate: `support@3pandalabs.com`.
+Email for the IARC certificate: `rsvpvault@3pandalabs.com`.
 
 ### Category
 

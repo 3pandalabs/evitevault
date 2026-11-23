@@ -21,7 +21,7 @@ plugins {
 }
 
 def twaManifest = [
-    applicationId: 'com.threepanda.rsvpvault',
+    applicationId: 'com.threepandalabs.rsvpvault',
     hostName: 'rsvpvault.3pandalabs.com', // The domain being opened in the TWA.
     launchUrl: '/dashboard', // The start path for the TWA. Must be relative to the domain.
     name: 'RsvpVault', // The application name.
@@ -52,9 +52,9 @@ def twaManifest = [
 
 android {
     compileSdkVersion 36
-    namespace "com.threepanda.rsvpvault"
+    namespace "com.threepandalabs.rsvpvault"
     defaultConfig {
-        applicationId "com.threepanda.rsvpvault"
+        applicationId "com.threepandalabs.rsvpvault"
         minSdkVersion 24
         targetSdkVersion 36
         versionCode 1

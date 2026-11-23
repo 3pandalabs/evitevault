@@ -4,7 +4,7 @@ Everything needed to publish RsvpVault as an Android app: a **Trusted Web Activi
 
 | | |
 |---|---|
-| Package id | `com.threepanda.rsvpvault` (same `com.threepanda.*` pattern as BorrowVault's `com.threepanda.borrowvault`) |
+| Package id | `com.threepandalabs.rsvpvault` (renamed from `com.threepanda.rsvpvault` before the first Play upload, matching AdVault's `com.threepandalabs.advault`) |
 | Version | versionName `1.0.0`, versionCode `1` |
 | Start URL | `/dashboard` (signed-out hosts are sent to `/login`; see `web/src/app/manifest.ts` for why not `/`) |
 | Fallback | Custom Tabs, when the device's browser can't run a TWA |
@@ -13,8 +13,8 @@ Everything needed to publish RsvpVault as an Android app: a **Trusted Web Activi
 | minSdk / targetSdk | 24 / 36 (android-browser-helper 2.7 needs 24) |
 | Upload key | `C:\Users\Anil\Documents\keys\rsvpvault-upload.jks`, alias `upload` (outside the repo; passwords in the 3PandaLabs password store) |
 | Upload key SHA-256 | `BE:3B:5F:DC:D0:08:6B:29:C9:BE:E7:E0:EA:63:00:83:EF:D5:55:9F:00:DB:21:68:2B:C2:41:39:1B:34:88:8D` |
-| Built AAB | `C:\Users\Anil\Documents\keys\rsvpvault-1.0.0.aab` (signed with the upload key) |
-| Sideload APK | `C:\Users\Anil\Documents\keys\rsvpvault-1.0.0.apk` (same key, for testing on a phone before Play) |
+| Built AAB | `C:\Users\Anil\Documents\keys\rsvpvault-1.0.0-threepandalabs.aab` (signed with the upload key; the older `rsvpvault-1.0.0.aab` is the pre-rename `com.threepanda.rsvpvault` build, don't upload it) |
+| Sideload APK | `C:\Users\Anil\Documents\keys\rsvpvault-1.0.0-threepandalabs.apk` (same key, for testing on a phone before Play) |
 
 | File | What it's for |
 |---|---|
@@ -23,7 +23,8 @@ Everything needed to publish RsvpVault as an Android app: a **Trusted Web Activi
 | `content-rating.md` | IARC questionnaire, target audience (18+), ads (none), other declarations |
 | `app-access.md` | Reviewer account, demo event, and the App access form text |
 | `screenshots.md` | Shot list, captions, how to recapture |
-| `graphics/icon-512.png` | 512 × 512 hi-res icon, no alpha |
+| `graphics/play-icon-512.png` | 512 × 512 Play store icon, no alpha: the "RsvpVault by 3PandaLabs" wordmark (same style as AdVault's). **Upload this one.** |
+| `graphics/icon-512.png` | 512 × 512 emoji icon (matches the launcher/PWA icon); kept as an alternative |
 | `graphics/feature-graphic.png` | 1024 × 500 feature graphic |
 | `screenshots/framed/`, `screenshots/raw/` | 9 phone screenshots each, 1080 × 1920. Play takes at most 8: upload 02–09 and skip `01-landing` (the feature graphic already carries the branding) |
 | `tools/` | `build-graphics.mjs` (Play icon, feature graphic **and** the PWA icons in `web/public/icons/`), `capture-screenshots.mjs`, `frame-screenshots.mjs` |
@@ -51,30 +52,30 @@ Lines starting **CONFIRM:** in any file are decisions for the owner; they're col
 
 ### 2. Create the app
 
-- [ ] Play Console → **Create app**. Name `RsvpVault: Invitations & RSVP` (`listing.md`), default language English (United States), **App**, **Free**. Tick the declarations.
+- [ ] Play Console → **Create app**. Name `RsvpVault by 3PandaLabs` (`listing.md`), default language English (United States), **App**, **Free**. Tick the declarations.
 
 ### 3. Upload the AAB to internal testing
 
 - [ ] **Test and release → Testing → Internal testing → Create new release.**
 - [ ] Accept **Play App Signing** (default; Google holds the app signing key, we keep only the upload key).
-- [ ] Upload `C:\Users\Anil\Documents\keys\rsvpvault-1.0.0.aab`. Release name `1.0.0 (1)`, notes from `listing.md`.
+- [ ] Upload `C:\Users\Anil\Documents\keyssvpvault-1.0.0-threepandalabs.aab`. Release name `1.0.0 (1)`, notes from `listing.md`.
 - [ ] Add testers (your own Google account), save, roll out.
 
 ### 4. Copy the Play App Signing SHA-256
 
-- [ ] **Test and release → Setup → App signing** (a.k.a. App integrity → App signing). Copy **App signing key certificate → SHA-256 certificate fingerprint**. (The upload key's fingerprint is shown there too and should match the one above.)
+- [ ] **Test and release → Setup → App signing** (a.k.a. App integrity → App signing). Use **Copy all certificate fingerprints** and take **every** SHA-256 listed: the classical app signing key, the *Quantum-ready (beta)* key, and any further signing certificate. AdVault's app showed an address bar on a newer phone (Galaxy Fold) until all of them were in assetlinks. (The upload key's fingerprint is shown there too and should match the one above.)
 
 ### 5. Add it to assetlinks.json and redeploy the web app
 
-- [ ] In `web/src/app/.well-known/assetlinks.json/route.ts`, add the Play fingerprint as a **second** entry in `SHA256_CERT_FINGERPRINTS`. Keep the upload key's entry: multiple fingerprints are allowed, and the upload key is what signs sideloaded test builds.
-- [ ] Also add it to `android/twa-manifest.json` → `fingerprints` as `{ "name": "play", "value": "<sha256>" }` so Bubblewrap tooling knows it.
+- [ ] In `web/src/app/.well-known/assetlinks.json/route.ts`, add **every** Play fingerprint from step 4 as further entries in `SHA256_CERT_FINGERPRINTS`. Keep the upload key's entry: multiple fingerprints are allowed, and the upload key is what signs sideloaded test builds.
+- [ ] Also add them to `android/twa-manifest.json` → `fingerprints` as `{ "name": "play", "value": "<sha256>" }` so Bubblewrap tooling knows it.
 - [ ] Branch → PR → merge → `npm run cf:deploy`.
 
 Why: users install the copy **Google** re-signed. If assetlinks.json lists only the upload key, Chrome can't verify the app and shows a URL bar at the top, which reviewers reject as a plain "webview wrapper".
 
 ### 6. Verify Digital Asset Links
 
-- [ ] Google's verifier (must list the statement with both fingerprints):
+- [ ] Google's verifier (must list the statement with every fingerprint):
   ```
   https://digitalassetlinks.googleapis.com/v1/statements:list?source.web.site=https://rsvpvault.3pandalabs.com&relation=delegate_permission/common.handle_all_urls
   ```
@@ -83,8 +84,8 @@ Why: users install the copy **Google** re-signed. If assetlinks.json lists only 
 
 ### 7. Store listing and App content forms
 
-- [ ] **Main store listing:** `listing.md` text, `graphics/icon-512.png`, `graphics/feature-graphic.png`, 8 screenshots from `screenshots/framed/` (02–09; skip 01-landing, Play caps phone screenshots at 8).
-- [ ] **Store settings:** category Events, tags, contact email `support@3pandalabs.com`, website `https://rsvpvault.3pandalabs.com`.
+- [ ] **Main store listing:** `listing.md` text, `graphics/play-icon-512.png`, `graphics/feature-graphic.png`, 8 screenshots from `screenshots/framed/` (02–09; skip 01-landing, Play caps phone screenshots at 8).
+- [ ] **Store settings:** category Events, tags, contact email `rsvpvault@3pandalabs.com`, website `https://rsvpvault.3pandalabs.com`.
 - [ ] **Privacy policy:** `https://rsvpvault.3pandalabs.com/privacy`.
 - [ ] **App access:** `app-access.md`.
 - [ ] **Ads:** No.
@@ -98,7 +99,7 @@ Why: users install the copy **Google** re-signed. If assetlinks.json lists only 
 
 - [ ] Read the internal track's **pre-launch report** (it should get past sign-in with the App access credentials).
 - [ ] **Production → Create release → Add from library** (the internal 1.0.0 build). Countries: CONFIRM (suggest United States + India to start). Staged rollout e.g. 20%.
-- [ ] Send for review. Answer reviewer email at support@3pandalabs.com quickly. A common TWA rejection is "Minimum functionality / webview"; the defences are a verified TWA (no URL bar), a signed-in reviewer path, and app-like screens — all covered above.
+- [ ] Send for review. Answer reviewer email (developer account inbox and rsvpvault@3pandalabs.com) quickly. A common TWA rejection is "Minimum functionality / webview"; the defences are a verified TWA (no URL bar), a signed-in reviewer path, and app-like screens — all covered above.
 
 ## Rebuilding the Android app (next releases)
 

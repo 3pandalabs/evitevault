@@ -7,19 +7,12 @@ Default language: **English (United States), en-US**. The site's copy is US Engl
 ## App name (limit 30)
 
 ```
-RsvpVault: Invitations & RSVP
+RsvpVault by 3PandaLabs
 ```
 
-**29 / 30 characters.**
+**23 / 30 characters.**
 
-| Name | Characters |
-|---|---|
-| `RsvpVault: Invitations & RSVP` (chosen) | 29 |
-| `RsvpVault: Party Invitations` | 28 |
-| `RsvpVault: Digital Invitations` | 30 |
-| `RsvpVault` | 9 |
-
-Why: "invitations" and "RSVP" are the two words people search for; the brand comes first. No "free", "best" or "#1" (Play metadata policy). The launcher name on the phone stays `RsvpVault` (`android/twa-manifest.json` → `launcherName`).
+Why: the org-wide store-name rule is "<App> by 3PandaLabs" (brand repo `brand.md`), the same as `AdVault by 3PandaLabs`. "Invitations" and "RSVP" are carried by the short description instead. No "free", "best" or "#1" (Play metadata policy). The launcher name on the phone stays `RsvpVault` (`android/twa-manifest.json` → `launcherName`).
 
 ## Short description (limit 80)
 
@@ -70,7 +63,7 @@ AFTER THE INVITATION
 PRIVATE BY DESIGN
 Every invitation has an unguessable link, and guests' emails and phone numbers are never shown on the invitation page. No ads and no tracking cookies. You can delete any guest, any event, or your whole account at any time from inside the app.
 
-RsvpVault is made by 3PandaLabs. Questions or feedback: support@3pandalabs.com
+RsvpVault is made by 3PandaLabs. Questions or feedback: rsvpvault@3pandalabs.com
 ```
 
 **Count: see the end of this file.**
@@ -80,10 +73,10 @@ RsvpVault is made by 3PandaLabs. Questions or feedback: support@3pandalabs.com
 | Field | Value |
 |---|---|
 | App or game | App |
-| Free or paid | **Free** (permanent: a free app can never become paid) |
+| Free or paid | **Free** (permanent: a free app can never become paid). RsvpVault itself is free to use with no paid tier and no in-app purchases (Terms section on fees) |
 | Category | **Events** |
 | Tags | Pick up to 5 of the closest the console offers, e.g. *Event planning*, *Invitations*, *Party planning*, *Calendar*, *Productivity* |
-| Contact email | `support@3pandalabs.com` |
+| Contact email | `rsvpvault@3pandalabs.com` (Cloudflare Email Routing alias, forwards to the 3PandaLabs inbox) |
 | Website | `https://rsvpvault.3pandalabs.com` |
 | Phone | leave blank |
 | Privacy policy URL | `https://rsvpvault.3pandalabs.com/privacy` |
@@ -110,7 +103,7 @@ First release of RsvpVault for Android. Design invitations, share one link, and 
 ## How the counts were checked
 
 ```
-node -e "for (const s of process.argv.slice(1)) console.log([...s].length, s.slice(0,40))" "RsvpVault: Invitations & RSVP" "Design digital invitations, share one link, and track every RSVP in one place."
+node -e "for (const s of process.argv.slice(1)) console.log([...s].length, s.slice(0,40))" "RsvpVault by 3PandaLabs" "Design digital invitations, share one link, and track every RSVP in one place."
 ```
 
 For the full description, copy the block into a file and run `node -e "console.log([...require('fs').readFileSync(process.argv[1],'utf8').trim()].length)" file.txt`. It is 2,195 characters, well under 4,000.
