@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FollowUs } from "@/components/FollowUs";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site";
 
@@ -47,6 +48,7 @@ export default function RootLayout({
         <div className="flex-1">{children}</div>
         <footer className="border-t border-slate-200 px-6 py-8">
           <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
+            <FollowUs />
             <span>&copy; 3PandaLabs LLC, USA.</span>
             <span>All rights reserved.</span>
             {/* On every page — landing, invitations and the dashboard — since

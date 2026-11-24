@@ -16,7 +16,10 @@ export default function ContactPage() {
         <>
           <p>
             Questions, problems, or a request about your data? Send us a message and we&apos;ll reply by email. You can
-            also write to <Mail /> directly.
+            also write to <Mail /> directly, or call{" "}
+            <a href="tel:+13323168453" className="font-medium hover:underline">
+              +1 (332) 316-8453
+            </a>.
           </p>
           <p className="text-sm text-zinc-500">
             Guests: questions about an event itself (time, place, who&apos;s invited) are best asked of the host who
