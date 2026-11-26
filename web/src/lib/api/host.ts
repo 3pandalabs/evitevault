@@ -277,6 +277,30 @@ export const updateGreeting = (id: string, patch: Partial<GreetingInput>) =>
 export const deleteGreeting = (id: string) =>
   hostFetch<void>(`/greetings/${id}`, { method: "DELETE" });
 
+export type GreetingSendResult = {
+  recipientCount: number;
+  delivered: number;
+  failed: number;
+  skipped: number;
+  emailConfigured: boolean;
+};
+
+// Emails the greeting to a raw address list. The card image is rendered in the
+// browser and sent inline (base64) — greetings have no R2 key and no guests.
+export const sendGreeting = (
+  id: string,
+  body: {
+    recipients: { email: string; name?: string | null }[];
+    image?: { content: string; type: "image/png" | "image/jpeg" } | null;
+    subject?: string | null;
+    message?: string | null;
+  },
+) =>
+  hostFetch<GreetingSendResult>(`/greetings/${id}/send`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 // A link that shows a draft exactly as guests will see it. The token inside is
 // event-scoped and expires in two hours, so fetch one each time rather than
 // storing it — it is a button, not a share link.

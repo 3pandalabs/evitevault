@@ -59,6 +59,7 @@ export default function EditGreetingPage() {
 
       <GreetingForm
         initial={initial}
+        greetingId={greetingId}
         submitLabel="Save changes"
         cancelHref="/dashboard"
         failureMessage="Couldn't save the greeting. Check the fields and try again."
