@@ -586,7 +586,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "lora" },
       layout: "poster",
-      art: "turkey",
+      art: "happy-turkey",
     },
   },
 

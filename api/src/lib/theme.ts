@@ -45,6 +45,7 @@ export const COVER_ART = [
   "stripes",
   "pumpkins",
   "turkey",
+  "happy-turkey",
   "pine",
   "snowflakes",
 ] as const;

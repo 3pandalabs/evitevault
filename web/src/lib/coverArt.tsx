@@ -32,6 +32,7 @@ export const ART_LABELS: Record<string, string> = {
   stripes: "Stripes",
   pumpkins: "Pumpkins",
   turkey: "Turkey",
+  "happy-turkey": "Happy turkey",
   pine: "Pine trees",
   snowflakes: "Snowflakes",
 };
@@ -418,6 +419,59 @@ const ARTWORK: Record<string, Draw> = {
         </g>
         <path d="M232 92 Q216 72 232 52 Q248 72 232 92 Z" fill={p.muted} opacity="0.4" />
         <path d="M566 112 Q550 92 566 72 Q582 92 566 112 Z" fill={p.accent} opacity="0.4" />
+      </>
+    );
+  },
+
+  // A cartoon turkey in a pilgrim hat. The one piece of built-in art that is a
+  // picture rather than a palette pattern: it's drawn in fixed autumn colours so
+  // it reads the same warm scene on any card (the palette bg still shows behind
+  // it). Centred and full-height to fill an arch; flat shapes only, so it
+  // rasterises cleanly for the card export.
+  "happy-turkey": () => {
+    const fan = ["#e07b1e", "#f0a63a", "#c0371f", "#d9632a", "#7a8a3e", "#f0a63a", "#c0371f", "#d9632a", "#f0a63a", "#e07b1e", "#c0371f"];
+    const angles = [-75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75];
+    return (
+      <>
+        <g transform="translate(400 214)">
+          {angles.map((a, i) => (
+            <g key={a} transform={`rotate(${a})`}>
+              <ellipse cx="0" cy="-116" rx="25" ry="76" fill={fan[i]} />
+              <ellipse cx="0" cy="-120" rx="11" ry="48" fill="#ffffff" opacity="0.18" />
+            </g>
+          ))}
+        </g>
+        {/* body */}
+        <ellipse cx="338" cy="228" rx="20" ry="34" fill="#9c571f" />
+        <ellipse cx="462" cy="228" rx="20" ry="34" fill="#9c571f" />
+        <ellipse cx="400" cy="228" rx="74" ry="66" fill="#b86a2a" />
+        <ellipse cx="400" cy="240" rx="50" ry="48" fill="#e3a05a" />
+        {/* head */}
+        <circle cx="400" cy="150" r="50" fill="#cc7a33" />
+        <circle cx="364" cy="168" r="10" fill="#e8896a" opacity="0.55" />
+        <circle cx="436" cy="168" r="10" fill="#e8896a" opacity="0.55" />
+        {/* eyes */}
+        <ellipse cx="382" cy="150" rx="16" ry="18" fill="#ffffff" />
+        <ellipse cx="418" cy="150" rx="16" ry="18" fill="#ffffff" />
+        <circle cx="386" cy="153" r="9" fill="#2a1a10" />
+        <circle cx="414" cy="153" r="9" fill="#2a1a10" />
+        <circle cx="389" cy="150" r="3" fill="#ffffff" />
+        <circle cx="417" cy="150" r="3" fill="#ffffff" />
+        {/* beak + wattle */}
+        <path d="M386 166 L414 166 L400 185 Z" fill="#f2a93b" />
+        <path d="M404 180 q12 14 3 30 q-11 -3 -9 -22 z" fill="#d6372a" />
+        {/* pilgrim hat */}
+        <ellipse cx="400" cy="116" rx="78" ry="13" fill="#2a221d" />
+        <path d="M360 116 L368 72 Q400 64 432 72 L440 116 Z" fill="#332a24" />
+        <rect x="360" y="98" width="80" height="14" fill="#5a4636" />
+        <rect x="391" y="97" width="18" height="16" rx="2" fill="none" stroke="#e0b23c" strokeWidth="4" />
+        {/* leaves + berries at the base */}
+        <path d="M250 278 Q234 258 250 240 Q266 258 250 278 Z" fill="#d9632a" opacity="0.85" />
+        <path d="M550 276 Q534 256 550 238 Q566 256 550 276 Z" fill="#e07b1e" opacity="0.85" />
+        <circle cx="300" cy="286" r="6" fill="#c0371f" opacity="0.85" />
+        <circle cx="315" cy="290" r="5" fill="#d6372a" opacity="0.85" />
+        <circle cx="500" cy="288" r="6" fill="#c0371f" opacity="0.85" />
+        <circle cx="486" cy="291" r="5" fill="#d6372a" opacity="0.85" />
       </>
     );
   },
