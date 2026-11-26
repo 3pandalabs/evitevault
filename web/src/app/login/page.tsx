@@ -10,6 +10,7 @@ import { GradientBackdrop } from "@/components/GradientBackdrop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { WordmarkName, WordmarkTag } from "@/components/Wordmark";
 import { geistSans } from "@/lib/fonts";
 
@@ -126,9 +127,8 @@ export default function LoginPage() {
                   </Link>
                 ) : null}
               </div>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 required
                 minLength={10}
                 className="rounded-lg border-zinc-300 focus-visible:ring-zinc-400"

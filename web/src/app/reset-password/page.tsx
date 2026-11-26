@@ -8,7 +8,8 @@ import { API_URL } from "@/lib/api/browser";
 import { GradientBackdrop } from "@/components/GradientBackdrop";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { WordmarkName, WordmarkTag } from "@/components/Wordmark";
 import { geistSans } from "@/lib/fonts";
 
@@ -100,9 +101,8 @@ function ResetPasswordForm() {
           <Label htmlFor="password" className="text-zinc-700">
             New password
           </Label>
-          <Input
+          <PasswordInput
             id="password"
-            type="password"
             required
             minLength={10}
             autoFocus
@@ -118,9 +118,8 @@ function ResetPasswordForm() {
           <Label htmlFor="confirm" className="text-zinc-700">
             Confirm new password
           </Label>
-          <Input
+          <PasswordInput
             id="confirm"
-            type="password"
             required
             minLength={10}
             className="rounded-lg border-zinc-300 focus-visible:ring-zinc-400"
