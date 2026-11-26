@@ -57,6 +57,13 @@
       "when": 1786465834151,
       "tag": "0007_card_source_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795715141332,
+      "tag": "0008_greetings",
+      "breakpoints": true
     }
   ]
 }

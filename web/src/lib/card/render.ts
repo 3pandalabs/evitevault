@@ -385,7 +385,7 @@ function buildBlocks(
 
   if (content.hostName) {
     blocks.push(
-      textBlock(ctx, `Hosted by ${content.hostName}`, {
+      textBlock(ctx, `${content.hostPrefix ?? "Hosted by"} ${content.hostName}`, {
         size: s(0.019),
         weight: 400,
         family: body,

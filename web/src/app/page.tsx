@@ -177,7 +177,7 @@ export default function HomePage() {
           </p>
         </section>
 
-        <section className="mt-20">
+        <section id="faq" className="mt-20 scroll-mt-20">
           <h2 className="text-2xl font-semibold tracking-tight text-zinc-900">Questions</h2>
           <dl className="mt-6 space-y-8">
             {FAQ.map(({ q, a }) => (

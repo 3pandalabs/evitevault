@@ -13,6 +13,7 @@ import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contact.js";
 import { eventRoutes } from "./routes/events.js";
+import { greetingRoutes } from "./routes/greetings.js";
 import { guestbookModerationRoutes } from "./routes/guestbook.js";
 import { guestRoutes } from "./routes/guests.js";
 import { metricsRoutes } from "./routes/metrics.js";
@@ -103,6 +104,7 @@ app.setErrorHandler(async (err: FastifyError & { code?: string }, req, reply) =>
 
 await app.register(authRoutes);
 await app.register(eventRoutes);
+await app.register(greetingRoutes);
 await app.register(guestRoutes);
 await app.register(guestbookModerationRoutes);
 await app.register(announcementRoutes);
