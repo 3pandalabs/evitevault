@@ -337,106 +337,129 @@ const ARTWORK: Record<string, Draw> = {
     );
   },
 
-  // A patch of ribbed pumpkins along the bottom — Thanksgiving, autumn.
-  pumpkins: (id, p) => (
-    <>
-      {(
-        [
-          [130, 205, 48],
-          [320, 235, 38],
-          [520, 215, 44],
-          [690, 240, 34],
-          [430, 252, 26],
-        ] as [number, number, number][]
-      ).map(([cx, cy, r], i) => {
-        const fill = i % 2 ? p.muted : p.accent;
-        return (
-          <g key={i} opacity={i % 2 ? 0.5 : 0.7}>
-            <ellipse cx={cx} cy={cy} rx={r} ry={r * 0.85} fill={fill} />
-            {/* ribs */}
-            <path
-              d={`M${cx} ${cy - r * 0.78} Q${cx - r * 0.5} ${cy} ${cx} ${cy + r * 0.78}`}
-              stroke={p.bg}
-              strokeWidth="2"
-              fill="none"
-              opacity="0.5"
-            />
-            <path
-              d={`M${cx} ${cy - r * 0.78} Q${cx + r * 0.5} ${cy} ${cx} ${cy + r * 0.78}`}
-              stroke={p.bg}
-              strokeWidth="2"
-              fill="none"
-              opacity="0.5"
-            />
-            {/* stem */}
-            <path
-              d={`M${cx} ${cy - r * 0.85} q-2 -12 7 -16`}
-              stroke={p.text}
-              strokeWidth="4"
-              fill="none"
-              opacity="0.5"
-              strokeLinecap="round"
-            />
-          </g>
-        );
-      })}
-    </>
-  ),
-
-  // A couple of turkeys with fanned tail feathers — Thanksgiving dinner.
-  turkey: (id, p) => {
-    const bird = (cx: number, cy: number, s: number, k: string) => (
-      <g key={k} transform={`translate(${cx} ${cy})`} opacity="0.7">
-        {/* fanned tail */}
-        {[-60, -40, -20, 0, 20, 40, 60].map((a, j) => (
-          <ellipse
-            key={a}
-            cx="0"
-            cy={-s * 1.25}
-            rx={s * 0.17}
-            ry={s * 0.9}
-            fill={j % 2 ? p.muted : p.accent}
-            opacity="0.55"
-            transform={`rotate(${a} 0 0)`}
-          />
-        ))}
-        {/* body */}
-        <ellipse cx="0" cy={s * 0.25} rx={s * 0.72} ry={s * 0.58} fill={p.accent} />
-        {/* head */}
-        <circle cx={s * 0.1} cy={-s * 0.45} r={s * 0.22} fill={p.accent} />
-        {/* beak + wattle */}
-        <path
-          d={`M${s * 0.3} ${-s * 0.45} l${s * 0.24} ${-s * 0.04} l${-s * 0.22} ${s * 0.14} z`}
-          fill={p.muted}
-        />
+  // A lush pumpkin patch under a scatter of autumn leaves — Thanksgiving.
+  // Composed to fill the centre of a tall arch: the frame crops to its middle
+  // band, so everything lives between x≈180–620, leaves up top and pumpkins
+  // massed along the base, nothing stranded at the sides.
+  pumpkins: (id, p) => {
+    const leaf = (x: number, y: number, s: number, rot: number, fill: string, o: number, k: string) => (
+      <path
+        key={k}
+        d={`M0 ${s} Q${-s * 0.7} 0 0 ${-s} Q${s * 0.7} 0 0 ${s} Z`}
+        transform={`translate(${x} ${y}) rotate(${rot})`}
+        fill={fill}
+        opacity={o}
+      />
+    );
+    const pumpkin = (cx: number, cy: number, r: number, fill: string, o: number, k: string) => (
+      <g key={k} opacity={o}>
+        <ellipse cx={cx - r * 0.5} cy={cy} rx={r * 0.45} ry={r * 0.82} fill={fill} />
+        <ellipse cx={cx + r * 0.5} cy={cy} rx={r * 0.45} ry={r * 0.82} fill={fill} />
+        <ellipse cx={cx} cy={cy} rx={r} ry={r * 0.84} fill={fill} />
+        <path d={`M${cx} ${cy - r * 0.7} Q${cx - r * 0.45} ${cy} ${cx} ${cy + r * 0.7}`} stroke={p.bg} strokeWidth="2" fill="none" opacity="0.4" />
+        <path d={`M${cx} ${cy - r * 0.7} Q${cx + r * 0.45} ${cy} ${cx} ${cy + r * 0.7}`} stroke={p.bg} strokeWidth="2" fill="none" opacity="0.4" />
+        <path d={`M${cx} ${cy - r * 0.84} q-3 -14 9 -18`} stroke={p.text} strokeWidth="5" fill="none" opacity="0.55" strokeLinecap="round" />
       </g>
     );
     return (
       <>
-        {bird(195, 165, 72, "a")}
-        {bird(600, 180, 62, "b")}
+        {leaf(250, 70, 22, 25, p.accent, 0.5, "l1")}
+        {leaf(330, 42, 17, -35, p.muted, 0.45, "l2")}
+        {leaf(405, 85, 24, 65, p.muted, 0.4, "l3")}
+        {leaf(475, 48, 19, -18, p.accent, 0.55, "l4")}
+        {leaf(545, 96, 16, 42, p.muted, 0.4, "l5")}
+        {leaf(300, 150, 15, 85, p.accent, 0.4, "l6")}
+        {leaf(530, 158, 17, -55, p.accent, 0.4, "l7")}
+        {leaf(400, 126, 13, 10, p.muted, 0.35, "l8")}
+        {pumpkin(330, 242, 50, p.muted, 0.7, "p1")}
+        {pumpkin(474, 250, 62, p.accent, 0.9, "p2")}
+        {pumpkin(406, 228, 40, p.accent, 0.8, "p3")}
+        {pumpkin(286, 264, 30, p.accent, 0.6, "p4")}
+        {pumpkin(542, 260, 34, p.muted, 0.6, "p5")}
       </>
     );
   },
 
-  // A little forest of three-tier pines — Christmas, winter.
-  pine: (id, p) => (
-    <>
-      <rect y="255" width="800" height="45" fill={p.accent} opacity="0.1" />
-      {[100, 250, 400, 545, 690, 782].map((x, i) => {
-        const s = 70 + (i % 3) * 16;
-        const baseY = 250;
-        return (
-          <g key={x} opacity={i % 2 ? 0.45 : 0.6} fill={p.accent}>
-            <path d={`M${x} ${baseY - s} L${x - s * 0.42} ${baseY - s * 0.45} L${x + s * 0.42} ${baseY - s * 0.45} Z`} />
-            <path d={`M${x} ${baseY - s * 0.72} L${x - s * 0.5} ${baseY - s * 0.1} L${x + s * 0.5} ${baseY - s * 0.1} Z`} />
-            <path d={`M${x} ${baseY - s * 0.42} L${x - s * 0.58} ${baseY + s * 0.26} L${x + s * 0.58} ${baseY + s * 0.26} Z`} />
-            <rect x={x - 4} y={baseY + s * 0.26} width="8" height="12" fill={p.text} opacity="0.4" />
-          </g>
-        );
-      })}
-    </>
-  ),
+  // A turkey with a full fanned tail, centred and filling the frame top to
+  // bottom, a leaf tucked at each side — Thanksgiving dinner.
+  turkey: (id, p) => {
+    const feather = (angle: number, len: number, rx: number, fill: string, o: number, k: string) => (
+      <ellipse
+        key={k}
+        cx="0"
+        cy={-len}
+        rx={rx}
+        ry={len * 0.9}
+        fill={fill}
+        opacity={o}
+        transform={`rotate(${angle} 0 0)`}
+      />
+    );
+    const outer = [-80, -60, -40, -20, 0, 20, 40, 60, 80];
+    const inner = [-64, -43, -21, 0, 21, 43, 64];
+    return (
+      <>
+        <g transform="translate(400 258)">
+          {outer.map((a, i) => feather(a, 120, 21, i % 2 ? p.muted : p.accent, 0.5, `o${i}`))}
+          {inner.map((a, i) => feather(a, 88, 18, i % 2 ? p.accent : p.muted, 0.7, `i${i}`))}
+          {/* body */}
+          <ellipse cx="0" cy="-4" rx="60" ry="52" fill={p.accent} />
+          {/* wing line */}
+          <path d="M-44 -10 Q0 26 44 -10" stroke={p.bg} strokeWidth="2.5" fill="none" opacity="0.35" />
+          {/* neck + head */}
+          <path d="M-8 -46 q-20 -16 -10 -44" stroke={p.accent} strokeWidth="20" fill="none" strokeLinecap="round" />
+          <circle cx="-18" cy="-92" r="16" fill={p.accent} />
+          {/* beak */}
+          <path d="M-33 -92 l-18 4 l16 9 z" fill={p.muted} />
+          {/* wattle */}
+          <path d="M-22 -80 q-5 14 2 20" stroke={p.muted} strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.85" />
+          {/* feet */}
+          <path d="M-16 46 l0 16 M16 46 l0 16" stroke={p.muted} strokeWidth="5" strokeLinecap="round" opacity="0.6" />
+        </g>
+        <path d="M232 92 Q216 72 232 52 Q248 72 232 92 Z" fill={p.muted} opacity="0.4" />
+        <path d="M566 112 Q550 92 566 72 Q582 92 566 112 Z" fill={p.accent} opacity="0.4" />
+      </>
+    );
+  },
+
+  // A stand of pines under falling snow, filling the frame — Christmas, winter.
+  pine: (id, p) => {
+    const tree = (x: number, baseY: number, s: number, o: number, k: string) => (
+      <g key={k} opacity={o} fill={p.accent}>
+        <path d={`M${x} ${baseY - s} L${x - s * 0.32} ${baseY - s * 0.58} L${x + s * 0.32} ${baseY - s * 0.58} Z`} />
+        <path d={`M${x} ${baseY - s * 0.74} L${x - s * 0.44} ${baseY - s * 0.3} L${x + s * 0.44} ${baseY - s * 0.3} Z`} />
+        <path d={`M${x} ${baseY - s * 0.46} L${x - s * 0.56} ${baseY} L${x + s * 0.56} ${baseY} Z`} />
+        <rect x={x - 4} y={baseY} width="8" height="14" fill={p.text} opacity="0.4" />
+      </g>
+    );
+    const snow = (x: number, y: number, r: number, o: number, k: string) => (
+      <circle key={k} cx={x} cy={y} r={r} fill={p.text} opacity={o} />
+    );
+    return (
+      <>
+        <rect y="266" width="800" height="34" fill={p.text} opacity="0.08" />
+        {tree(400, 258, 232, 0.72, "t1")}
+        {tree(300, 264, 168, 0.5, "t2")}
+        {tree(500, 262, 176, 0.52, "t3")}
+        {tree(238, 268, 118, 0.4, "t4")}
+        {tree(560, 268, 126, 0.4, "t5")}
+        {(
+          [
+            [252, 60, 4],
+            [330, 108, 3],
+            [408, 48, 5],
+            [470, 92, 3],
+            [540, 66, 4],
+            [300, 168, 3],
+            [520, 160, 4],
+            [382, 140, 3],
+            [596, 118, 3],
+            [224, 118, 3],
+          ] as [number, number, number][]
+        ).map(([x, y, r], i) => snow(x, y, r, 0.5, `s${i}`))}
+      </>
+    );
+  },
 
   // Six-armed snowflakes scattered — Christmas, winter whites.
   snowflakes: (id, p) => {

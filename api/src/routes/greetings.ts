@@ -4,6 +4,8 @@ import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { eventTemplates, greetings } from "../db/schema.js";
+import { buildGreetingEmail } from "../lib/emails/greeting.js";
+import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { loadOwnedGreeting } from "../lib/ownership.js";
 import { themeOverridesSchema } from "../lib/theme.js";
 
@@ -105,6 +107,69 @@ export async function greetingRoutes(app: FastifyInstance) {
         .returning();
 
       return updated;
+    },
+  );
+
+  // --- send -----------------------------------------------------------------
+  // Email the greeting to a raw list of addresses. Greetings have no guests
+  // table and no RSVP, so recipients are not stored — this is a one-shot send,
+  // deliberately the small version of the event announcement flow. The card
+  // image is rendered in the browser and inlined per message.
+  const sendBody = z.object({
+    recipients: z
+      .array(z.object({ email: z.string().email().max(320), name: z.string().max(120).nullish() }))
+      .min(1)
+      .max(200),
+    // Base64 card image + its mime type. Optional: a text-only greeting sends.
+    image: z
+      .object({
+        content: z.string().max(10_000_000),
+        type: z.enum(["image/png", "image/jpeg"]),
+      })
+      .nullish(),
+    // Override the card title as the subject / the saved message as the body.
+    subject: z.string().max(200).nullish(),
+    message: z.string().max(5000).nullish(),
+  });
+
+  app.post(
+    "/greetings/:greetingId/send",
+    {
+      // A base64 card image is a few hundred KB; the default 1 MB body limit
+      // would reject the send. No R2 round trip — the browser already rendered
+      // the card, so it rides along with the request.
+      bodyLimit: 10 * 1024 * 1024,
+      schema: { params: z.object({ greetingId: z.string().uuid() }), body: sendBody },
+    },
+    async (req, reply) => {
+      const { greetingId } = req.params as { greetingId: string };
+      const body = req.body as z.infer<typeof sendBody>;
+
+      const greeting = await loadOwnedGreeting(greetingId, req.userId!, reply);
+      if (!greeting) return;
+
+      const subject = body.subject?.trim() || greeting.title;
+      const message = body.message?.trim() ?? greeting.message ?? null;
+
+      const messages = body.recipients.map((r) =>
+        buildGreetingEmail({
+          to: r.email,
+          title: subject,
+          message,
+          fromName: greeting.hostDisplayName,
+          image: body.image ?? undefined,
+        }),
+      );
+
+      const result = await sendMail(messages, (m) => req.log.info({ greetingId }, m));
+
+      return reply.code(201).send({
+        recipientCount: body.recipients.length,
+        delivered: result.delivered,
+        failed: result.failed,
+        skipped: result.skipped,
+        emailConfigured: mailerConfigured(),
+      });
     },
   );
 

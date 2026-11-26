@@ -50,12 +50,15 @@ export function GreetingForm({
   cancelHref,
   failureMessage,
   onSubmit,
+  greetingId,
 }: {
   initial?: Partial<GreetingFormValues>;
   submitLabel: string;
   cancelHref: string;
   failureMessage: string;
   onSubmit: (input: GreetingInput) => Promise<void>;
+  /** Set on the edit screen — enables emailing the card (a saved greeting). */
+  greetingId?: string;
 }) {
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -265,6 +268,7 @@ export function GreetingForm({
                 fonts={previewFonts}
                 content={previewContent}
                 art={previewArt}
+                greetingId={greetingId}
               />
               <p className="text-center text-xs text-slate-500">
                 Save the greeting to keep it — download or share the image to send it.
