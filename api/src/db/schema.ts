@@ -409,8 +409,51 @@ export const eventViews = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// Greetings — a designed card with a message and nothing else. Same host, same
+// template/theme machinery as events, but no public page, no timing, no
+// location, no RSVP and no guests. A greeting is something a host makes and
+// keeps (and exports as an image to send); it has no slug because nothing
+// fetches it anonymously. Deliberately its own table rather than a `kind`
+// column on `events`: every event feature — slug, status, RSVP config, the
+// guest/announcement/view children — would be dead weight on a greeting row,
+// and every "events but only the real ones" query would have to remember to
+// filter it out.
+// ---------------------------------------------------------------------------
+
+export const greetings = pgTable(
+  "greetings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    title: text("title").notNull(),
+    message: text("message"),
+    hostDisplayName: text("host_display_name"),
+
+    // The occasion this card is for — thanksgiving, christmas, birthday,
+    // thank-you, and so on. Free text (not a CHECK) so a host is never blocked
+    // from labelling a greeting the product didn't anticipate; the form offers
+    // a known set and the list groups/filters by whatever is stored. Null means
+    // untagged.
+    occasion: text("occasion"),
+
+    // Same design model as events: a chosen template plus per-greeting
+    // overrides merged over its theme. See lib/theme.ts.
+    templateId: uuid("template_id").references(() => eventTemplates.id, { onDelete: "set null" }),
+    themeOverrides: jsonb("theme_overrides"),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_greetings_host").on(t.hostId)],
+);
+
 export type User = typeof users.$inferSelect;
 export type Event = typeof events.$inferSelect;
+export type Greeting = typeof greetings.$inferSelect;
 export type Guest = typeof guests.$inferSelect;
 export type GuestbookPost = typeof guestbookPosts.$inferSelect;
 export type EventTemplate = typeof eventTemplates.$inferSelect;

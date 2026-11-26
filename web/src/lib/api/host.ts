@@ -237,6 +237,46 @@ export const publishEvent = (id: string) =>
 
 export const deleteEvent = (id: string) => hostFetch<void>(`/events/${id}`, { method: "DELETE" });
 
+// --- Greetings -------------------------------------------------------------
+// A greeting is a designed card with a message — the event model minus timing,
+// location, RSVP, guests and any public page. See api/src/routes/greetings.ts.
+
+export type GreetingSummary = {
+  id: string;
+  title: string;
+  message: string | null;
+  hostDisplayName: string | null;
+  occasion: string | null;
+  templateId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  // Only on the full row (GET /greetings/:id); the list projection omits it.
+  themeOverrides?: ThemeOverrides | null;
+};
+
+export type GreetingInput = {
+  title: string;
+  message?: string | null;
+  hostDisplayName?: string | null;
+  occasion?: string | null;
+  templateId?: string | null;
+  // An empty object clears every override and restores the design's own look.
+  themeOverrides?: ThemeOverrides | null;
+};
+
+export const listGreetings = () => hostFetch<{ greetings: GreetingSummary[] }>("/greetings");
+
+export const getGreeting = (id: string) => hostFetch<GreetingSummary>(`/greetings/${id}`);
+
+export const createGreeting = (input: GreetingInput) =>
+  hostFetch<{ id: string }>("/greetings", { method: "POST", body: JSON.stringify(input) });
+
+export const updateGreeting = (id: string, patch: Partial<GreetingInput>) =>
+  hostFetch<GreetingSummary>(`/greetings/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const deleteGreeting = (id: string) =>
+  hostFetch<void>(`/greetings/${id}`, { method: "DELETE" });
+
 // A link that shows a draft exactly as guests will see it. The token inside is
 // event-scoped and expires in two hours, so fetch one each time rather than
 // storing it — it is a button, not a share link.

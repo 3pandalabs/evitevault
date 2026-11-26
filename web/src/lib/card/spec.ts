@@ -43,6 +43,11 @@ export type CardPalette = {
 export type CardContent = {
   title: string;
   hostName: string | null;
+  /**
+   * What precedes the host name — "Hosted by" for an invitation, "From" for a
+   * greeting. Optional so every existing caller keeps the invitation wording.
+   */
+  hostPrefix?: string;
   dateLine: string;
   timeLine: string | null;
   locationName: string | null;

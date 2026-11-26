@@ -46,27 +46,33 @@ export default function RootLayout({
     <html lang="en">
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
         <div className="flex-1">{children}</div>
-        <footer className="border-t border-slate-200 px-6 py-8">
-          <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
-            <FollowUs />
-            <span>&copy; 3PandaLabs LLC, USA.</span>
-            <span>All rights reserved.</span>
-            {/* On every page — landing, invitations and the dashboard — since
-                this footer is the root layout's. */}
-            <nav aria-label="Legal" className="flex gap-4">
-              <Link href="/privacy" className="hover:text-slate-900">
-                Privacy
-              </Link>
-              <Link href="/terms" className="hover:text-slate-900">
-                Terms
-              </Link>
-              <Link href="/contact" className="hover:text-slate-900">
-                Contact
-              </Link>
-            </nav>
-            <p className="mt-1 basis-full text-xs text-slate-500">
-              Built by pandas. Loved by people.
-            </p>
+        {/* On every page — landing, invitations and the dashboard — since this
+            footer is the root layout's. Dark bar so it reads as the page's
+            foot wherever it sits, on light dashboards and the dark landing. */}
+        <footer className="bg-slate-950 px-6 py-8 text-slate-400">
+          <div className="mx-auto w-full max-w-5xl text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-y-3">
+              <nav aria-label="Legal" className="flex flex-wrap gap-5">
+                <Link href="/privacy" className="hover:text-white">
+                  Privacy
+                </Link>
+                <Link href="/terms" className="hover:text-white">
+                  Terms
+                </Link>
+                <Link href="/#faq" className="hover:text-white">
+                  FAQ
+                </Link>
+                <Link href="/contact" className="hover:text-white">
+                  Contact us
+                </Link>
+              </nav>
+              <FollowUs />
+            </div>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-y-1 text-xs text-slate-500">
+              <span>&copy; 3PandaLabs LLC, USA.</span>
+              <span>All rights reserved.</span>
+            </div>
+            <p className="mt-1 text-xs text-slate-500">Built by pandas. Loved by people.</p>
           </div>
         </footer>
       </body>
