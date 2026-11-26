@@ -43,6 +43,10 @@ export const COVER_ART = [
   "home",
   "palms",
   "stripes",
+  "pumpkins",
+  "turkey",
+  "pine",
+  "snowflakes",
 ] as const;
 
 // ---------------------------------------------------------------------------
