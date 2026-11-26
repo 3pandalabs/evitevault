@@ -173,7 +173,7 @@ export function EventForm({
               maxLength={200}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Diwali at ours"
+              placeholder="Thanksgiving at ours"
             />
           </div>
 
@@ -184,7 +184,7 @@ export function EventForm({
               maxLength={120}
               value={hostDisplayName}
               onChange={(e) => setHostDisplayName(e.target.value)}
-              placeholder="Anil &amp; Prachi"
+              placeholder="Marie and Liam"
             />
             <p className="text-xs text-slate-500">
               Shown on the invitation. Leave blank to use your account name.
@@ -199,7 +199,7 @@ export function EventForm({
               maxLength={5000}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Come for the diyas, stay for the food…"
+              placeholder="Come for the turkey, stay for the pie…"
             />
           </div>
         </CardContent>
@@ -277,7 +277,7 @@ export function EventForm({
               maxLength={500}
               value={locationAddress}
               onChange={(e) => setLocationAddress(e.target.value)}
-              placeholder="42 Lantern Road, Bengaluru 560001"
+              placeholder="42 Maple Street, Portland, OR 97201"
             />
           </div>
           <div className="space-y-1.5">
