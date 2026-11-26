@@ -152,6 +152,18 @@ long-running container, so there is exactly one of these, and a second
 deployable would mean another thing to keep alive and another credential to
 hold. Missing a tick costs an hour against a quota that resets daily.
 
+## New sign-up alert
+
+Every new host account emails **"RsvpVault New user"** (email, display name if
+given, signup time UTC, user id) to `NEW_USER_ALERT_EMAIL` (default
+3pandas@3pandalabs.com; `off` disables) — `api/src/lib/newUserAlert.ts`, called
+from `POST /auth/register` only when the insert created a row (an existing
+email sends nothing). That is the only place a user row is created; if you add
+another (admin-made, seeded, backfilled), decide deliberately whether it is a
+real sign-up before calling `notifyNewUser`. Fire-and-forget through the shared
+gateway (this app's sender, one message off the daily allowance): a mailer
+failure only logs, never touches the sign-up. Same shape as AdVault's.
+
 ## Not used here
 
 No Temporal, no native mobile app (`android/` is only a TWA shell), no Supabase. The hourly job above is deliberately

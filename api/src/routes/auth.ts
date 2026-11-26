@@ -13,7 +13,8 @@ import { hashSecret, verifySecret } from "../auth/password.js";
 import { db } from "../db/index.js";
 import { passwordResetTokens, sessions, users } from "../db/schema.js";
 import { buildPasswordResetEmail } from "../lib/emails/passwordReset.js";
-import { sendMail } from "../lib/mailer.js";
+import { mailerConfigured, sendMail } from "../lib/mailer.js";
+import { notifyNewUser } from "../lib/newUserAlert.js";
 
 const credentials = z.object({
   email: z.string().email().max(320),
@@ -65,6 +66,14 @@ export async function authRoutes(app: FastifyInstance) {
       if (!user) {
         return reply.code(409).send({ error: "registration_failed" });
       }
+
+      // Only a row this insert actually created reaches here, so an existing
+      // email never alerts. Fire-and-forget: not awaited, cannot fail the sign-up.
+      notifyNewUser(
+        { email: normalised, userId: user.id, displayName },
+        { configured: mailerConfigured, send: sendMail },
+        (m) => req.log.warn(m),
+      );
 
       return reply.code(201).send({
         accessToken: signAccessToken({ sub: user.id, role: user.role as "host" | "admin" }),
