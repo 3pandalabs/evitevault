@@ -47,32 +47,32 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
         <div className="flex-1">{children}</div>
         {/* On every page — landing, invitations and the dashboard — since this
-            footer is the root layout's. Dark bar so it reads as the page's
-            foot wherever it sits, on light dashboards and the dark landing. */}
-        <footer className="bg-slate-950 px-6 py-8 text-slate-400">
+            footer is the root layout's. Keeps the app's light background; it is
+            the page's foot, not a separate dark bar. */}
+        <footer className="border-t border-slate-200 px-6 py-8 text-slate-500">
           <div className="mx-auto w-full max-w-5xl text-sm">
             <div className="flex flex-wrap items-center justify-between gap-y-3">
               <nav aria-label="Legal" className="flex flex-wrap gap-5">
-                <Link href="/privacy" className="hover:text-white">
+                <Link href="/privacy" className="hover:text-slate-900">
                   Privacy
                 </Link>
-                <Link href="/terms" className="hover:text-white">
+                <Link href="/terms" className="hover:text-slate-900">
                   Terms
                 </Link>
-                <Link href="/#faq" className="hover:text-white">
+                <Link href="/#faq" className="hover:text-slate-900">
                   FAQ
                 </Link>
-                <Link href="/contact" className="hover:text-white">
+                <Link href="/contact" className="hover:text-slate-900">
                   Contact us
                 </Link>
               </nav>
               <FollowUs />
             </div>
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-y-1 text-xs text-slate-500">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-y-1 text-xs text-slate-400">
               <span>&copy; 3PandaLabs LLC, USA.</span>
               <span>All rights reserved.</span>
             </div>
-            <p className="mt-1 text-xs text-slate-500">Built by pandas. Loved by people.</p>
+            <p className="mt-1 text-xs text-slate-400">Built by pandas. Loved by people.</p>
           </div>
         </footer>
       </body>
