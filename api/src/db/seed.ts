@@ -25,7 +25,7 @@ type SeedTemplate = {
 // and labels (web/src/lib/templateCategories.ts):
 //
 //   wedding · baby · birthday · festival · housewarming · party · business
-//   · general
+//   · thanksgiving · christmas · newyear · general
 //
 // A category outside that set still works — the picker falls back to
 // title-casing it — but add it to both places rather than relying on that.
@@ -548,6 +548,152 @@ const TEMPLATES: SeedTemplate[] = [
     },
   },
 
+  // --- Thanksgiving ---------------------------------------------------------
+  {
+    key: "harvest-table",
+    name: "Harvest Table",
+    description: "Amber and cream with fallen leaves — Thanksgiving dinners and autumn gatherings.",
+    category: "thanksgiving",
+    sortOrder: 800,
+    theme: {
+      palette: {
+        bg: "#fdf6ec",
+        surface: "#ffffff",
+        text: "#4a2e13",
+        muted: "#8a6b45",
+        accent: "#b5531f",
+        accentText: "#ffffff",
+      },
+      fonts: { heading: "cormorant", body: "lora" },
+      layout: "classic",
+      art: "petals",
+    },
+  },
+  {
+    key: "giving-thanks",
+    name: "Giving Thanks",
+    description: "Deep brown and pumpkin, warm by candlelight — the big Thanksgiving table.",
+    category: "thanksgiving",
+    sortOrder: 810,
+    theme: {
+      palette: {
+        bg: "#3a2213",
+        surface: "#4a2e1a",
+        text: "#fdf4e8",
+        muted: "#d4b48f",
+        accent: "#e08a3c",
+        accentText: "#3a2213",
+      },
+      fonts: { heading: "playfair", body: "lora" },
+      layout: "poster",
+      art: "home",
+    },
+  },
+
+  // --- Christmas ------------------------------------------------------------
+  {
+    key: "noel-classic",
+    name: "Noël",
+    description: "Cream, pine and christmas red — the traditional holiday card.",
+    category: "christmas",
+    sortOrder: 820,
+    theme: {
+      palette: {
+        bg: "#f7f3ec",
+        surface: "#ffffff",
+        text: "#1f3b2c",
+        muted: "#5f7a68",
+        accent: "#b01c2e",
+        accentText: "#ffffff",
+      },
+      fonts: { heading: "playfair", body: "lora" },
+      layout: "classic",
+      art: "stars",
+    },
+  },
+  {
+    key: "frosted-pine",
+    name: "Frosted Pine",
+    description: "Deep evergreen and gold — Christmas dinners and evening parties.",
+    category: "christmas",
+    sortOrder: 830,
+    theme: {
+      palette: {
+        bg: "#0d2417",
+        surface: "#123020",
+        text: "#f0faf2",
+        muted: "#9fc3ad",
+        accent: "#d4af37",
+        accentText: "#0d2417",
+      },
+      fonts: { heading: "cormorant", body: "lora" },
+      layout: "poster",
+      art: "stars",
+    },
+  },
+  {
+    key: "winter-white",
+    name: "Winter White",
+    description: "Icy blue and silver, clean and quiet — a modern holiday invitation.",
+    category: "christmas",
+    sortOrder: 840,
+    theme: {
+      palette: {
+        bg: "#f4f8fb",
+        surface: "#ffffff",
+        text: "#1e2f40",
+        muted: "#6b8299",
+        accent: "#3a7ca5",
+        accentText: "#ffffff",
+      },
+      fonts: { heading: "inter", body: "inter" },
+      layout: "minimal",
+      art: "stars",
+    },
+  },
+
+  // --- New Year -------------------------------------------------------------
+  {
+    key: "midnight-gold",
+    name: "Midnight Gold",
+    description: "Black and gold with fireworks — ring in the new year.",
+    category: "newyear",
+    sortOrder: 850,
+    theme: {
+      palette: {
+        bg: "#0b0b14",
+        surface: "#16161f",
+        text: "#faf7ef",
+        muted: "#a7a295",
+        accent: "#d4af37",
+        accentText: "#0b0b14",
+      },
+      fonts: { heading: "playfair", body: "dm-sans" },
+      layout: "poster",
+      art: "confetti",
+    },
+  },
+  {
+    key: "champagne-toast",
+    name: "Champagne Toast",
+    description: "Deep plum and champagne gold — New Year's Eve drinks and dinners.",
+    category: "newyear",
+    sortOrder: 860,
+    theme: {
+      palette: {
+        bg: "#1a1424",
+        surface: "#271c35",
+        text: "#fdf6ff",
+        muted: "#c3b0d4",
+        accent: "#e8c547",
+        accentText: "#1a1424",
+      },
+      fonts: { heading: "space-grotesk", body: "dm-sans" },
+      layout: "poster",
+      art: "stars",
+    },
+  },
+
   // --- Anything else --------------------------------------------------------
   {
     key: "photo-first",
@@ -630,6 +776,19 @@ const CARDS: Record<string, Partial<CardDesign>> = {
   // invitation reading like a wedding one.
   "minimal-slate": { frame: "rounded", align: "left", eyebrow: "You're invited" },
   "boardroom-blue": { frame: "rounded", align: "left", eyebrow: "Invitation" },
+
+  // Thanksgiving — warm and gathered.
+  "harvest-table": { frame: "arch", eyebrow: "Gather with us" },
+  "giving-thanks": { frame: "arch", eyebrow: "Thanksgiving dinner" },
+
+  // Christmas.
+  "noel-classic": { frame: "arch", eyebrow: "Merry Christmas" },
+  "frosted-pine": { frame: "arch", eyebrow: "Christmas celebrations" },
+  "winter-white": { frame: "rounded", eyebrow: "You're invited" },
+
+  // New Year — rounded and loud.
+  "midnight-gold": { frame: "circle", eyebrow: "Ring in the new year" },
+  "champagne-toast": { frame: "rounded", eyebrow: "New Year's Eve" },
 
   "photo-first": { frame: "full", overlay: 0.45 },
 };

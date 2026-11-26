@@ -14,6 +14,9 @@ export const CATEGORY_LABELS: Record<string, string> = {
   housewarming: "Housewarming",
   party: "Party",
   business: "Business",
+  thanksgiving: "Thanksgiving",
+  christmas: "Christmas",
+  newyear: "New Year",
   general: "Anything else",
 };
 
