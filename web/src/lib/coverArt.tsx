@@ -30,6 +30,10 @@ export const ART_LABELS: Record<string, string> = {
   home: "New home",
   palms: "Palms",
   stripes: "Stripes",
+  pumpkins: "Pumpkins",
+  turkey: "Turkey",
+  pine: "Pine trees",
+  snowflakes: "Snowflakes",
 };
 
 export const ART_CHOICES = Object.keys(ART_LABELS);
@@ -331,6 +335,142 @@ const ARTWORK: Record<string, Draw> = {
         {frond(810, 240, 200, "d")}
       </>
     );
+  },
+
+  // A patch of ribbed pumpkins along the bottom — Thanksgiving, autumn.
+  pumpkins: (id, p) => (
+    <>
+      {(
+        [
+          [130, 205, 48],
+          [320, 235, 38],
+          [520, 215, 44],
+          [690, 240, 34],
+          [430, 252, 26],
+        ] as [number, number, number][]
+      ).map(([cx, cy, r], i) => {
+        const fill = i % 2 ? p.muted : p.accent;
+        return (
+          <g key={i} opacity={i % 2 ? 0.5 : 0.7}>
+            <ellipse cx={cx} cy={cy} rx={r} ry={r * 0.85} fill={fill} />
+            {/* ribs */}
+            <path
+              d={`M${cx} ${cy - r * 0.78} Q${cx - r * 0.5} ${cy} ${cx} ${cy + r * 0.78}`}
+              stroke={p.bg}
+              strokeWidth="2"
+              fill="none"
+              opacity="0.5"
+            />
+            <path
+              d={`M${cx} ${cy - r * 0.78} Q${cx + r * 0.5} ${cy} ${cx} ${cy + r * 0.78}`}
+              stroke={p.bg}
+              strokeWidth="2"
+              fill="none"
+              opacity="0.5"
+            />
+            {/* stem */}
+            <path
+              d={`M${cx} ${cy - r * 0.85} q-2 -12 7 -16`}
+              stroke={p.text}
+              strokeWidth="4"
+              fill="none"
+              opacity="0.5"
+              strokeLinecap="round"
+            />
+          </g>
+        );
+      })}
+    </>
+  ),
+
+  // A couple of turkeys with fanned tail feathers — Thanksgiving dinner.
+  turkey: (id, p) => {
+    const bird = (cx: number, cy: number, s: number, k: string) => (
+      <g key={k} transform={`translate(${cx} ${cy})`} opacity="0.7">
+        {/* fanned tail */}
+        {[-60, -40, -20, 0, 20, 40, 60].map((a, j) => (
+          <ellipse
+            key={a}
+            cx="0"
+            cy={-s * 1.25}
+            rx={s * 0.17}
+            ry={s * 0.9}
+            fill={j % 2 ? p.muted : p.accent}
+            opacity="0.55"
+            transform={`rotate(${a} 0 0)`}
+          />
+        ))}
+        {/* body */}
+        <ellipse cx="0" cy={s * 0.25} rx={s * 0.72} ry={s * 0.58} fill={p.accent} />
+        {/* head */}
+        <circle cx={s * 0.1} cy={-s * 0.45} r={s * 0.22} fill={p.accent} />
+        {/* beak + wattle */}
+        <path
+          d={`M${s * 0.3} ${-s * 0.45} l${s * 0.24} ${-s * 0.04} l${-s * 0.22} ${s * 0.14} z`}
+          fill={p.muted}
+        />
+      </g>
+    );
+    return (
+      <>
+        {bird(195, 165, 72, "a")}
+        {bird(600, 180, 62, "b")}
+      </>
+    );
+  },
+
+  // A little forest of three-tier pines — Christmas, winter.
+  pine: (id, p) => (
+    <>
+      <rect y="255" width="800" height="45" fill={p.accent} opacity="0.1" />
+      {[100, 250, 400, 545, 690, 782].map((x, i) => {
+        const s = 70 + (i % 3) * 16;
+        const baseY = 250;
+        return (
+          <g key={x} opacity={i % 2 ? 0.45 : 0.6} fill={p.accent}>
+            <path d={`M${x} ${baseY - s} L${x - s * 0.42} ${baseY - s * 0.45} L${x + s * 0.42} ${baseY - s * 0.45} Z`} />
+            <path d={`M${x} ${baseY - s * 0.72} L${x - s * 0.5} ${baseY - s * 0.1} L${x + s * 0.5} ${baseY - s * 0.1} Z`} />
+            <path d={`M${x} ${baseY - s * 0.42} L${x - s * 0.58} ${baseY + s * 0.26} L${x + s * 0.58} ${baseY + s * 0.26} Z`} />
+            <rect x={x - 4} y={baseY + s * 0.26} width="8" height="12" fill={p.text} opacity="0.4" />
+          </g>
+        );
+      })}
+    </>
+  ),
+
+  // Six-armed snowflakes scattered — Christmas, winter whites.
+  snowflakes: (id, p) => {
+    const flake = (x: number, y: number, s: number, o: number, k: string) => (
+      <g
+        key={k}
+        transform={`translate(${x} ${y})`}
+        stroke={p.accent}
+        strokeWidth={Math.max(1.2, s * 0.06)}
+        opacity={o}
+        fill="none"
+        strokeLinecap="round"
+      >
+        {[0, 60, 120].map((a) => (
+          <g key={a} transform={`rotate(${a})`}>
+            <line x1={-s} y1="0" x2={s} y2="0" />
+            <path
+              d={`M${s * 0.55} 0 l${s * 0.22} ${-s * 0.2} M${s * 0.55} 0 l${s * 0.22} ${s * 0.2} M${-s * 0.55} 0 l${-s * 0.22} ${-s * 0.2} M${-s * 0.55} 0 l${-s * 0.22} ${s * 0.2}`}
+            />
+          </g>
+        ))}
+      </g>
+    );
+    const pts: [number, number, number, number][] = [
+      [100, 80, 28, 0.6],
+      [260, 200, 18, 0.45],
+      [430, 70, 32, 0.55],
+      [560, 210, 20, 0.5],
+      [680, 90, 24, 0.6],
+      [740, 230, 14, 0.4],
+      [330, 250, 16, 0.4],
+      [180, 150, 12, 0.4],
+    ];
+    return <>{pts.map(([x, y, s, o], i) => flake(x, y, s, o, String(i)))}</>;
   },
 
   // Diagonal bands — the quiet one, for work events and anything formal.

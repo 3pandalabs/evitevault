@@ -566,7 +566,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "classic",
-      art: "petals",
+      art: "pumpkins",
     },
   },
   {
@@ -586,7 +586,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "lora" },
       layout: "poster",
-      art: "home",
+      art: "turkey",
     },
   },
 
@@ -608,7 +608,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "playfair", body: "lora" },
       layout: "classic",
-      art: "stars",
+      art: "pine",
     },
   },
   {
@@ -628,7 +628,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "cormorant", body: "lora" },
       layout: "poster",
-      art: "stars",
+      art: "snowflakes",
     },
   },
   {
@@ -648,7 +648,7 @@ const TEMPLATES: SeedTemplate[] = [
       },
       fonts: { heading: "inter", body: "inter" },
       layout: "minimal",
-      art: "stars",
+      art: "snowflakes",
     },
   },
 
