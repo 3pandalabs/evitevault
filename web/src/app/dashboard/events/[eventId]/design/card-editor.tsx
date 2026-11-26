@@ -317,7 +317,7 @@ export function CardEditor({
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
       {/* Preview */}
-      <div className="lg:sticky lg:top-6 lg:self-start">
+      <div className="lg:self-start">
         <div className="mx-auto max-w-[440px]">
           <CardCanvas
             design={design}
