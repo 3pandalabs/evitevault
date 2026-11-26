@@ -112,8 +112,11 @@ export function GreetingForm({
   const previewFonts = selectedTemplate
     ? { heading: selectedTemplate.theme.fonts.heading, body: selectedTemplate.theme.fonts.body }
     : null;
+  // No eyebrow on a greeting — the template's "Thanksgiving dinner"/"You're
+  // invited" line is invitation copy. A greeting shows only its title, who it's
+  // from, the message and the footer.
   const previewDesign = selectedTemplate
-    ? resolveCardDesign(selectedTemplate.theme.card, { showQr: false })
+    ? resolveCardDesign(selectedTemplate.theme.card, { showQr: false, eyebrow: "" })
     : null;
   const previewArt = art ?? selectedTemplate?.theme.art ?? "plain";
   const previewContent: CardContentData = {
