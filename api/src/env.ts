@@ -71,7 +71,8 @@ export const env = {
   // Also read directly by lib/videoInvites (kept out of this object so those
   // modules stay importable from tests): GOOGLE_SA_KEY_B64 (Vertex AI service
   // account JSON, base64; Google is tried first), VERTEX_OMNI_MODEL,
-  // VIDEO_INVITE_PROVIDERS (default "vertex,fal").
+  // VIDEO_INVITE_PROVIDERS (default "vertex,fal"), TTS_VOICE (Simple's
+  // narrator, a Google Cloud TTS voice, default en-US-Studio-O).
   // fal.ai: ElevenLabs TTS, then a talking-avatar model over the panda scene
   // or the host's photo. Same org fal account AdVault uses.
   FAL_KEY: process.env.FAL_KEY ?? "",

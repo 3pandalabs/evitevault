@@ -496,6 +496,8 @@ export type VideoInviteInfo = {
   lineMax?: Record<keyof VideoInviteLines, number>;
   /** Free Simple videos per host per day (when Simple is free). */
   freePerDay?: number;
+  /** How many template clips each occasion has ("Try another" cycles them). */
+  variants?: number;
   prices: Record<VideoInviteTier, number>;
   occasions: { id: string; label: string }[];
   maxScriptChars: number;
@@ -506,6 +508,8 @@ export type VideoInviteInfo = {
     occasion: string;
     script: string;
     lines?: VideoInviteLines | null;
+    variant?: number | null;
+    narration?: string | null;
     state: "paying" | "making" | "ready" | "failed" | "none";
     createdAt: string;
     videoUrl: string | null;
@@ -542,6 +546,10 @@ export async function startVideoInviteCheckout(
     script?: string;
     /** Simple: the lines written on the template clip. */
     lines?: VideoInviteLines;
+    /** Simple: which template clip (1..5). */
+    variant?: number;
+    /** Simple: the narrator's message to read out (empty = no voice). */
+    narration?: string | null;
     photoKey?: string | null;
     attested?: boolean;
   },

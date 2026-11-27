@@ -10,6 +10,7 @@ import { tierAvailable } from "../lib/videoInvites/generate.js";
 import {
   ATTESTATION_TEXT,
   canTransition,
+  clampVariant,
   cleanScript,
   cleanTextLines,
   estimatedSeconds,
@@ -23,6 +24,7 @@ import {
   scriptProblem,
   TEXT_LINE_MAX,
   textLinesProblem,
+  VARIANT_COUNT,
   VIDEO_INVITE_OCCASIONS,
   VIDEO_INVITE_TIERS,
   type VideoInviteStatus,
@@ -80,6 +82,10 @@ const checkoutBody = z.object({
       where: line(TEXT_LINE_MAX.where),
     })
     .nullish(),
+  // Simple: which of the occasion's template clips (1..5), and the narrator's
+  // "message to read out" (optional; same rules and cap as a Pro script).
+  variant: z.number().int().min(1).max(VARIANT_COUNT).optional(),
+  narration: z.string().max(2000).nullish(),
   photoKey: z.string().max(300).nullish(),
   attested: z.boolean().optional(),
 });
@@ -118,6 +124,7 @@ export async function videoInviteRoutes(app: FastifyInstance) {
           testMode,
           occasions: VIDEO_INVITE_OCCASIONS.map((id) => ({ id, label: OCCASION_LABELS[id] })),
           maxScriptChars: MAX_SCRIPT_CHARS,
+          variants: VARIANT_COUNT,
           lineMax: TEXT_LINE_MAX,
           freePerDay: FREE_SIMPLE_PER_DAY,
           attestationText: ATTESTATION_TEXT,
@@ -128,6 +135,8 @@ export async function videoInviteRoutes(app: FastifyInstance) {
                 occasion: order.occasion,
                 script: order.script,
                 lines: order.textLines ?? null,
+                variant: order.variant,
+                narration: order.narration,
                 state: hostView(order.status as VideoInviteStatus),
                 createdAt: order.createdAt,
                 videoUrl: order.status === "ready" && order.videoKey ? await presignDownload(order.videoKey) : null,
@@ -171,11 +180,21 @@ export async function videoInviteRoutes(app: FastifyInstance) {
 
         let script: string;
         let textLines: ReturnType<typeof cleanTextLines> | null = null;
+        let variant: number | null = null;
+        let narration: string | null = null;
         if (body.tier === "simple") {
           textLines = cleanTextLines(body.lines ?? {});
           const problem = textLinesProblem(textLines);
           if (problem) return reply.code(400).send({ error: problem });
           script = [textLines.kicker, textLines.headline, textLines.when, textLines.where].filter(Boolean).join(" · ");
+          variant = clampVariant(body.variant ?? 1);
+          // Read aloud = the same wording rules as a Pro script.
+          const spoken = cleanScript(body.narration ?? "");
+          if (spoken) {
+            const narrationProblem = scriptProblem(spoken);
+            if (narrationProblem) return reply.code(400).send({ error: `narration_${narrationProblem.replace("script_", "")}` });
+            narration = spoken;
+          }
         } else {
           script = cleanScript(body.script ?? "");
           const problem = scriptProblem(script);
@@ -217,6 +236,8 @@ export async function videoInviteRoutes(app: FastifyInstance) {
           occasion: body.occasion,
           script,
           textLines,
+          variant,
+          narration,
           photoKey,
           attestedAt,
           attestationText: attestedAt ? ATTESTATION_TEXT : null,

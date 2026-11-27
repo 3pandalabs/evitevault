@@ -20,6 +20,9 @@ const ERRORS: Record<string, string> = {
   script_too_long: "That's too long for one video. Keep it short and warm.",
   script_has_link: "Leave links out: the invitation already has the link.",
   headline_required: "Add the main line (for example the names or the event).",
+  narration_too_short: "Make the message to read out a little longer, or leave it empty.",
+  narration_too_long: "The message to read out is too long. Keep it under 200 characters.",
+  narration_has_link: "Leave links out of the message to read out.",
   line_too_long: "One of the lines is too long. Keep each one short.",
   line_has_link: "Leave links out: the invitation already has the link.",
   photo_required: "Add your photo first.",
@@ -42,25 +45,64 @@ const money = (cents: number) => (cents === 0 ? "Free" : `$${(cents / 100).toFix
  * (lib/videoInvites/policy.ts layoutTextLines). Sizes are in container-width
  * units so the 9:16 box looks the same at 360px and on a desktop.
  */
-function SimplePreview({ occasion, lines }: { occasion: string; lines: VideoInviteLines }) {
+// The still for a variant, then the occasion's clip still, then its scene:
+// clip-<occasion>-<n>.jpg exists once Muse's variant clips (and their posters,
+// web/scripts/make-clip-posters.mjs) are in; until then the fallbacks show.
+const posterChain = (occasion: string, variant: number) => [
+  `/video-invites/clip-${occasion}-${variant}.jpg`,
+  `/video-invites/clip-${occasion}.jpg`,
+  `/video-invites/pandas-${occasion}.jpg`,
+];
+
+/** Strips emoji etc. the video's font can't draw, as the API does (stripUnsupportedGlyphs). */
+const drawable = (t: string) =>
+  t
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[‍︎️⃣]/g, "")
+    .replace(/[^ -ɏ‐-‧‰-⁞€™]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+function Poster({ occasion, variant }: { occasion: string; variant: number }) {
+  const chain = posterChain(occasion, variant);
+  const [step, setStep] = useState(0);
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={chain[0]}
+      src={chain[Math.min(step, chain.length - 1)]}
+      onError={() => setStep((s) => Math.min(s + 1, chain.length - 1))}
+      alt=""
+      className="absolute inset-0 h-full w-full object-cover"
+    />
+  );
+}
+
+/**
+ * The live preview of a Simple video: the chosen variant's still with the
+ * host's lines in the top area, roughly as the API's ffmpeg render draws them
+ * (lib/videoInvites/policy.ts layoutTextLines, ~35% larger since 2026-11-26).
+ * Sizes are in container-width units so the 9:16 box looks the same at 360px
+ * and on a desktop.
+ */
+function SimplePreview({ occasion, variant, lines }: { occasion: string; variant: number; lines: VideoInviteLines }) {
   return (
     <div
       className="relative mx-auto aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-lg bg-slate-900 [container-type:inline-size]"
       aria-label="Preview of your video"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={`/video-invites/pandas-${occasion}.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-x-0 top-0 h-[44%] bg-gradient-to-b from-black/45 via-black/25 to-transparent" />
+      <Poster key={`${occasion}-${variant}`} occasion={occasion} variant={variant} />
+      <div className="absolute inset-x-0 top-0 h-[46%] bg-black/30" />
       <div
-        className="absolute inset-x-[7.4%] top-[5.7%] flex h-[34%] flex-col items-center justify-center gap-[1.2cqw] text-center text-white"
+        className="absolute inset-x-[6.5%] top-[5%] flex h-[37%] flex-col items-center justify-center gap-[1.4cqw] text-center text-white"
         style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}
       >
-        {lines.kicker ? <p className="text-[4.3cqw] leading-tight opacity-90">{lines.kicker}</p> : null}
-        <p className="text-[8.2cqw] font-medium leading-[1.05] [overflow-wrap:anywhere]">
-          {lines.headline || "Your main line"}
+        {lines.kicker ? <p className="text-[5.8cqw] leading-tight opacity-90">{drawable(lines.kicker)}</p> : null}
+        <p className="text-[11cqw] font-medium leading-[1.05] [overflow-wrap:anywhere]">
+          {drawable(lines.headline) || "Your main line"}
         </p>
-        {lines.when ? <p className="text-[4.8cqw] leading-tight">{lines.when}</p> : null}
-        {lines.where ? <p className="text-[4.3cqw] leading-tight opacity-90">{lines.where}</p> : null}
+        {lines.when ? <p className="text-[6.5cqw] leading-tight">{drawable(lines.when)}</p> : null}
+        {lines.where ? <p className="text-[5.8cqw] leading-tight opacity-90">{drawable(lines.where)}</p> : null}
       </div>
     </div>
   );
@@ -95,6 +137,15 @@ export function VideoInviteCard({
     where: defaults.where.slice(0, DEFAULT_LINE_MAX.where),
   });
   const [script, setScript] = useState("");
+  // Simple: which template clip ("Try another" cycles 1..5) and the narrator.
+  const [variant, setVariant] = useState(1);
+  const [narration, setNarration] = useState(() => {
+    // Mirrors defaultNarration() in api/src/lib/videoInvites/policy.ts.
+    const parts = [`You're invited to ${defaults.headline}`];
+    if (defaults.when) parts.push(`on ${defaults.when}`);
+    if (defaults.where) parts.push(`at ${defaults.where}`);
+    return `${parts.join(" ")}. Come celebrate with us!`.slice(0, 200);
+  });
   const [photo, setPhoto] = useState<File | null>(null);
   const [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -156,7 +207,9 @@ export function VideoInviteCard({
       const res = await startVideoInviteCheckout(eventId, {
         tier,
         occasion,
-        ...(tier === "simple" ? { lines } : { script, photoKey, attested }),
+        ...(tier === "simple"
+          ? { lines, variant, narration: narration.trim() || null }
+          : { script, photoKey, attested }),
       });
       if (res.checkoutUrl) {
         window.location.href = res.checkoutUrl;
@@ -303,8 +356,37 @@ export function VideoInviteCard({
                       />
                     </div>
                   ))}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="video-narration">Message to read out</Label>
+                    <Textarea
+                      id="video-narration"
+                      rows={3}
+                      maxLength={info.maxScriptChars}
+                      value={narration}
+                      onChange={(e) => setNarration(e.target.value)}
+                    />
+                    <p className="text-xs text-slate-500">
+                      A narrator reads this over the music. {narration.trim().length}/{info.maxScriptChars} characters
+                      · leave it empty for music only.
+                    </p>
+                  </div>
                 </div>
-                <SimplePreview occasion={occasion} lines={lines} />
+                <div className="space-y-2">
+                  <SimplePreview occasion={occasion} variant={variant} lines={lines} />
+                  <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVariant((v) => (v % (info.variants ?? 5)) + 1)}
+                    >
+                      Try another
+                    </Button>
+                    <span>
+                      {variant} of {info.variants ?? 5}
+                    </span>
+                  </div>
+                </div>
               </div>
             ) : (
               <>
