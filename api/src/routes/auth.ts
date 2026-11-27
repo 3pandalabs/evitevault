@@ -16,6 +16,7 @@ import { buildPasswordResetEmail } from "../lib/emails/passwordReset.js";
 import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { notifyNewUser } from "../lib/newUserAlert.js";
 import { inTestMode, isTestHost, isUndeliverableEmail, mayToggleTestMode } from "../lib/testMode/policy.js";
+import { videoInvitesVisible } from "../lib/videoInvites/access.js";
 
 const credentials = z.object({
   email: z.string().email().max(320),
@@ -308,6 +309,9 @@ export async function authRoutes(app: FastifyInstance) {
       // The admin tools (lib/testMode). `role` stays the REAL role.
       testHost: isTestHost(user),
       testMode: inTestMode(user),
+      // Feature switches decided on the SERVER, so the web never infers them
+      // from the role (VIDEO_INVITES=on | admins | off).
+      features: { videoInvites: await videoInvitesVisible(req.userId!) },
     };
   });
 

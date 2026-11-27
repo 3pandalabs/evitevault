@@ -86,7 +86,9 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | H | POST | `/storage/presign-download` | Authorized by the key's `events/<id>/` prefix |
 | P | POST | `/public/events/:slug/guestbook/presign-upload` | Only when the event allows guest photos |
 
-## Video invites (paid; 404 unless `VIDEO_INVITES=on`)
+## Video invites (404 unless `VIDEO_INVITES=on`, or `=admins` and the caller is a real admin / an admin's test host)
+
+`/auth/me` returns `features.videoInvites` (the same decision, made on the server).
 
 | | Method | Path | Notes |
 |---|---|---|---|

@@ -76,8 +76,40 @@ export function providersToTry(
   return providerOrder(raw).filter((p) => configured[p]);
 }
 
+/**
+ * VIDEO_INVITES: "on" (everyone), "admins" (only real admins and test hosts
+ * owned by a real admin, for trying it in production before launch), anything
+ * else = off.
+ */
+export type FeatureMode = "on" | "admins" | "off";
+
+export function featureMode(flag: string | undefined): FeatureMode {
+  const v = (flag ?? "").trim().toLowerCase();
+  return v === "on" || v === "admins" ? v : "off";
+}
+
+/**
+ * True when the feature RUNS at all (the job, the public page showing ready
+ * videos): "on" or "admins". In admins mode only admins can create videos, so
+ * showing ready ones publicly leaks nothing.
+ */
 export function isEnabled(flag: string | undefined): boolean {
-  return (flag ?? "").trim().toLowerCase() === "on";
+  return featureMode(flag) !== "off";
+}
+
+/** Who is asking, from the DATABASE (never the JWT role). */
+export type FeatureViewer = {
+  /** users.role = 'admin' and not a test host. */
+  realAdmin: boolean;
+  /** A test host whose owner is (still) a real admin. */
+  adminTestHost: boolean;
+};
+
+/** Whether this account sees and can use video invites. */
+export function videoInvitesVisibleTo(mode: FeatureMode, viewer: FeatureViewer): boolean {
+  if (mode === "on") return true;
+  if (mode === "admins") return viewer.realAdmin || viewer.adminTestHost;
+  return false;
 }
 
 /**

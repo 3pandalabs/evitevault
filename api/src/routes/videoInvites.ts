@@ -16,7 +16,6 @@ import {
   FREE_SIMPLE_PER_DAY,
   freeLimitReached,
   hostView,
-  isEnabled,
   MAX_SCRIPT_CHARS,
   OCCASION_LABELS,
   priceCents,
@@ -30,6 +29,7 @@ import {
   type VideoInviteTier,
 } from "../lib/videoInvites/policy.js";
 import { createCheckoutSession, stripeConfigured, verifyStripeSignature } from "../lib/videoInvites/stripe.js";
+import { videoInvitesVisible } from "../lib/videoInvites/access.js";
 import { hostIdentity } from "../lib/testMode/index.js";
 import { chargeCents, isUndeliverableEmail } from "../lib/testMode/policy.js";
 import { extForType, isAllowedImageType, presignDownload, presignUpload, videoPhotoKey } from "../plugins/r2.js";
@@ -75,8 +75,11 @@ const checkoutBody = z.object({
 export async function videoInviteRoutes(app: FastifyInstance) {
   app.register(async (host) => {
     host.addHook("onRequest", requireAuth);
-    host.addHook("onRequest", async (_req, reply) => {
-      if (!isEnabled(env.VIDEO_INVITES)) return reply.code(404).send({ error: "not_found" });
+    // Off, or VIDEO_INVITES=admins and the caller isn't a real admin (or one
+    // of their test hosts): 404, exactly as if the feature didn't exist.
+    host.addHook("onRequest", async (req, reply) => {
+      if (!req.userId) return;
+      if (!(await videoInvitesVisible(req.userId))) return reply.code(404).send({ error: "not_found" });
     });
 
     // Config for the card + the event's latest order (cancelled ones skipped).
