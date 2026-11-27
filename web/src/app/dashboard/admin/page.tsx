@@ -1,6 +1,7 @@
 "use client";
 
 import { FlaskConical, Loader2, Search } from "lucide-react";
+import { PageHeader } from "../ui";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import {
@@ -153,7 +154,7 @@ export default function AdminPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Admin</h1>
+      <PageHeader eyebrow="Admin" title="Admin" description="Real-admin only: every call re-checks your role on the server." />
 
       <Card>
         <CardHeader>

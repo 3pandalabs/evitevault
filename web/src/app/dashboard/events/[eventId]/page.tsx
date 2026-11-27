@@ -1,25 +1,31 @@
 "use client";
 
 import {
-  ArrowLeft,
   BellDot,
   CalendarDays,
+  Check,
+  Clapperboard,
   Copy,
   Download,
   Eye,
+  Gift,
   ImagePlus,
+  LayoutDashboard,
   Loader2,
   Mail,
   MapPin,
   Palette,
+  PartyPopper,
   Pencil,
   Plus,
   Send,
+  Settings,
   TriangleAlert,
+  UserPlus,
   Users,
 } from "lucide-react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addGuests,
@@ -41,9 +47,9 @@ import {
 import { ApiError } from "@/lib/api/browser";
 import { Badge, rsvpVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/input";
 import {
+  cn,
   formatEventDate,
   formatEventTime,
   formatRelative,
@@ -51,6 +57,9 @@ import {
   formatTimeZoneLabel,
 } from "@/lib/utils";
 import { DeleteEventButton } from "../delete-event-button";
+import { effectiveEnd, eventPhase } from "../event-status";
+import { useMe } from "../../me-context";
+import { BackLink, EmptyState, PageSpinner, Panel, Segmented, StatTile, StatusPill } from "../../ui";
 import { PhotoAlbumCard } from "./photo-album";
 import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
@@ -59,9 +68,37 @@ import { CashGiftsCard } from "./cash-gifts";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+// The event hub follows the host's journey: design the invitation, publish,
+// invite guests, watch the replies (and gifts), then the after-party album.
+// Each stage is a tab; every tab's panels stay MOUNTED and are only hidden,
+// so a half-typed guest list or video form survives switching tabs and every
+// feature card keeps fetching/polling exactly as it did on the old long page.
+type Tab = "overview" | "design" | "guests" | "rsvps" | "gifts" | "after" | "settings";
+const TABS: Tab[] = ["overview", "design", "guests", "rsvps", "gifts", "after", "settings"];
+
+/**
+ * Which tab to open. Stripe sends the host back with ?gifts=… (Connect
+ * onboarding) or ?video=… (video checkout), so those land on the tab that
+ * holds the card that reads them.
+ */
+function initialTab(params: URLSearchParams | null): Tab {
+  const t = params?.get("tab");
+  if (t && (TABS as string[]).includes(t)) return t as Tab;
+  if (params?.get("gifts")) return "gifts";
+  if (params?.get("video")) return "design";
+  return "overview";
+}
+
 export default function EventDetailPage() {
   const { eventId } = useParams<{ eventId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const me = useMe();
+  const [tab, setTabState] = useState<Tab>(() => initialTab(searchParams));
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [rsvpFilter, setRsvpFilter] = useState<"all" | GuestRow["rsvpStatus"]>("all");
+  // Read once per visit: "has the day ended" is a label, not a live clock.
+  const [now] = useState(() => Date.now());
 
   const [event, setEvent] = useState<EventSummary | null>(null);
   const [guests, setGuests] = useState<GuestRow[]>([]);
@@ -126,7 +163,7 @@ export default function EventDetailPage() {
         });
       }
     } catch {
-      setError("Couldn't load this event.");
+      setLoadError("Couldn't load this event.");
     }
   }, [eventId]);
 
@@ -310,16 +347,45 @@ export default function EventDetailPage() {
     }
   }
 
-  if (error) return <p className="text-sm text-red-600">{error}</p>;
-  if (!event || !analytics) {
-    return (
-      <div className="flex justify-center py-16">
-        <Loader2 className="size-5 animate-spin text-slate-400" />
-      </div>
-    );
+
+  // Keeps the other query params (Stripe's ?video=paid is read by the video
+  // card while it polls) and doesn't add a history entry per tab click.
+  function setTab(next: Tab) {
+    setTabState(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === "overview") params.delete("tab");
+    else params.set("tab", next);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }
 
+  if (loadError) {
+    return (
+      <EmptyState
+        icon={TriangleAlert}
+        title={loadError}
+        action={
+          <Link href="/dashboard">
+            <Button variant="outline" className="rounded-full">
+              Back to your events
+            </Button>
+          </Link>
+        }
+      />
+    );
+  }
+  if (!event || !analytics) return <PageSpinner />;
+
   const invitationUrl = `${SITE_URL}/e/${event.slug}`;
+  const published = event.status === "published";
+  const phase = eventPhase(event, now);
+  const ended = effectiveEnd(event) < now;
+  const whenLabel = `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`;
+  // Display hints only: the API decides VIDEO_INVITES / CASH_GIFTS
+  // (/auth/me features), and each card also renders nothing on the API's 404.
+  const giftsOn = me?.features?.cashGifts === true;
+  const videoOn = me?.features?.videoInvites === true;
+  const hasCard = Boolean((event as EventSummary & { cardImageKey?: string | null }).cardImageKey);
 
   // Compared against the baseline captured on first load, not the live server
   // value — that gets cleared moments after the page renders, and the
@@ -328,6 +394,7 @@ export default function EventDetailPage() {
     Boolean(g.respondedAt) &&
     (!seenBaseline || new Date(g.respondedAt!) > new Date(seenBaseline));
   const newResponses = guests.filter(isNewResponse).length;
+  const responded = guests.filter((g) => g.respondedAt);
 
   async function copy(text: string, label: string) {
     await navigator.clipboard.writeText(text);
@@ -335,316 +402,554 @@ export default function EventDetailPage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  // --- journey ---------------------------------------------------------------
+  type StepState = "done" | "todo" | "warn" | "optional";
+  const steps: { key: string; label: string; detail: string; state: StepState; tab: Tab }[] = [
+    {
+      key: "design",
+      label: "Design",
+      detail: event.cardStale ? "Card out of date" : hasCard ? "Card saved" : "Card optional",
+      state: event.cardStale ? "warn" : hasCard ? "done" : "optional",
+      tab: "design",
+    },
+    {
+      key: "publish",
+      label: "Publish",
+      detail: published ? "Link is live" : "Still a draft",
+      state: published ? "done" : "todo",
+      tab: "overview",
+    },
+    {
+      key: "guests",
+      label: "Guests",
+      detail:
+        uninvited.length > 0
+          ? `${uninvited.length} not sent`
+          : guests.length > 0
+            ? `${guests.length} on the list`
+            : "None yet",
+      state: uninvited.length > 0 ? "warn" : guests.length > 0 ? "done" : "todo",
+      tab: "guests",
+    },
+    {
+      key: "rsvps",
+      label: "Replies",
+      detail: `${responded.length} of ${guests.length} replied`,
+      state: guests.length > 0 && analytics.rsvp.pending === 0 ? "done" : responded.length > 0 ? "optional" : "todo",
+      tab: "rsvps",
+    },
+    {
+      key: "after",
+      label: "After",
+      detail: event.photoAlbumUrl ? "Album shared" : ended ? "Share photos" : "After the day",
+      state: event.photoAlbumUrl ? "done" : "optional",
+      tab: "after",
+    },
+  ];
+
+  const publishButtons = (
+    <div className="flex flex-wrap gap-2">
+      {/* The preview link is minted per click, scoped to this event and dead
+          in two hours. */}
+      <Button variant="outline" className="rounded-full" disabled={previewing} onClick={onPreview}>
+        {previewing ? <Loader2 className="size-4 animate-spin" /> : <Eye className="size-4" />}
+        Preview
+      </Button>
+      <Button className="rounded-full" onClick={onPublish} disabled={publishing}>
+        {publishing ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
+        Publish
+      </Button>
+    </div>
+  );
+
+  // The one thing to do next, said plainly on the Overview.
+  const next: { title: string; body: string; action: React.ReactNode } | null = !published
+    ? {
+        title: "Publish when it looks right",
+        body: "Your invitation is a draft: the link doesn't work for guests yet. Preview it, then publish. Publishing sends nothing — you add guests after.",
+        action: publishButtons,
+      }
+    : uninvited.length > 0
+      ? {
+          title: `${uninvited.length} invitation${uninvited.length === 1 ? "" : "s"} still to send`,
+          body: "Their invitation didn't go out yet. Send them from the Guests tab.",
+          action: (
+            <Button className="rounded-full" onClick={() => setTab("guests")}>
+              <Mail className="size-4" />
+              Go to guests
+            </Button>
+          ),
+        }
+      : guests.length === 0 && !ended
+        ? {
+            title: "Invite your guests",
+            body: "Paste your guest list and they're emailed straight away — or share the link, a WhatsApp message or the QR code yourself.",
+            action: (
+              <Button className="rounded-full" onClick={() => setTab("guests")}>
+                <UserPlus className="size-4" />
+                Add guests
+              </Button>
+            ),
+          }
+        : ended && !event.photoAlbumUrl
+          ? {
+              title: "Share the photos",
+              body: "The day is over. Point guests at your shared album and thank them in one go.",
+              action: (
+                <Button className="rounded-full" onClick={() => setTab("after")}>
+                  <PartyPopper className="size-4" />
+                  After the event
+                </Button>
+              ),
+            }
+          : null;
+
+  const tabs: { value: Tab; label: string; icon: typeof Users; badge?: number }[] = [
+    { value: "overview", label: "Overview", icon: LayoutDashboard },
+    { value: "design", label: "Design", icon: Palette },
+    { value: "guests", label: "Guests", icon: Users, badge: guests.length || undefined },
+    { value: "rsvps", label: "RSVPs", icon: Check, badge: newResponses || undefined },
+    ...(giftsOn ? [{ value: "gifts" as Tab, label: "Gifts", icon: Gift }] : []),
+    { value: "after", label: "After", icon: PartyPopper },
+    { value: "settings", label: "Settings", icon: Settings },
+  ];
+  // A ?tab=gifts link for an account without gifts falls back to Overview
+  // (once /auth/me has answered).
+  const activeTab: Tab = tab === "gifts" && !giftsOn && me !== undefined ? "overview" : tab;
+  const show = (t: Tab) => activeTab === t;
+
+  const filteredResponses = guests.filter((g) => rsvpFilter === "all" || g.rsvpStatus === rsvpFilter);
+  const statusPill = <StatusPill status={phase === "past" ? "past" : event.status} />;
+
   return (
     <div className="space-y-6">
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
-      >
-        <ArrowLeft className="size-4" />
-        Back to events
-      </Link>
+      <BackLink href="/dashboard">All events</BackLink>
 
-      {/* The page header doubles as the at-a-glance summary of the invitation:
-          what it is, when and where, and how to reach it. Before, the date and
-          location only appeared on the guest-facing page, so a host checking a
-          detail had to open their own invitation to read it back. */}
-      <header className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      {/* The header doubles as the at-a-glance summary: what it is, when and
+          where, the link guests use, and where the event is in the journey. */}
+      <header className="rounded-2xl border border-zinc-200 bg-white/90 p-5 shadow-sm shadow-zinc-900/5 backdrop-blur-sm sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">{event.title}</h1>
-              <Badge variant={event.status === "published" ? "attending" : "outline"}>
-                {event.status}
-              </Badge>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-slate-600">
+            {statusPill}
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">{event.title}</h1>
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-zinc-600">
               <span className="flex items-center gap-1.5">
-                <CalendarDays className="size-4 text-slate-400" />
+                <CalendarDays className="size-4 text-zinc-400" />
                 {formatEventDate(event.startsAt, event.timezone)}
                 {" · "}
                 {formatEventTime(event.startsAt, event.timezone)}
-                <span className="text-slate-400">
-                  {formatTimeZoneLabel(event.startsAt, event.timezone)}
-                </span>
+                <span className="text-zinc-400">{formatTimeZoneLabel(event.startsAt, event.timezone)}</span>
               </span>
               {event.locationName ? (
                 <span className="flex items-center gap-1.5">
-                  <MapPin className="size-4 text-slate-400" />
+                  <MapPin className="size-4 text-zinc-400" />
                   {event.locationName}
                 </span>
               ) : null}
               <span className="flex items-center gap-1.5">
-                <Users className="size-4 text-slate-400" />
-                {event.headcount} attending
+                <Users className="size-4 text-zinc-400" />
+                {/* From analytics: the single-event row doesn't carry the
+                    list projection's headcount. */}
+                {analytics.rsvp.headcount} attending
                 {event.capacity ? ` of ${event.capacity}` : ""}
               </span>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {event.status !== "published" ? (
-              <>
-                {/* Checking the design used to mean publishing and hoping
-                    nobody opened the link in between. The preview link is
-                    minted per click, scoped to this event and dead in two
-                    hours. */}
-                <Button variant="outline" disabled={previewing} onClick={onPreview}>
-                  {previewing ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Eye className="size-4" />
-                  )}
-                  Preview
-                </Button>
-                <Button onClick={onPublish} disabled={publishing}>
-                  {publishing ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Send className="size-4" />
-                  )}
-                  Publish
-                </Button>
-              </>
+            {!published ? (
+              publishButtons
             ) : (
               <a href={invitationUrl} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline">
+                <Button variant="outline" className="rounded-full">
                   <Eye className="size-4" />
-                  Preview
+                  View invitation
                 </Button>
               </a>
             )}
             <Link href={`/dashboard/events/${eventId}/edit`}>
-              <Button variant="outline">
+              <Button variant="outline" className="rounded-full">
                 <Pencil className="size-4" />
-                Edit
+                Edit details
               </Button>
             </Link>
-            <Link href={`/dashboard/events/${eventId}/design`}>
-              <Button variant="outline">
-                <Palette className="size-4" />
-                Design card
-              </Button>
-            </Link>
-            <Button variant="outline" onClick={() => downloadGuestCsv(eventId, event.slug)}>
-              <Download className="size-4" />
-              Download CSV
-            </Button>
           </div>
         </div>
 
-        <div className="mt-5 border-t border-slate-100 pt-4">
-          {event.status === "published" ? (
+        <div className="mt-5 border-t border-zinc-100 pt-4">
+          {published ? (
             <div className="flex flex-wrap items-center gap-2">
-              <code className="min-w-0 truncate rounded bg-slate-100 px-2 py-1 text-xs text-slate-700">
+              <code className="min-w-0 truncate rounded-lg bg-zinc-100 px-2.5 py-1.5 text-xs text-zinc-700">
                 {invitationUrl}
               </code>
               <Button variant="ghost" size="sm" onClick={() => copy(invitationUrl, "link")}>
                 <Copy className="size-3.5" />
-                {copied === "link" ? "Copied" : "Copy"}
+                {copied === "link" ? "Copied" : "Copy link"}
               </Button>
             </div>
           ) : (
             /* Loud on purpose. A host who thinks their invitation is out, when
                it is actually a draft whose link 404s, finds out from a guest —
-               usually too late. This is the one state on the page worth
-               shouting about. */
+               usually too late. */
             <p className="flex items-center gap-2 text-sm font-bold text-red-600">
               <TriangleAlert className="size-4 shrink-0" />
               This is a draft — the link doesn&apos;t work for guests until you publish it.
             </p>
           )}
         </div>
+
+        {/* Journey: one step per stage; each opens its tab. */}
+        <ol className="-mx-1 mt-5 flex gap-2 overflow-x-auto px-1 pb-1">
+          {steps.map((s, i) => (
+            <li key={s.key} className="min-w-[8.5rem] flex-1">
+              <button
+                type="button"
+                onClick={() => setTab(s.tab)}
+                className="flex w-full items-center gap-2.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-left transition hover:border-zinc-300"
+              >
+                <span
+                  className={cn(
+                    "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                    s.state === "done" && "bg-emerald-500 text-white",
+                    s.state === "warn" && "bg-amber-400 text-amber-950",
+                    s.state === "todo" && "bg-zinc-900 text-white",
+                    s.state === "optional" && "bg-zinc-100 text-zinc-500",
+                  )}
+                >
+                  {s.state === "done" ? <Check className="size-3.5" /> : s.state === "warn" ? "!" : i + 1}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-zinc-900">{s.label}</span>
+                  <span className="block truncate text-xs text-zinc-500">{s.detail}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ol>
       </header>
 
-      {/* The card image is flattened once and never re-rendered, so an edit to
-          the title, date or place leaves it showing the old ones — in every
-          chat it was forwarded to, and in the link preview, silently, while
-          this page and the invitation both look correct. Amber rather than red:
-          nothing is broken, but it is wrong, and only the host can fix it. */}
-      {event.cardStale && (
-        <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
-          <TriangleAlert className="size-4 shrink-0 text-amber-700" />
-          <p className="flex-1 text-sm text-amber-900">
-            Your saved invitation card is out of date — this event has changed since it was made.
-            Link previews and anything already shared still show the old details.
-          </p>
-          <Link href={`/dashboard/events/${eventId}/design`}>
-            <Button size="sm" variant="outline">
-              <Palette className="size-4" />
-              Update the card
-            </Button>
-          </Link>
-        </div>
-      )}
-
-      {event.status === "published" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Send className="size-4 text-slate-400" />
-              Invite people
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ShareButtons
-              url={invitationUrl}
-              subject={event.title}
-              message={buildInviteMessage({
-                title: event.title,
-                // The zone belongs in a shared message too — it used to ride
-                // along inside formatEventTime, which no longer carries it.
-                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`,
-                url: invitationUrl,
-              })}
-            />
-            <p className="mt-3 text-sm text-slate-500">
-              These open your own WhatsApp, mail app or messages — the invitation comes from you,
-              not from us. Nothing is sent automatically, and there&apos;s no sending limit.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {/* Only for a published event — a QR pointing at a draft would scan to a
-          404, and printing one is the sort of mistake you find out about from a
-          guest standing in your hallway. */}
-      {event.status === "published" ? (
-        <>
-          <EventQrCode url={invitationUrl} slug={event.slug} />
-          {event.allowPublicRsvp === false ? (
-            <p className="-mt-3 text-sm text-amber-700">
-              This event is invitation-only, so scanning the code shows the invitation but
-              can&apos;t be used to reply. Turn on &ldquo;anyone with the link can RSVP&rdquo;, or share
-              each guest&apos;s personal link instead.
-            </p>
-          ) : null}
-        </>
-      ) : null}
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2">
-            <ImagePlus className="size-4 text-slate-400" />
-            Cover image
-          </CardTitle>
-          <div>
-            <input
-              ref={coverRef}
-              type="file"
-              accept="image/jpeg,image/png,image/webp,image/avif"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                setUploading(true);
-                setError(null);
-                try {
-                  await uploadCoverImage(eventId, file);
-                  await load();
-                } catch {
-                  setError("Couldn't upload that image.");
-                } finally {
-                  setUploading(false);
-                  e.target.value = "";
-                }
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={uploading}
-              onClick={() => coverRef.current?.click()}
-            >
-              {uploading ? <Loader2 className="size-4 animate-spin" /> : null}
-              {event.coverImageKey ? "Replace" : "Upload"}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {event.coverImageKey ? (
-            <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50">
-              {coverUrl ? (
-                /* Presigned R2 URL on a per-request host — next/image would need
-                   every one of them in remotePatterns, and optimising a preview
-                   the host looks at once buys nothing. */
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={coverUrl}
-                  alt="Event cover"
-                  className="h-40 w-full object-cover sm:h-48"
-                />
-              ) : (
-                <div className="flex h-40 items-center justify-center sm:h-48">
-                  <Loader2 className="size-5 animate-spin text-slate-400" />
-                </div>
+      {/* Tabs: sticky under the site header so they stay reachable on a long guest list. */}
+      <nav
+        aria-label="Event sections"
+        className="sticky top-[110px] z-20 rounded-full border border-zinc-200 bg-white/90 p-1 shadow-sm shadow-zinc-900/5 backdrop-blur md:top-[72px]"
+      >
+        <div role="tablist" className="flex gap-1 overflow-x-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.value}
+              onClick={() => setTab(t.value)}
+              className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
+                activeTab === t.value ? "bg-zinc-900 text-white" : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900",
               )}
-            </div>
-          ) : null}
-          <p className="text-sm text-slate-500">
-            {event.coverImageKey
-              ? "Replacing it deletes the old one."
-              : "Optional — until you add one, the design's own artwork fills the top of the invitation. JPEG, PNG, WebP or AVIF, up to 10MB."}
-          </p>
-        </CardContent>
-      </Card>
+            >
+              <t.icon className="size-4" />
+              {t.label}
+              {t.badge ? (
+                <span
+                  className={cn(
+                    "rounded-full px-1.5 text-xs tabular-nums",
+                    activeTab === t.value ? "bg-white/20" : "bg-zinc-100 text-zinc-500",
+                  )}
+                >
+                  {t.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </nav>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Invite guests</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {/* Guests cannot be added to a draft, and this is the fix for the
-              worst failure this product had: adding guests only ever mailed
-              them if the event was already published, so the natural order —
-              create, paste the list, publish — produced a live event with a
-              full guest list and not one invitation sent. Every step reported
-              success. Nobody was told.
+      {/* Action feedback stays visible whichever tab the action came from. */}
+      {error ? (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+      {addResult ? (
+        <p className="rounded-xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm text-zinc-700">{addResult}</p>
+      ) : null}
 
-              Removing the entry box while the event is a draft makes that
-              sequence impossible to perform rather than merely recoverable.
-              The card itself stays, saying what unlocks it: a host who cannot
-              find where guests go is a different failure, not a fixed one. */}
-          {event.status !== "published" ? (
-            <p className="text-sm text-slate-600">
-              Publish the event first. Guests you add after that are emailed their invitation
-              straight away, so the link has to be working before anyone receives it.
+      {/* ---------------- Overview ---------------- */}
+      <div hidden={!show("overview")} className="space-y-6">
+        {next ? (
+          <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 sm:p-6">
+            <p className="text-xs font-semibold tracking-[.2em] text-amber-800 uppercase">Next step</p>
+            <h2 className="mt-1 text-lg font-semibold text-zinc-900">{next.title}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-zinc-600">{next.body}</p>
+            <div className="mt-4">{next.action}</div>
+          </section>
+        ) : null}
+
+        {newResponses > 0 ? (
+          <button
+            type="button"
+            onClick={() => setTab("rsvps")}
+            className="flex w-full items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm text-emerald-900"
+          >
+            <BellDot className="size-4 shrink-0" />
+            <span>
+              <strong>
+                {newResponses} new {newResponses === 1 ? "response" : "responses"}
+              </strong>{" "}
+              since you last looked — see RSVPs.
+            </span>
+          </button>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile label="Going" value={analytics.rsvp.headcount} hint={`${analytics.rsvp.attending} replied yes`} tone="good" />
+          <StatTile label="Awaiting reply" value={analytics.rsvp.pending} />
+          <StatTile
+            label="Response rate"
+            value={`${Math.round(analytics.responseRate * 100)}%`}
+            hint={`${analytics.rsvp.invited} invited`}
+          />
+          <StatTile label="Views" value={analytics.views.total} hint={`${analytics.views.uniqueVisitors} unique`} />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Panel
+            title="Latest replies"
+            icon={Check}
+            actions={
+              <Button variant="ghost" size="sm" onClick={() => setTab("rsvps")}>
+                All RSVPs
+              </Button>
+            }
+          >
+            {responded.length === 0 ? (
+              <p className="text-sm text-zinc-500">No replies yet.</p>
+            ) : (
+              <ul className="divide-y divide-zinc-100">
+                {[...responded]
+                  .sort((a, b) => new Date(b.respondedAt!).getTime() - new Date(a.respondedAt!).getTime())
+                  .slice(0, 5)
+                  .map((g) => (
+                    <li key={g.id} className="flex items-center gap-3 py-2 text-sm">
+                      {isNewResponse(g) ? <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" /> : null}
+                      <span className="min-w-0 flex-1 truncate font-medium text-zinc-900">{g.name}</span>
+                      <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
+                      <span className="w-20 text-right text-xs text-zinc-500">{formatRelative(g.respondedAt!)}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Make it special" icon={PartyPopper} description="Optional extras for this invitation.">
+            <ul className="space-y-1 text-sm">
+              <ExtraRow
+                icon={Palette}
+                title="Invitation card"
+                body={
+                  event.cardStale
+                    ? "Out of date — the event changed since it was made."
+                    : hasCard
+                      ? "Saved. Used on WhatsApp and in link previews."
+                      : "Design the picture you send on WhatsApp."
+                }
+                warn={event.cardStale}
+                onClick={() => setTab("design")}
+              />
+              {videoOn ? (
+                <ExtraRow
+                  icon={Clapperboard}
+                  title="Video invite"
+                  body="A short panda video with your words."
+                  onClick={() => setTab("design")}
+                />
+              ) : null}
+              {giftsOn ? (
+                <ExtraRow
+                  icon={Gift}
+                  title="Cash gifts"
+                  body="Let guests send a gift with their RSVP."
+                  onClick={() => setTab("gifts")}
+                />
+              ) : null}
+              <ExtraRow
+                icon={ImagePlus}
+                title="Photo album"
+                body="Share the photos with everyone after the day."
+                onClick={() => setTab("after")}
+              />
+            </ul>
+          </Panel>
+        </div>
+      </div>
+
+      {/* ---------------- Design ---------------- */}
+      <div hidden={!show("design")} className="space-y-6">
+        {/* The card image is flattened once and never re-rendered, so an edit to
+            the title, date or place leaves it showing the old ones — in every
+            chat it was forwarded to, and in the link preview, silently. Amber
+            rather than red: nothing is broken, but it is wrong. */}
+        {event.cardStale && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <TriangleAlert className="size-4 shrink-0 text-amber-700" />
+            <p className="flex-1 text-sm text-amber-900">
+              Your saved invitation card is out of date — this event has changed since it was made.
+              Link previews and anything already shared still show the old details.
             </p>
-          ) : (
+            <Link href={`/dashboard/events/${eventId}/design`}>
+              <Button size="sm" variant="outline">
+                <Palette className="size-4" />
+                Update the card
+              </Button>
+            </Link>
+          </div>
+        )}
+
+        <Panel
+          title="Invitation card"
+          icon={Palette}
+          description="The picture you send on WhatsApp, and the preview people see when the link is shared. The invitation page itself keeps its own layout."
+          actions={
+            <Link href={`/dashboard/events/${eventId}/design`}>
+              <Button size="sm" className="rounded-full">
+                <Palette className="size-4" />
+                {hasCard ? "Edit the card" : "Design the card"}
+              </Button>
+            </Link>
+          }
+        >
+          <p className="text-sm text-zinc-500">
+            {hasCard
+              ? event.cardStale
+                ? "Saved, but out of date."
+                : "Saved and up to date."
+              : "No card saved yet — optional."}
+          </p>
+        </Panel>
+
+        <Panel
+          title="Cover image"
+          icon={ImagePlus}
+          actions={
             <>
-              {/* One textarea rather than a repeating row form: hosts arrive with a
-                  list already written down somewhere, and retyping it into
-                  individual fields is the friction that stops them inviting anyone. */}
+              <input
+                ref={coverRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setUploading(true);
+                  setError(null);
+                  try {
+                    await uploadCoverImage(eventId, file);
+                    await load();
+                  } catch {
+                    setError("Couldn't upload that image.");
+                  } finally {
+                    setUploading(false);
+                    e.target.value = "";
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                disabled={uploading}
+                onClick={() => coverRef.current?.click()}
+              >
+                {uploading ? <Loader2 className="size-4 animate-spin" /> : null}
+                {event.coverImageKey ? "Replace" : "Upload"}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            {event.coverImageKey ? (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50">
+                {coverUrl ? (
+                  /* Presigned R2 URL on a per-request host — next/image would need
+                     every one of them in remotePatterns, and optimising a preview
+                     the host looks at once buys nothing. */
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverUrl} alt="Event cover" className="h-40 w-full object-cover sm:h-48" />
+                ) : (
+                  <div className="flex h-40 items-center justify-center sm:h-48">
+                    <Loader2 className="size-5 animate-spin text-zinc-400" />
+                  </div>
+                )}
+              </div>
+            ) : null}
+            <p className="text-sm text-zinc-500">
+              {event.coverImageKey
+                ? "Replacing it deletes the old one."
+                : "Optional — until you add one, the design's own artwork fills the top of the invitation. JPEG, PNG, WebP or AVIF, up to 10MB."}
+            </p>
+          </div>
+        </Panel>
+
+        {/* Renders nothing while the API has video invites off for this account. */}
+        <VideoInviteCard
+          eventId={eventId}
+          title={event.title}
+          defaults={{
+            headline: event.title,
+            when: `${formatEventDate(event.startsAt, event.timezone)} · ${formatEventTime(event.startsAt, event.timezone)}`,
+            where: event.locationName ?? "",
+          }}
+        />
+      </div>
+
+      {/* ---------------- Guests ---------------- */}
+      <div hidden={!show("guests")} className="space-y-6">
+        <Panel title="Invite guests" icon={UserPlus}>
+          {/* Guests cannot be added to a draft. Adding guests only ever mailed
+              them if the event was already published, so the natural order —
+              create, paste the list, publish — once produced a live event with
+              a full guest list and not one invitation sent. Removing the entry
+              box while the event is a draft makes that impossible; the panel
+              stays, saying what unlocks it. */}
+          {!published ? (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-600">
+                Publish the event first. Guests you add after that are emailed their invitation
+                straight away, so the link has to be working before anyone receives it.
+              </p>
+              {publishButtons}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* One textarea rather than a repeating row form: hosts arrive
+                  with a list already written down somewhere. */}
               <Textarea
                 rows={4}
                 value={bulkGuests}
                 onChange={(e) => setBulkGuests(e.target.value)}
                 placeholder={"One per line:\nMeera Iyer, meera@example.com\nSanjay Rao"}
               />
+              <p className="text-xs text-zinc-500">
+                Guests with an email address are sent their invitation as soon as you add them.
+              </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" disabled={addingGuests || !bulkGuests.trim()} onClick={onAddGuests}>
+                <Button
+                  size="sm"
+                  className="rounded-full"
+                  disabled={addingGuests || !bulkGuests.trim()}
+                  onClick={onAddGuests}
+                >
                   {addingGuests ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
                   Add guests
                 </Button>
-                {/* There is deliberately no "email the ones who haven't
-                    replied" button. A guest gets exactly one invitation, and
-                    silence is an answer the product does not get to nag at.
-                    Chasing a non-responder is what the link, WhatsApp, SMS and
-                    the QR code are for — all free, none of them a second
-                    unsolicited email. The API enforces this too, so removing
-                    the button is not the only thing holding the rule up. */}
+                {/* Deliberately no "email the ones who haven't replied" button:
+                    a guest gets exactly one invitation, and the API enforces it. */}
               </div>
 
-              {/* Adding a guest to a published event mails them straight away,
-                  so this panel is not the normal path — a non-zero count here
-                  means a send did not land: the day's mail allowance ran out
-                  mid-list, the gateway was unreachable, or an address was
-                  rejected. That is exactly when a host needs a standing
-                  statement of who is still waiting and a way to try again,
-                  rather than a toast that has already scrolled away. */}
+              {/* A non-zero count here means a send did not land (the day's
+                  mail allowance, the gateway, a rejected address): a standing
+                  statement of who is still waiting, and a way to try again. */}
               {uninvited.length > 0 ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                   <p className="text-sm font-medium text-amber-900">
                     {uninvited.length} guest{uninvited.length === 1 ? "" : "s"} still waiting for an
                     invitation
@@ -659,132 +964,271 @@ export default function EventDetailPage() {
                   </Button>
                 </div>
               ) : null}
-            </>
-          )}
 
-          {addResult ? <p className="text-sm text-slate-600">{addResult}</p> : null}
-
-          {/* Named, not counted. A host told "62 failed" can do nothing with
-              it; a host shown who they were can re-send to exactly those. The
-              daily send allowance makes this the ordinary way a large list
-              goes out — in two passes — rather than an error state. */}
-          {failedGuests.length > 0 ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-              <p className="text-sm font-medium text-amber-900">
-                {failedGuests.length} invitation{failedGuests.length === 1 ? "" : "s"} didn&apos;t
-                go out
-              </p>
-              <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-sm text-amber-900/80">
-                {failedGuests.map((g) => (
-                  <li key={g.id}>
-                    {g.name} <span className="text-amber-900/60">· {g.email}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-amber-900/70">
-                There&apos;s a daily limit on how much mail can go out. If you&apos;ve just sent a
-                lot, try these again tomorrow.
-              </p>
-              <Button
-                size="sm"
-                variant="outline"
-                className="mt-3"
-                disabled={retrying}
-                onClick={onRetryFailed}
-              >
-                {retrying ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
-                Try these again
-              </Button>
+              {/* Named, not counted: a host shown who they were can re-send to
+                  exactly those. */}
+              {failedGuests.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-sm font-medium text-amber-900">
+                    {failedGuests.length} invitation{failedGuests.length === 1 ? "" : "s"} didn&apos;t
+                    go out
+                  </p>
+                  <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-sm text-amber-900/80">
+                    {failedGuests.map((g) => (
+                      <li key={g.id}>
+                        {g.name} <span className="text-amber-900/60">· {g.email}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-xs text-amber-900/70">
+                    There&apos;s a daily limit on how much mail can go out. If you&apos;ve just sent a
+                    lot, try these again tomorrow.
+                  </p>
+                  <Button size="sm" variant="outline" className="mt-3" disabled={retrying} onClick={onRetryFailed}>
+                    {retrying ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                    Try these again
+                  </Button>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </CardContent>
-      </Card>
+          )}
+        </Panel>
 
-      {/* Paid add-on; renders nothing while the API has it switched off. */}
-      <VideoInviteCard
-        eventId={eventId}
-        title={event.title}
-        defaults={{
-          headline: event.title,
-          when: `${formatEventDate(event.startsAt, event.timezone)} · ${formatEventTime(event.startsAt, event.timezone)}`,
-          where: event.locationName ?? "",
-        }}
-      />
+        {published ? (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Panel
+              title="Share it yourself"
+              icon={Send}
+              description="These open your own WhatsApp, mail app or messages — the invitation comes from you, not from us. Nothing is sent automatically, and there's no sending limit."
+            >
+              <ShareButtons
+                url={invitationUrl}
+                subject={event.title}
+                message={buildInviteMessage({ title: event.title, whenLabel, url: invitationUrl })}
+              />
+            </Panel>
+            {/* Only for a published event — a QR pointing at a draft would scan to a 404. */}
+            <div className="space-y-2">
+              <EventQrCode url={invitationUrl} slug={event.slug} />
+              {event.allowPublicRsvp === false ? (
+                <p className="px-1 text-sm text-amber-700">
+                  This event is invitation-only, so scanning the code shows the invitation but
+                  can&apos;t be used to reply. Turn on &ldquo;anyone with the link can RSVP&rdquo;, or share
+                  each guest&apos;s personal link instead.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
-      {/* Renders nothing while CASH_GIFTS is off for this account. */}
-      <CashGiftsCard eventId={eventId} />
-
-      <PhotoAlbumCard
-        eventId={eventId}
-        albumUrl={event.photoAlbumUrl ?? null}
-        recipientCounts={{
-          all: guests.filter((g) => g.email).length,
-          attending: guests.filter((g) => g.email && g.rsvpStatus === "attending").length,
-        }}
-      />
-
-      {error ? (
-        <p role="alert" className="text-sm text-red-600">
-          {error}
-        </p>
-      ) : null}
-
-      {newResponses > 0 ? (
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          <BellDot className="size-4 shrink-0" />
-          <span>
-            <strong>
-              {newResponses} new {newResponses === 1 ? "response" : "responses"}
-            </strong>{" "}
-            since you last looked — marked below.
-          </span>
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Going" value={`${analytics.rsvp.headcount}`} hint={`${analytics.rsvp.attending} responded yes`} />
-        <Stat label="Awaiting reply" value={`${analytics.rsvp.pending}`} />
-        <Stat
-          label="Response rate"
-          value={`${Math.round(analytics.responseRate * 100)}%`}
-          hint={`${analytics.rsvp.invited} invited`}
-        />
-        <Stat
-          label="Views"
-          value={`${analytics.views.total}`}
-          hint={`${analytics.views.uniqueVisitors} unique`}
-        />
-      </div>
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="size-4 text-slate-400" />
-            Guest list
-          </CardTitle>
-          <span className="text-sm text-slate-500">{guests.length} guests</span>
-        </CardHeader>
-        <CardContent>
+        <Panel
+          title="Guest list"
+          icon={Users}
+          description="Each guest has a personal link, so their reply arrives already attributed to them."
+          actions={<span className="text-sm text-zinc-500">{guests.length} guests</span>}
+        >
           {guests.length === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">
+            <p className="py-6 text-center text-sm text-zinc-500">
               No guests yet. Share the invitation link, or add guests to send personal invites.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Phones: one card per guest instead of a sideways-scrolling table. */}
+            <ul className="divide-y divide-zinc-100 sm:hidden">
+              {guests.map((g) => (
+                <li key={g.id} className="py-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-zinc-900">{g.name}</div>
+                      {g.email ? <div className="truncate text-xs text-zinc-500">{g.email}</div> : null}
+                    </div>
+                    <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                    <span className={g.invitedAt ? "text-emerald-700" : g.email && g.source !== "public" ? "font-medium text-amber-700" : "text-zinc-500"}>
+                      {g.source === "public"
+                        ? "Replied via the link"
+                        : g.invitedAt
+                          ? `Emailed ${formatRelative(g.invitedAt)}`
+                          : g.email
+                            ? "Not sent yet"
+                            : "No email — share their link"}
+                      {g.firstViewedAt ? " · opened" : ""}
+                    </span>
+                    <GuestShareButtons
+                      url={`${invitationUrl}?t=${g.inviteToken}`}
+                      subject={event.title}
+                      email={g.email}
+                      phone={g.phone}
+                      message={buildInviteMessage({
+                        title: event.title,
+                        whenLabel,
+                        url: `${invitationUrl}?t=${g.inviteToken}`,
+                        guestName: g.name.split(" ")[0],
+                      })}
+                    />
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="-mx-5 hidden overflow-x-auto px-5 sm:-mx-6 sm:block sm:px-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
-                    <th className="pb-2 pr-4 font-medium">Name</th>
-                    <th className="pb-2 pr-4 font-medium">RSVP</th>
-                    <th className="pb-2 pr-4 font-medium">Replied</th>
-                    <th className="pb-2 pr-4 font-medium">Party</th>
-                    <th className="pb-2 pr-4 font-medium">Notes</th>
-                    <th className="pb-2 font-medium">Link</th>
+                  <tr className="border-b border-zinc-200 text-left text-xs tracking-wide text-zinc-500 uppercase">
+                    <th className="pr-4 pb-2 font-medium">Guest</th>
+                    <th className="pr-4 pb-2 font-medium">Invitation</th>
+                    <th className="pr-4 pb-2 font-medium">Reply</th>
+                    <th className="pb-2 font-medium">Personal link</th>
                   </tr>
                 </thead>
                 <tbody>
                   {guests.map((g) => (
-                    <tr key={g.id} className="border-b border-slate-100 last:border-0">
+                    <tr key={g.id} className="border-b border-zinc-100 last:border-0">
+                      <td className="py-3 pr-4">
+                        <div className="font-medium text-zinc-900">{g.name}</div>
+                        {g.email ? <div className="text-xs text-zinc-500">{g.email}</div> : null}
+                      </td>
+                      <td className="py-3 pr-4 text-xs whitespace-nowrap">
+                        {g.source === "public" ? (
+                          <span className="text-zinc-500">Replied via the link</span>
+                        ) : g.invitedAt ? (
+                          <span className="text-emerald-700">Emailed {formatRelative(g.invitedAt)}</span>
+                        ) : g.email ? (
+                          <span className="font-medium text-amber-700">Not sent yet</span>
+                        ) : (
+                          <span className="text-zinc-500">No email — share their link</span>
+                        )}
+                        {g.firstViewedAt ? (
+                          <span className="mt-0.5 flex items-center gap-1 text-zinc-500">
+                            <Eye className="size-3" aria-hidden /> Opened
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
+                      </td>
+                      <td className="py-3">
+                        {/* Each guest's own link, so their reply arrives already
+                            attributed to them rather than as a stranger filling
+                            in the open form. */}
+                        <GuestShareButtons
+                          url={`${invitationUrl}?t=${g.inviteToken}`}
+                          subject={event.title}
+                          email={g.email}
+                          phone={g.phone}
+                          message={buildInviteMessage({
+                            title: event.title,
+                            whenLabel,
+                            url: `${invitationUrl}?t=${g.inviteToken}`,
+                            guestName: g.name.split(" ")[0],
+                          })}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            </>
+          )}
+        </Panel>
+      </div>
+
+      {/* ---------------- RSVPs ---------------- */}
+      <div hidden={!show("rsvps")} className="space-y-6">
+        {newResponses > 0 ? (
+          <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <BellDot className="size-4 shrink-0" />
+            <span>
+              <strong>
+                {newResponses} new {newResponses === 1 ? "response" : "responses"}
+              </strong>{" "}
+              since you last looked — marked below.
+            </span>
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile label="Going" value={analytics.rsvp.headcount} hint={`${analytics.rsvp.attending} replied yes`} tone="good" />
+          <StatTile label="Maybe" value={analytics.rsvp.maybe} />
+          <StatTile label="Can't come" value={analytics.rsvp.declined} />
+          <StatTile
+            label="Awaiting reply"
+            value={analytics.rsvp.pending}
+            hint={`${Math.round(analytics.responseRate * 100)}% replied`}
+          />
+        </div>
+
+        <Panel
+          title="Replies"
+          icon={Check}
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={() => downloadGuestCsv(eventId, event.slug)}
+            >
+              <Download className="size-4" />
+              Download CSV
+            </Button>
+          }
+        >
+          <div className="mb-4">
+            <Segmented
+              label="Filter replies"
+              value={rsvpFilter}
+              onChange={setRsvpFilter}
+              options={[
+                { value: "all", label: "All", count: guests.length },
+                { value: "attending", label: "Going", count: guests.filter((g) => g.rsvpStatus === "attending").length },
+                { value: "maybe", label: "Maybe", count: guests.filter((g) => g.rsvpStatus === "maybe").length },
+                { value: "declined", label: "Can't come", count: guests.filter((g) => g.rsvpStatus === "declined").length },
+                { value: "pending", label: "Awaiting", count: guests.filter((g) => g.rsvpStatus === "pending").length },
+              ]}
+            />
+          </div>
+          {filteredResponses.length === 0 ? (
+            <p className="py-6 text-center text-sm text-zinc-500">Nobody here yet.</p>
+          ) : (
+            <>
+            <ul className="divide-y divide-zinc-100 sm:hidden">
+              {filteredResponses.map((g) => (
+                <li key={g.id} className="py-3 text-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {isNewResponse(g) ? (
+                        <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" aria-label="New since you last looked" />
+                      ) : null}
+                      <span className="truncate font-medium text-zinc-900">{g.name}</span>
+                    </div>
+                    <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    {g.respondedAt ? `Replied ${formatRelative(g.respondedAt)}` : "No reply yet"}
+                    {g.rsvpStatus === "attending" ? ` · party of ${1 + g.plusOnes}` : ""}
+                    {g.plusOneNames?.length ? ` (+ ${g.plusOneNames.join(", ")})` : ""}
+                  </p>
+                  {g.dietaryNotes || g.message ? (
+                    <p className="mt-1 text-xs text-zinc-600">{[g.dietaryNotes, g.message].filter(Boolean).join(" · ")}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <div className="-mx-5 hidden overflow-x-auto px-5 sm:-mx-6 sm:block sm:px-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-200 text-left text-xs tracking-wide text-zinc-500 uppercase">
+                    <th className="pr-4 pb-2 font-medium">Name</th>
+                    <th className="pr-4 pb-2 font-medium">RSVP</th>
+                    <th className="pr-4 pb-2 font-medium">Replied</th>
+                    <th className="pr-4 pb-2 font-medium">Party</th>
+                    <th className="pb-2 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredResponses.map((g) => (
+                    <tr key={g.id} className="border-b border-zinc-100 last:border-0">
                       <td className="py-3 pr-4">
                         <div className="flex items-center gap-1.5">
                           {isNewResponse(g) ? (
@@ -794,97 +1238,141 @@ export default function EventDetailPage() {
                               title="New since you last looked"
                             />
                           ) : null}
-                          <span className="font-medium">{g.name}</span>
+                          <span className="font-medium text-zinc-900">{g.name}</span>
                         </div>
-                        {g.email ? <div className="text-xs text-slate-500">{g.email}</div> : null}
+                        {g.email ? <div className="text-xs text-zinc-500">{g.email}</div> : null}
                       </td>
                       <td className="py-3 pr-4">
                         <Badge variant={rsvpVariant[g.rsvpStatus]}>{g.rsvpStatus}</Badge>
                       </td>
-                      {/* When they answered, not merely that they did. A host
-                          chasing replies needs to tell "said yes months ago"
-                          from "said yes an hour ago", and the date is what a
-                          later argument about who confirmed first turns on.
-                          It moves when a guest changes their answer, so it
-                          always reads as the current reply's time. */}
+                      {/* When they answered, not merely that they did. It moves
+                          when a guest changes their answer, so it always reads
+                          as the current reply's time. */}
                       <td className="py-3 pr-4 whitespace-nowrap">
                         {g.respondedAt ? (
                           <>
                             <div title={new Date(g.respondedAt).toLocaleString()}>
                               {formatTimestamp(g.respondedAt, event.timezone)}
                             </div>
-                            <div className="text-xs text-slate-500">
-                              {formatRelative(g.respondedAt)}
-                            </div>
+                            <div className="text-xs text-zinc-500">{formatRelative(g.respondedAt)}</div>
                           </>
                         ) : (
-                          <span className="text-slate-400">—</span>
+                          <span className="text-zinc-400">—</span>
                         )}
                       </td>
                       <td className="py-3 pr-4">
                         {g.rsvpStatus === "attending" ? (
                           <>
                             <div>{1 + g.plusOnes}</div>
-                            {/* Names the guest supplied for the people they're
-                                bringing — what a host actually needs for place
-                                cards and a door list. */}
+                            {/* Names for the people they're bringing — what a
+                                host needs for place cards and a door list. */}
                             {g.plusOneNames?.length ? (
-                              <div className="text-xs text-slate-500">
-                                + {g.plusOneNames.join(", ")}
-                              </div>
+                              <div className="text-xs text-zinc-500">+ {g.plusOneNames.join(", ")}</div>
                             ) : null}
                           </>
                         ) : (
                           "—"
                         )}
                       </td>
-                      <td className="max-w-[16rem] py-3 pr-4 text-slate-600">
+                      <td className="max-w-[16rem] py-3 text-zinc-600">
                         {[g.dietaryNotes, g.message].filter(Boolean).join(" · ") || "—"}
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center gap-1">
-                          {g.firstViewedAt ? (
-                            <Eye
-                              className="size-3.5 shrink-0 text-slate-400"
-                              aria-label="Has opened the invitation"
-                            />
-                          ) : null}
-                          {/* Each guest's own link, so their reply arrives
-                              already attributed to them rather than as a
-                              stranger filling in the open form. */}
-                          <GuestShareButtons
-                            url={`${invitationUrl}?t=${g.inviteToken}`}
-                            subject={event.title}
-                            email={g.email}
-                            phone={g.phone}
-                            message={buildInviteMessage({
-                              title: event.title,
-                              // The zone belongs in a shared message too — it used to ride
-                // along inside formatEventTime, which no longer carries it.
-                whenLabel: `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`,
-                              url: `${invitationUrl}?t=${g.inviteToken}`,
-                              guestName: g.name.split(" ")[0],
-                            })}
-                          />
-                        </div>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            </>
           )}
-        </CardContent>
-      </Card>
+        </Panel>
+      </div>
 
-      {/* Last on the page and visually set apart, so it is never the thing a
-          host reaches for by accident while scanning RSVPs. */}
-      <Card className="border-red-200">
-        <CardHeader>
-          <CardTitle className="text-red-900">Delete this event</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="mb-4 max-w-prose text-sm text-slate-600">
+      {/* ---------------- Gifts ---------------- */}
+      {/* Mounted only when the API says cash gifts are on for this account; the
+          card itself also renders nothing on the API's 404. */}
+      {giftsOn ? (
+        <div hidden={!show("gifts")} className="space-y-3">
+          <CashGiftsCard eventId={eventId} />
+          <p className="px-1 text-xs text-zinc-500">
+            Payout status and Stripe tax forms are also under{" "}
+            <Link href="/dashboard/account" className="underline">
+              Account
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
+
+      {/* ---------------- After the event ---------------- */}
+      <div hidden={!show("after")} className="space-y-6">
+        {!ended ? (
+          <p className="rounded-xl border border-zinc-200 bg-white/90 px-4 py-3 text-sm text-zinc-600">
+            This is for after the day: share one album link with everyone, and keep a copy of the guest list.
+          </p>
+        ) : null}
+        <PhotoAlbumCard
+          eventId={eventId}
+          albumUrl={event.photoAlbumUrl ?? null}
+          recipientCounts={{
+            all: guests.filter((g) => g.email).length,
+            attending: guests.filter((g) => g.email && g.rsvpStatus === "attending").length,
+          }}
+        />
+        <Panel
+          title="Keep the guest list"
+          icon={Download}
+          description="Everyone, their reply, party size and notes, as a spreadsheet."
+          actions={
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              onClick={() => downloadGuestCsv(eventId, event.slug)}
+            >
+              <Download className="size-4" />
+              Download CSV
+            </Button>
+          }
+        />
+      </div>
+
+      {/* ---------------- Settings ---------------- */}
+      <div hidden={!show("settings")} className="space-y-6">
+        <Panel
+          title="Event details"
+          icon={Pencil}
+          description="Title, date and time, place, design, RSVP options (plus-ones, capacity, deadline, dietary notes) and the guestbook."
+          actions={
+            <Link href={`/dashboard/events/${eventId}/edit`}>
+              <Button size="sm" className="rounded-full">
+                <Pencil className="size-4" />
+                Edit details
+              </Button>
+            </Link>
+          }
+        >
+          <dl className="grid gap-3 text-sm sm:grid-cols-3">
+            <div>
+              <dt className="text-zinc-500">Who can reply</dt>
+              <dd className="mt-0.5 font-medium text-zinc-900">
+                {event.allowPublicRsvp === false ? "Invited guests only" : "Anyone with the link"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Capacity</dt>
+              <dd className="mt-0.5 font-medium text-zinc-900">{event.capacity ?? "No limit"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Status</dt>
+              <dd className="mt-0.5">{statusPill}</dd>
+            </div>
+          </dl>
+        </Panel>
+
+        {/* Last and visually set apart, so it is never the thing a host
+            reaches for by accident. */}
+        <Panel title="Delete this event" tone="danger">
+          <p className="mb-4 max-w-prose text-sm text-zinc-600">
             Removes the invitation, its guest list and every RSVP. Anyone holding the link — or a
             printed QR code — will find nothing there.
           </p>
@@ -894,20 +1382,45 @@ export default function EventDetailPage() {
             size="default"
             onDeleted={() => router.replace("/dashboard")}
           />
-        </CardContent>
-      </Card>
+        </Panel>
+      </div>
     </div>
   );
 }
 
-function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function ExtraRow({
+  icon: Icon,
+  title,
+  body,
+  warn,
+  onClick,
+}: {
+  icon: typeof Users;
+  title: string;
+  body: string;
+  warn?: boolean;
+  onClick: () => void;
+}) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-        <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-        {hint ? <p className="mt-0.5 text-xs text-slate-500">{hint}</p> : null}
-      </CardContent>
-    </Card>
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-zinc-50"
+      >
+        <span
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-full",
+            warn ? "bg-amber-100 text-amber-700" : "bg-amber-50 text-[#b98d4f]",
+          )}
+        >
+          <Icon className="size-4" />
+        </span>
+        <span className="min-w-0">
+          <span className="block font-medium text-zinc-900">{title}</span>
+          <span className="block text-zinc-500">{body}</span>
+        </span>
+      </button>
+    </li>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { Loader2 } from "lucide-react";
+import { PageHeader } from "../../../ui";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
@@ -129,20 +129,16 @@ export default function EditEventPage() {
 
   return (
     <div>
-      <Link
-        href={`/dashboard/events/${eventId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
-      >
-        <ArrowLeft className="size-4" />
-        Back to {title || "the event"}
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold">Edit event</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        {published
-          ? "This invitation is published — changes are live for guests as soon as you save."
-          : "This event is still a draft, so nothing you change here is visible to guests yet."}
-      </p>
+      <PageHeader
+        back={{ href: `/dashboard/events/${eventId}`, label: `Back to ${title || "the event"}` }}
+        eyebrow="Edit event"
+        title="Event details"
+        description={
+          published
+            ? "This invitation is published — changes are live for guests as soon as you save."
+            : "This event is still a draft, so nothing you change here is visible to guests yet."
+        }
+      />
 
       <EventForm
         initial={initial}

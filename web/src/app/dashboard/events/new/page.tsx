@@ -1,10 +1,9 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api/browser";
 import { createEvent } from "@/lib/api/host";
+import { PageHeader } from "../../ui";
 import { EventForm } from "../event-form";
 
 export default function NewEventPage() {
@@ -12,19 +11,12 @@ export default function NewEventPage() {
 
   return (
     <div>
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
-      >
-        <ArrowLeft className="size-4" />
-        Back to events
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold">New event</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        This saves as a draft — nothing is visible to guests until you publish it. You can add a
-        cover image after saving.
-      </p>
+      <PageHeader
+        back={{ href: "/dashboard", label: "All events" }}
+        eyebrow="New event"
+        title="Create your invitation"
+        description="Start with the basics and a design. It saves as a draft — nothing is visible to guests until you publish. Next you'll get the event's own page to design the card or video, publish, and invite guests."
+      />
 
       <EventForm
         submitLabel="Save draft"
