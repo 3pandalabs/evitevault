@@ -11,6 +11,7 @@ import {
   FREE_SIMPLE_PER_DAY,
   HARD_MIN_SIZE,
   layoutTextLines,
+  mixPlan,
   priceCents,
   splitInTwo,
   TEXT_AREA,
@@ -87,18 +88,20 @@ test("layout skips empty lines", () => {
 
 test("ffmpeg args never contain host text: only line<i>.txt files", () => {
   const drawn = layoutTextLines({ kicker: "x", headline: "Evil' :drawtext=text=pwned %{localtime}", when: "", where: "" });
-  const args = composeArgs(drawn);
-  const graph = args[args.indexOf("-vf") + 1];
+  const args = composeArgs({ lines: drawn, plan: mixPlan(8, null), hasVoice: false, clipHasAudio: true });
+  const graph = args[args.indexOf("-filter_complex") + 1];
   assert.ok(!graph.includes("pwned"));
   assert.ok(!graph.includes("Evil"));
   assert.ok(graph.includes("textfile=line0.txt") && graph.includes("textfile=line1.txt"));
   assert.ok(graph.includes("expansion=none"), "no %{...} expansion of host text");
-  assert.ok(args.includes("0:a?"), "keeps the clip's own audio when present");
+  assert.ok(args.includes("0:a?"), "keeps the clip's own audio when there is no voice");
+  assert.ok(!args.includes("voice.mp3"));
   assert.equal(args[args.length - 1], "out.mp4");
 });
 
-test("clip urls: occasion first, default second", () => {
-  assert.deepEqual(clipUrls("https://rsvpvault.3pandalabs.com", "wedding"), [
+test("clip urls: variant first, then the occasion's clip, then the default", () => {
+  assert.deepEqual(clipUrls("https://rsvpvault.3pandalabs.com", "wedding", 3), [
+    "https://rsvpvault.3pandalabs.com/video-invites/clip-wedding-3.mp4",
     "https://rsvpvault.3pandalabs.com/video-invites/clip-wedding.mp4",
     "https://rsvpvault.3pandalabs.com/video-invites/clip-default.mp4",
   ]);

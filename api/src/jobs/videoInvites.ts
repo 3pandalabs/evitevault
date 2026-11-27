@@ -68,6 +68,7 @@ export async function runVideoInviteTick(log: (msg: string) => void): Promise<vo
           status: "ready",
           videoKey: key,
           provider: result.provider,
+          voiceProvider: result.voiceProvider ?? null,
           attempts,
           finishedAt: new Date(),
           // Keep the fallback reason for ops (e.g. Google out of credit).

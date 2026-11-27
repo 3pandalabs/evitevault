@@ -38,6 +38,17 @@ export function vertexConfigured(): boolean {
   return serviceAccount() !== null;
 }
 
+/**
+ * A Google Cloud access token for the service account (GOOGLE_SA_KEY_B64),
+ * shared by Omni (Pro) and Cloud Text-to-Speech (Simple's narrator). Throws
+ * when no key is configured.
+ */
+export async function googleAccessToken(): Promise<string> {
+  const sa = serviceAccount();
+  if (!sa) throw new Error("google is not configured (GOOGLE_SA_KEY_B64)");
+  return accessToken(sa);
+}
+
 let cached: { token: string; expires: number } | null = null;
 
 const b64url = (b: Buffer | string) =>

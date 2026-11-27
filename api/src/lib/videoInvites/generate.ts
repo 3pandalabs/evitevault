@@ -3,9 +3,11 @@ import { env } from "../../env.js";
 import { presignDownload, r2 } from "../../plugins/r2.js";
 import type { VideoInvite } from "../../db/schema.js";
 import { composeTemplateVideo, ffmpegAvailable } from "./compose.js";
+import { narrate } from "./tts.js";
 import { animate, falConfigured, speak } from "./fal.js";
 import { OMNI_MAX_SECONDS, vertexConfigured, vertexSpeakingClip } from "./google.js";
 import {
+  clampVariant,
   cleanTextLines,
   estimatedSeconds,
   OCCASION_LABELS,
@@ -46,13 +48,26 @@ async function r2Image(key: string): Promise<{ bytes: Buffer; mimeType: string }
   return { bytes, mimeType: obj.ContentType ?? "image/jpeg" };
 }
 
-export type GenerationResult = { bytes: Buffer; provider: VideoProvider | "template"; errors: string[] };
+export type GenerationResult = {
+  bytes: Buffer;
+  provider: VideoProvider | "template";
+  errors: string[];
+  /** Simple: who spoke the narration ('google' | 'fal'), null = no voice. */
+  voiceProvider?: string | null;
+};
 
 export async function generateVideo(order: VideoInvite): Promise<GenerationResult> {
   if (order.tier === "simple") {
     const lines = cleanTextLines((order.textLines ?? {}) as Partial<TextLines>);
-    const bytes = await composeTemplateVideo(env.WEB_ORIGIN, order.occasion, lines);
-    return { bytes, provider: "template", errors: [] };
+    // Narrator voiceover (Google TTS first, fal second, cached); none = the
+    // video is still made, text on screen only.
+    const errors: string[] = [];
+    const voice = order.narration ? await narrate(order.narration, (m) => errors.push(m)) : null;
+    const bytes = await composeTemplateVideo(env.WEB_ORIGIN, order.occasion, lines, {
+      variant: clampVariant(order.variant ?? 1),
+      voice: voice?.bytes ?? null,
+    });
+    return { bytes, provider: "template", errors, voiceProvider: voice?.provider ?? null };
   }
 
   const providers = providersToTry(process.env.VIDEO_INVITE_PROVIDERS, configuredProviders());

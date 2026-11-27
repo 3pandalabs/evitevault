@@ -73,7 +73,8 @@ export default function PrivacyPage() {
           </li>
           <li>
             <strong>Video invites (optional):</strong> the occasion and, for a Simple video, the lines you want written
-            on screen (we make it ourselves from our own panda clip); for a Pro video, the words you want it to say,
+            on screen, which of our panda clips you picked, and the message you want read out (we make the video
+            ourselves from our own panda clip); for a Pro video, the words you want it to say,
             the photo you upload and a record that you confirmed it is you or that you have consent from everyone in
             it (with the time). The finished video is stored in Cloudflare R2 and shown on your invitation. We keep
             the order (price, status, Stripe payment reference for paid ones); we never see or store your card
@@ -176,10 +177,11 @@ export default function PrivacyPage() {
             content.
           </li>
           <li>
-            <strong>Google Cloud (Vertex AI)</strong> (USA) and <strong>fal.ai</strong> (USA): only if you order a Pro
-            video invite. They receive your photo and the words you typed, and return the video. Google is tried
-            first; fal.ai (which uses ElevenLabs for the voice) only if Google fails. Simple video invites are made on
-            our own server and are not sent to them.
+            <strong>Google Cloud (Vertex AI and Text-to-Speech)</strong> (USA) and <strong>fal.ai</strong> (USA): only
+            if you order a video invite. For a Pro video they receive your photo and the words you typed, and return
+            the video. For a Simple video they receive only the message you want read out (never your photo or guest
+            list) and return the narrator&apos;s voice; the video itself is made on our own server. Google is tried
+            first; fal.ai (which uses ElevenLabs for the voice) only if Google fails.
           </li>
           <li>
             <strong>Stripe</strong> (USA): takes payment for video invites. Your card details go to Stripe, never to us;

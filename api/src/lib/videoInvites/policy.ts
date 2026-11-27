@@ -161,9 +161,26 @@ export const TEXT_LINE_MAX: Record<keyof TextLines, number> = {
 export type TextLinesProblem = "headline_required" | "line_too_long" | "line_has_link";
 
 /** Cleans every line (control characters out, whitespace collapsed). */
+/**
+ * Removes characters the bundled font can't draw (they would render as empty
+ * boxes): emoji and pictographs, their joiners, variation selectors and skin
+ * tones, and anything outside Basic Latin, Latin-1 / Latin Extended, general
+ * punctuation and a few common symbols. Accented names (José, Zoë) are kept.
+ */
+export function stripUnsupportedGlyphs(text: string): string {
+  return text
+    .replace(/\p{Extended_Pictographic}/gu, "")
+    .replace(/[‍︎️⃣]/g, "")
+    .replace(/[\u{1f3fb}-\u{1f3ff}\u{e0020}-\u{e007f}]/gu, "")
+    .replace(/[^ -ɏ‐-‧‰-⁞€™]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Cleans every line (control characters and undrawable glyphs out, whitespace collapsed). */
 export function cleanTextLines(raw: Partial<Record<keyof TextLines, string | null | undefined>>): TextLines {
   const one = (v: string | null | undefined) =>
-    (v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    stripUnsupportedGlyphs((v ?? "").replace(/[\u0000-\u001f\u007f]/g, " "));
   return { kicker: one(raw.kicker), headline: one(raw.headline), when: one(raw.when), where: one(raw.where) };
 }
 
@@ -182,9 +199,10 @@ export type DrawnLine = { text: string; size: number; y: number; role: keyof Tex
 // The frame every template clip is scaled to before drawing.
 export const FRAME = { width: 1080, height: 1920 } as const;
 // Text lives in the top TEXT_AREA of the frame, with side margins.
-export const TEXT_AREA = { top: 110, bottom: Math.round(1920 * 0.4), side: 80 } as const;
-const BASE_SIZE: Record<keyof TextLines, number> = { kicker: 46, headline: 104, when: 52, where: 46 };
-const MIN_SIZE: Record<keyof TextLines, number> = { kicker: 32, headline: 56, when: 36, where: 32 };
+// 2026-11-26: text ~35% larger (Anil), and the area a little taller to fit it.
+export const TEXT_AREA = { top: 96, bottom: Math.round(1920 * 0.42), side: 70 } as const;
+const BASE_SIZE: Record<keyof TextLines, number> = { kicker: 62, headline: 140, when: 70, where: 62 };
+const MIN_SIZE: Record<keyof TextLines, number> = { kicker: 43, headline: 76, when: 49, where: 43 };
 // Average glyph width as a share of the font size, for the bundled sans font.
 // Deliberately generous so a measured line never overflows the frame.
 const CHAR_WIDTH = 0.56;
@@ -270,6 +288,81 @@ export function layoutTextLines(lines: TextLines): DrawnLine[] {
 /** Clip file for an occasion, served from the web app. */
 export function clipFileName(occasion: string): string {
   return `clip-${occasion}.mp4`;
+}
+
+// ---------------------------------------------------------------------------
+// Variants: each occasion has VARIANT_COUNT non-talking panda clips,
+// clip-<occasion>-<n>.mp4 (n = 1..5, from Muse). Until a variant exists the
+// render falls back to clip-<occasion>.mp4, then clip-default.mp4.
+// ---------------------------------------------------------------------------
+
+export const VARIANT_COUNT = 5;
+
+/** A stored/requested variant, forced into 1..VARIANT_COUNT. */
+export function clampVariant(v: unknown): number {
+  const n = Math.trunc(Number(v));
+  return Number.isFinite(n) && n >= 1 && n <= VARIANT_COUNT ? n : 1;
+}
+
+/** "Try another": 1 -> 2 -> ... -> 5 -> 1. */
+export function nextVariant(v: number): number {
+  return (clampVariant(v) % VARIANT_COUNT) + 1;
+}
+
+/** Clip files to try, in order, for an occasion + variant. */
+export function clipCandidates(occasion: string, variant: number): string[] {
+  return [`clip-${occasion}-${clampVariant(variant)}.mp4`, clipFileName(occasion), clipFileName("default")];
+}
+
+// ---------------------------------------------------------------------------
+// Narrator voiceover for Simple: the host's "message to read out" (same
+// cleanScript / scriptProblem rules as Pro, 200-character cap), spoken by one
+// fixed warm narrator voice and mixed over the clip's music.
+// ---------------------------------------------------------------------------
+
+/** The prefilled message, from the event. */
+export function defaultNarration(e: { title: string; when?: string | null; where?: string | null }): string {
+  const parts = [`You're invited to ${e.title}`];
+  if (e.when) parts.push(`on ${e.when}`);
+  if (e.where) parts.push(`at ${e.where}`);
+  return `${parts.join(" ")}. Come celebrate with us!`.slice(0, MAX_SCRIPT_CHARS);
+}
+
+export const VOICE_DELAY_S = 0.4;
+export const VOICE_TAIL_S = 0.8;
+export const MAX_OUTPUT_S = 15;
+/** Music level under the voice: about -12 dB. */
+export const MUSIC_UNDER_VOICE_DB = -12;
+
+export type MixPlan = {
+  /** Length of the finished video, seconds. */
+  outSeconds: number;
+  /** Loop the clip because the voice runs past its end. */
+  loopClip: boolean;
+  /** Voice start, ms. */
+  voiceDelayMs: number;
+};
+
+/**
+ * Timing of the final video: the voice starts VOICE_DELAY_S in; if it runs
+ * past the clip, the clip loops to voice end + VOICE_TAIL_S; never longer than
+ * MAX_OUTPUT_S. Without a voice the clip plays as it is (capped).
+ */
+export function mixPlan(clipSeconds: number, voiceSeconds: number | null): MixPlan {
+  const clip = Math.max(0.5, clipSeconds);
+  if (voiceSeconds === null || voiceSeconds <= 0) {
+    return { outSeconds: Math.min(MAX_OUTPUT_S, round2(clip)), loopClip: false, voiceDelayMs: 0 };
+  }
+  const needed = VOICE_DELAY_S + voiceSeconds + VOICE_TAIL_S;
+  const out = Math.min(MAX_OUTPUT_S, Math.max(clip, needed));
+  return { outSeconds: round2(out), loopClip: out > clip + 0.01, voiceDelayMs: Math.round(VOICE_DELAY_S * 1000) };
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** R2 cache key for a synthesized line: identical (provider, voice, text) is made once. */
+export function ttsCacheKey(provider: string, voice: string, text: string, hash: (s: string) => string): string {
+  return `tts/${hash(`${provider}|${voice}|${text}`)}.mp3`;
 }
 
 /**

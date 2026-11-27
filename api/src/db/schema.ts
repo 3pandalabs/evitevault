@@ -501,6 +501,12 @@ export const videoInvites = pgTable(
     // Simple only: the lines drawn on the template clip
     // ({kicker, headline, when, where}, cleaned). Null for Pro.
     textLines: jsonb("text_lines"),
+    // Simple only (migration 0012): which of the occasion's 5 template clips
+    // (clip-<occasion>-<n>.mp4), the narrator's "message to read out" (null =
+    // no voice), and who spoke it ('google' | 'fal'; null = no voice made).
+    variant: integer("variant"),
+    narration: text("narration"),
+    voiceProvider: text("voice_provider"),
     // Pro only: the host's photo, under events/<eventId>/video-photo/.
     photoKey: text("photo_key"),
     // Pro only: the consent tick, with the exact sentence shown.

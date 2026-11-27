@@ -180,10 +180,35 @@ The first PAID feature. A host gets a short 9:16 video for an event:
   array in that dir. The clip's own audio is kept. Font: bundled Geist Regular
   (OFL, `api/assets/fonts/`, copied into the image); ffmpeg comes from
   `apk add ffmpeg` in `api/Dockerfile`.
-- **Clips: `web/public/video-invites/clip-<occasion>.mp4`** (served by the web
-  app, fetched by the API from `WEB_ORIGIN`), plus `clip-default.mp4` as the
-  fallback. Today they are PLACEHOLDERS (the occasion JPG with a slow zoom,
-  silent, 8 s); Anil's Muse clips replace them with the same file names.
+- **Clips: five non-talking variants per occasion,
+  `web/public/video-invites/clip-<occasion>-<1..5>.mp4`** (from Muse; served by
+  the web app, fetched by the API from `WEB_ORIGIN`). The order stores its
+  `variant`; the render tries `clip-<occasion>-<n>.mp4`, then
+  `clip-<occasion>.mp4`, then `clip-default.mp4` (`clipCandidates`). Today only
+  the single PLACEHOLDER per occasion exists (the occasion JPG with a slow
+  zoom, silent, 8 s), so every variant falls back to it. The form's "Try
+  another" cycles 1..5 over posters `clip-<occasion>-<n>.jpg` (falling back to
+  `clip-<occasion>.jpg`, then `pandas-<occasion>.jpg`); make posters with
+  `node web/scripts/make-clip-posters.mjs` (local ffmpeg) after adding clips.
+  Every remake counts toward the free daily cap as before.
+- **Narrator voiceover (Simple, 2026-11-26):** the host's "message to read
+  out" (prefilled from the event, `defaultNarration`; same `cleanScript` /
+  `scriptProblem` rules and 200-character cap as a Pro script, errors
+  `narration_*`; empty = music only) is spoken by ONE fixed warm voice
+  (`lib/videoInvites/tts.ts`): Google Cloud Text-to-Speech first
+  (texts:synthesize with the same `GOOGLE_SA_KEY_B64` token as Omni, voice
+  `TTS_VOICE`, default `en-US-Studio-O`; the Cloud Text-to-Speech API must be
+  enabled on that project), fal ElevenLabs second, else NO voice (the video is
+  still made, text on screen). No edge-tts: there's no cheap Node-only path.
+  Identical (provider, voice, text) is cached in R2 at `tts/<sha256>.mp3`.
+  Mix (`mixPlan`, `composeArgs`): the voice starts 0.4 s in over the clip's
+  music at -12 dB; if it runs past the clip, the clip loops to voice end +
+  0.8 s; output never over 15 s. `video_invites.voice_provider` records who
+  spoke it. ffprobe (same Alpine ffmpeg package) measures clip and voice.
+- **On-screen text:** ~35% larger (headline base 140 px of 1080), emoji and
+  any glyph the bundled font can't draw are stripped (`stripUnsupportedGlyphs`
+  in `cleanTextLines`; no boxes), and the dark band is sized from the last
+  drawn line (`scrimHeight`) so it always covers the whole block.
 - **Free Simple**: `VIDEO_INVITE_PRICE_SIMPLE_CENTS=0` skips Stripe; the
   order is inserted `paid` and queued at once, at most 5 per host per UTC day
   (429 `free_daily_limit`). A failed free order needs no refund. Pro can never
