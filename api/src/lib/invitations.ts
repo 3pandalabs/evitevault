@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { guests, type Event, type Guest } from "../db/schema.js";
 import { buildInvitationEmail } from "./emails/invitation.js";
-import { sendMail, type SendResult } from "./mailer.js";
+import { sendGuestMail, type GuestSendResult } from "./testMode/index.js";
 
 // Shared by the add-guests route and the publish route, which are the two ways
 // an invitation goes out. It lived inside routes/guests.ts until publishing
@@ -15,13 +15,25 @@ export async function sendInvitations(
   event: Event,
   recipients: Guest[],
   log: (msg: string) => void,
-): Promise<SendResult> {
+): Promise<GuestSendResult> {
   const withEmail = recipients.filter((g) => g.email);
   if (withEmail.length === 0)
-    return { delivered: 0, failed: 0, skipped: 0, failedRecipients: [], quotaExhausted: false };
+    return {
+      delivered: 0,
+      failed: 0,
+      skipped: 0,
+      failedRecipients: [],
+      quotaExhausted: false,
+      testSuppressed: 0,
+      suppressedRecipients: [],
+    };
 
   const messages = await Promise.all(withEmail.map((g) => buildInvitationEmail(event, g)));
-  return sendMail(messages, log);
+  // Guest mail: in test mode (admin testing as host, or a test host) only the
+  // admin's own address is reached; the rest is "test: not sent". Suppressed
+  // guests keep invitedAt null (nothing was delivered), so nothing is marked
+  // sent that wasn't.
+  return sendGuestMail(event.hostId, messages, log);
 }
 
 // Maps the addresses a send reported as failed back onto the guest rows it was

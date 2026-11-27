@@ -5,7 +5,8 @@ import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { eventTemplates, greetings } from "../db/schema.js";
 import { buildGreetingEmail } from "../lib/emails/greeting.js";
-import { mailerConfigured, sendMail } from "../lib/mailer.js";
+import { mailerConfigured } from "../lib/mailer.js";
+import { sendGuestMail } from "../lib/testMode/index.js";
 import { loadOwnedGreeting } from "../lib/ownership.js";
 import { themeOverridesSchema } from "../lib/theme.js";
 
@@ -161,13 +162,15 @@ export async function greetingRoutes(app: FastifyInstance) {
         }),
       );
 
-      const result = await sendMail(messages, (m) => req.log.info({ greetingId }, m));
+      // Guest mail: suppressed in test mode except to the admin (lib/testMode).
+      const result = await sendGuestMail(greeting.hostId, messages, (m) => req.log.info({ greetingId }, m));
 
       return reply.code(201).send({
         recipientCount: body.recipients.length,
         delivered: result.delivered,
         failed: result.failed,
         skipped: result.skipped,
+        testSuppressed: result.testSuppressed,
         emailConfigured: mailerConfigured(),
       });
     },

@@ -222,7 +222,8 @@ export default function EventDetailPage() {
         setAddResult("Email isn't set up yet, so nothing was sent — share the link or QR code instead.");
       } else {
         const failed = res.failed > 0 ? ` ${res.failed} didn't go out.` : "";
-        setAddResult(`Emailed ${res.delivered} guest${res.delivered === 1 ? "" : "s"}.${failed}`);
+        const test = res.testNotSent ? ` Test mode: ${res.testNotSent} not sent.` : "";
+        setAddResult(`Emailed ${res.delivered} guest${res.delivered === 1 ? "" : "s"}.${failed}${test}`);
         setFailedGuests(res.failedGuests ?? []);
       }
       await load();
@@ -296,6 +297,8 @@ export default function EventDetailPage() {
         parts.push(`Emailed ${res.emailed}.`);
       }
       if (res.emailsFailed > 0) parts.push(`${res.emailsFailed} email(s) failed.`);
+      // Admin testing as host / test host: guest email is held back (lib/testMode).
+      if (res.testNotSent) parts.push(`Test mode: ${res.testNotSent} invitation(s) not sent.`);
       setAddResult(parts.join(" "));
       setFailedGuests(res.failedGuests ?? []);
       await load();

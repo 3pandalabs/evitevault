@@ -56,7 +56,8 @@ export default function PrivacyPage() {
           <li>
             <strong>Your account:</strong> email address, an optional display name, and your password, stored only as a
             one-way hash that we cannot read. Sign-in sessions and, if you ask for one, a single-use password reset link
-            (also stored only as a hash).
+            (also stored only as a hash). Our staff may also flag an account as one of our own (internal or test), which
+            only keeps it out of our usage statistics and changes nothing about how RsvpVault works for you.
           </li>
           <li>
             <strong>Your events:</strong> title, description, the host name you show guests, date, time and time zone,

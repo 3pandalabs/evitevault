@@ -15,6 +15,7 @@ import { passwordResetTokens, sessions, users } from "../db/schema.js";
 import { buildPasswordResetEmail } from "../lib/emails/passwordReset.js";
 import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { notifyNewUser } from "../lib/newUserAlert.js";
+import { inTestMode, isTestHost, isUndeliverableEmail, mayToggleTestMode } from "../lib/testMode/policy.js";
 
 const credentials = z.object({
   email: z.string().email().max(320),
@@ -30,7 +31,16 @@ const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
 // Postgres throw on an invalid uuid rather than return no rows.
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-async function issueSession(userId: string) {
+/** Access token for a user row; a test host's carries its owner (testOwner). */
+export function accessTokenFor(user: { id: string; role: string; testOwnerId?: string | null }): string {
+  return signAccessToken({
+    sub: user.id,
+    role: user.role as "host" | "admin",
+    ...(user.testOwnerId ? { testOwner: user.testOwnerId } : {}),
+  });
+}
+
+export async function issueSession(userId: string) {
   const secret = generateRefreshSecret();
   const [session] = await db
     .insert(sessions)
@@ -85,7 +95,7 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/auth/login", { schema: { body: credentials } }, async (req, reply) => {
     const { email, password } = req.body as z.infer<typeof credentials>;
     const [user] = await db
-      .select({ id: users.id, passwordHash: users.passwordHash, role: users.role })
+      .select({ id: users.id, passwordHash: users.passwordHash, role: users.role, testOwnerId: users.testOwnerId })
       .from(users)
       .where(eq(users.email, email.toLowerCase()))
       .limit(1);
@@ -99,9 +109,12 @@ export async function authRoutes(app: FastifyInstance) {
     if (!(await verifySecret(password, user.passwordHash))) {
       return reply.code(401).send({ error: "invalid_credentials" });
     }
+    // An admin's test host is entered only by switching (routes/testHosts.ts),
+    // never by password, even if someone learned it.
+    if (user.testOwnerId) return reply.code(401).send({ error: "invalid_credentials" });
 
     return {
-      accessToken: signAccessToken({ sub: user.id, role: user.role as "host" | "admin" }),
+      accessToken: accessTokenFor(user),
       refreshToken: await issueSession(user.id),
     };
   });
@@ -129,7 +142,7 @@ export async function authRoutes(app: FastifyInstance) {
       }
 
       const [user] = await db
-        .select({ id: users.id, role: users.role })
+        .select({ id: users.id, role: users.role, testOwnerId: users.testOwnerId })
         .from(users)
         .where(eq(users.id, session.userId))
         .limit(1);
@@ -141,7 +154,7 @@ export async function authRoutes(app: FastifyInstance) {
       await db.delete(sessions).where(eq(sessions.id, session.id));
 
       return {
-        accessToken: signAccessToken({ sub: user.id, role: user.role as "host" | "admin" }),
+        accessToken: accessTokenFor(user),
         refreshToken: await issueSession(user.id),
       };
     },
@@ -179,7 +192,9 @@ export async function authRoutes(app: FastifyInstance) {
         .where(eq(users.email, email.toLowerCase()))
         .limit(1);
 
-      if (user) {
+      // A test host's *.invalid address can't receive mail; skip it so it
+      // spends nothing from the daily allowance (same answer either way).
+      if (user && !isUndeliverableEmail(user.email)) {
         // Invalidate any outstanding token first, so asking twice doesn't
         // leave two live links — the newest email is the only one that works.
         await db
@@ -278,13 +293,43 @@ export async function authRoutes(app: FastifyInstance) {
         displayName: users.displayName,
         role: users.role,
         createdAt: users.createdAt,
+        testAsHost: users.testAsHost,
+        testOwnerId: users.testOwnerId,
+        isInternal: users.isInternal,
+        internalLabel: users.internalLabel,
       })
       .from(users)
       .where(eq(users.id, req.userId!))
       .limit(1);
     if (!user) return reply.code(404).send({ error: "not_found" });
-    return user;
+    const { testOwnerId, ...rest } = user;
+    return {
+      ...rest,
+      // The admin tools (lib/testMode). `role` stays the REAL role.
+      testHost: isTestHost(user),
+      testMode: inTestMode(user),
+    };
   });
+
+  // Admin "Test as host" switch. Only a real admin (role read from the
+  // database, not the JWT) may change it; it means nothing on anyone else.
+  app.patch(
+    "/auth/me/test-mode",
+    { preHandler: requireAuth, schema: { body: z.object({ on: z.boolean() }) } },
+    async (req, reply) => {
+      const { on } = req.body as { on: boolean };
+      const [me] = await db
+        .select({ role: users.role, testOwnerId: users.testOwnerId })
+        .from(users)
+        .where(eq(users.id, req.userId!))
+        .limit(1);
+      if (!me || !mayToggleTestMode(me.role) || me.testOwnerId) {
+        return reply.code(403).send({ error: "admin_role_required" });
+      }
+      await db.update(users).set({ testAsHost: on }).where(eq(users.id, req.userId!));
+      return { testAsHost: on };
+    },
+  );
 
   app.delete("/auth/sessions", { preHandler: requireAuth }, async (req, reply) => {
     await db.delete(sessions).where(and(eq(sessions.userId, req.userId!)));

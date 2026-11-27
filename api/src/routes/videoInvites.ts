@@ -30,6 +30,8 @@ import {
   type VideoInviteTier,
 } from "../lib/videoInvites/policy.js";
 import { createCheckoutSession, stripeConfigured, verifyStripeSignature } from "../lib/videoInvites/stripe.js";
+import { hostIdentity } from "../lib/testMode/index.js";
+import { chargeCents, isUndeliverableEmail } from "../lib/testMode/policy.js";
 import { extForType, isAllowedImageType, presignDownload, presignUpload, videoPhotoKey } from "../plugins/r2.js";
 
 // Video invites (lib/videoInvites/policy.ts has the rules). Off unless
@@ -91,10 +93,14 @@ export async function videoInviteRoutes(app: FastifyInstance) {
           .orderBy(desc(videoInvites.createdAt))
           .limit(1);
         const tiers = availability();
+        // In test mode the card shows what will actually be charged (50 cents).
+        const { testMode } = await hostIdentity(req.userId!);
+        const real = prices();
         return {
           available: tiers.simple || tiers.pro,
           tiers,
-          prices: prices(),
+          prices: { simple: chargeCents(real.simple, testMode), pro: chargeCents(real.pro, testMode) },
+          testMode,
           occasions: VIDEO_INVITE_OCCASIONS.map((id) => ({ id, label: OCCASION_LABELS[id] })),
           maxScriptChars: MAX_SCRIPT_CHARS,
           lineMax: TEXT_LINE_MAX,
@@ -184,8 +190,12 @@ export async function videoInviteRoutes(app: FastifyInstance) {
         const [me] = await db.select({ email: users.email }).from(users).where(eq(users.id, req.userId!)).limit(1);
         if (!me) return reply.code(401).send({ error: "not_authenticated" });
 
-        const amount = prices()[body.tier];
+        // Admin testing as host / test host: every paid charge is the 50-cent
+        // test price, tagged test_mode=1 (lib/testMode). Free stays free.
+        const identity = await hostIdentity(req.userId!);
+        const amount = chargeCents(prices()[body.tier], identity.testMode);
         const values = {
+          testMode: identity.testMode,
           eventId,
           hostId: req.userId!,
           tier: body.tier,
@@ -225,8 +235,9 @@ export async function videoInviteRoutes(app: FastifyInstance) {
           const session = await createCheckoutSession({
             orderId: order.id,
             eventId,
-            hostEmail: me.email,
+            hostEmail: isUndeliverableEmail(me.email) ? null : me.email,
             amountCents: amount,
+            testMode: identity.testMode,
             productName: `RsvpVault video invite (${body.tier === "pro" ? "Pro: your photo" : "Simple: our pandas with your text"})`,
             successUrl: `${back}?video=paid`,
             cancelUrl: `${back}?video=cancelled`,

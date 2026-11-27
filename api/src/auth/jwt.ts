@@ -3,7 +3,10 @@ import jwt from "jsonwebtoken";
 import { env } from "../env.js";
 
 export type UserRole = "host" | "admin";
-export type AccessTokenPayload = { sub: string; role: UserRole };
+// `testOwner`: set on a session inside an admin's TEST HOST (the admin's user
+// id), so "Back to admin" can be accepted only from such a session, and is
+// always re-checked against users.test_owner_id (routes/testHosts.ts).
+export type AccessTokenPayload = { sub: string; role: UserRole; testOwner?: string };
 
 const ACCESS_TOKEN_TTL = "15m";
 export const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days

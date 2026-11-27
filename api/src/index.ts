@@ -10,6 +10,7 @@ import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
 import { startVideoInvitesJob } from "./jobs/videoInvites.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
 import { accountRoutes } from "./routes/account.js";
+import { adminRoutes } from "./routes/admin.js";
 import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contact.js";
@@ -21,6 +22,7 @@ import { metricsRoutes } from "./routes/metrics.js";
 import { publicEventRoutes } from "./routes/publicEvents.js";
 import { storageRoutes } from "./routes/storage.js";
 import { templateRoutes } from "./routes/templates.js";
+import { testHostRoutes } from "./routes/testHosts.js";
 import { videoInviteRoutes } from "./routes/videoInvites.js";
 
 const app = Fastify({
@@ -129,6 +131,10 @@ await app.register(announcementRoutes);
 await app.register(templateRoutes);
 await app.register(storageRoutes);
 await app.register(accountRoutes);
+// Admin tools (lib/testMode): the admin area re-reads the real role from the
+// database on every request; test hosts are switched into, never logged into.
+await app.register(adminRoutes);
+await app.register(testHostRoutes);
 // Paid video invites (off unless VIDEO_INVITES=on). Its host routes are behind
 // requireAuth inside the plugin; POST /webhooks/stripe is signature-checked.
 await app.register(videoInviteRoutes);

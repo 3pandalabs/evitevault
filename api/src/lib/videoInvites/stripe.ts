@@ -16,8 +16,11 @@ export function stripeConfigured(): boolean {
 export type CheckoutRequest = {
   orderId: string;
   eventId: string;
-  hostEmail: string;
+  /** Omitted for a test host's undeliverable *.invalid address. */
+  hostEmail: string | null;
   amountCents: number;
+  /** Admin testing as host / test host: tagged test_mode=1, excluded from revenue. */
+  testMode?: boolean;
   productName: string;
   successUrl: string;
   cancelUrl: string;
@@ -25,12 +28,18 @@ export type CheckoutRequest = {
 
 /** The form body sent to POST /v1/checkout/sessions (exported for tests). */
 export function checkoutForm(req: CheckoutRequest): URLSearchParams {
-  const meta = { app: "rsvpvault", kind: "video_invite", order_id: req.orderId, event_id: req.eventId };
+  const meta: Record<string, string> = {
+    app: "rsvpvault",
+    kind: "video_invite",
+    order_id: req.orderId,
+    event_id: req.eventId,
+    ...(req.testMode ? { test_mode: "1" } : {}),
+  };
   const form = new URLSearchParams({
     mode: "payment",
     success_url: req.successUrl,
     cancel_url: req.cancelUrl,
-    customer_email: req.hostEmail,
+    ...(req.hostEmail ? { customer_email: req.hostEmail } : {}),
     "line_items[0][quantity]": "1",
     "line_items[0][price_data][currency]": "usd",
     "line_items[0][price_data][unit_amount]": String(req.amountCents),
