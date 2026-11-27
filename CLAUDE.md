@@ -196,8 +196,17 @@ The first PAID feature. A host gets a short 9:16 video for an event:
 `web/src/app/dashboard/events/[eventId]/video-invite.tsx`; the public page
 shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
 
-- **Off unless `VIDEO_INVITES=on`.** Host routes 404 and the card renders
-  nothing. Per tier: Simple needs ffmpeg, Pro needs Google or fal, and a paid
+- **`VIDEO_INVITES` = `on` | `admins` | anything else = off.** `admins` makes
+  the feature visible and usable ONLY for accounts whose REAL database role is
+  admin, and for test hosts whose owner is still a real admin
+  (`adminStanding()` in `lib/testMode/index.ts`, the same lookup as
+  `requireRealAdmin`; `videoInvitesVisibleTo` in `policy.ts`, tested). Everyone
+  else gets exactly "off": host routes 404 and the card renders nothing. The
+  job and the public page's ready video run in `on` and `admins` (only admins
+  can create videos in `admins`, so nothing leaks). The web never decides on
+  role: `/auth/me` returns `features.videoInvites`, computed on the server
+  (`lib/videoInvites/access.ts`), and the card itself renders nothing on the
+  API's 404. Per tier: Simple needs ffmpeg, Pro needs Google or fal, and a paid
   tier also needs Stripe; otherwise 503 `video_invites_unavailable`. Every key
   is optional; the API always boots.
 - **Money first, then generation (paid orders).** An order is created `pending_payment`

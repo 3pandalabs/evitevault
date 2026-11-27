@@ -566,6 +566,13 @@ export type Me = {
   testMode: boolean;
   isInternal: boolean;
   internalLabel: string | null;
+  /**
+   * Feature switches decided by the API (never inferred from `role` here).
+   * videoInvites: VIDEO_INVITES=on, or =admins and this is a real admin or one
+   * of their test hosts. The video invite card also asks the API itself and
+   * renders nothing on a 404, so the two always agree.
+   */
+  features?: { videoInvites: boolean };
 };
 
 export const getMe = () => hostFetch<Me>("/auth/me");

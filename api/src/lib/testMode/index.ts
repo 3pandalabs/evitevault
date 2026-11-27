@@ -84,10 +84,27 @@ export async function sendGuestMail(
  */
 export async function requireRealAdmin(req: FastifyRequest, reply: FastifyReply) {
   if (!req.userId) return reply.code(401).send({ error: "not_authenticated" });
+  if (!(await adminStanding(req.userId)).realAdmin) return reply.code(403).send({ error: "admin_role_required" });
+}
+
+/**
+ * The caller's admin standing, read from the DATABASE: a real admin (role
+ * admin, not a test host), or a test host whose owner is still a real admin.
+ * The one lookup behind requireRealAdmin and admin-only feature gates
+ * (e.g. VIDEO_INVITES=admins).
+ */
+export async function adminStanding(userId: string): Promise<{ realAdmin: boolean; adminTestHost: boolean }> {
   const [u] = await db
     .select({ role: users.role, testOwnerId: users.testOwnerId })
     .from(users)
-    .where(eq(users.id, req.userId))
+    .where(eq(users.id, userId))
     .limit(1);
-  if (!u || u.role !== "admin" || u.testOwnerId) return reply.code(403).send({ error: "admin_role_required" });
+  if (!u) return { realAdmin: false, adminTestHost: false };
+  if (!u.testOwnerId) return { realAdmin: u.role === "admin", adminTestHost: false };
+  const [owner] = await db
+    .select({ role: users.role, testOwnerId: users.testOwnerId })
+    .from(users)
+    .where(eq(users.id, u.testOwnerId))
+    .limit(1);
+  return { realAdmin: false, adminTestHost: !!owner && owner.role === "admin" && !owner.testOwnerId };
 }
