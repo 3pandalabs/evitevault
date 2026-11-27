@@ -17,6 +17,7 @@ import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { notifyNewUser } from "../lib/newUserAlert.js";
 import { inTestMode, isTestHost, isUndeliverableEmail, mayToggleTestMode } from "../lib/testMode/policy.js";
 import { videoInvitesVisible } from "../lib/videoInvites/access.js";
+import { giftsVisible } from "../lib/gifts/access.js";
 
 const credentials = z.object({
   email: z.string().email().max(320),
@@ -311,7 +312,10 @@ export async function authRoutes(app: FastifyInstance) {
       testMode: inTestMode(user),
       // Feature switches decided on the SERVER, so the web never infers them
       // from the role (VIDEO_INVITES=on | admins | off).
-      features: { videoInvites: await videoInvitesVisible(req.userId!) },
+      features: {
+        videoInvites: await videoInvitesVisible(req.userId!),
+        cashGifts: await giftsVisible(req.userId!),
+      },
     };
   });
 

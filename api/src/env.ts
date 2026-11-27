@@ -61,6 +61,13 @@ export const env = {
   // (routes 503 `video_invites_unavailable`) until both fal and Stripe are
   // configured, so a missing key never stops the API booting.
   VIDEO_INVITES: process.env.VIDEO_INVITES ?? "",
+  // Cash gifts (lib/gifts), read directly from process.env by those modules:
+  // CASH_GIFTS (on | admins | off), STRIPE_TEST_SECRET_KEY (test-mode gifts;
+  // without it test mode refuses gifts), STRIPE_CONNECT_WEBHOOK_SECRET +
+  // STRIPE_TEST_WEBHOOK_SECRET + STRIPE_TEST_CONNECT_WEBHOOK_SECRET (extra
+  // signing secrets accepted by POST /webhooks/stripe), GIFT_PLATFORM_FEE_BPS
+  // (150), GIFT_STRIPE_PERCENT_BPS (290), GIFT_STRIPE_FIXED_CENTS (30),
+  // GIFT_MIN_CENTS (500), GIFT_MAX_CENTS (25000), GIFT_EVENT_DAILY_CAP_CENTS (200000).
   // Also read directly by lib/videoInvites (kept out of this object so those
   // modules stay importable from tests): GOOGLE_SA_KEY_B64 (Vertex AI service
   // account JSON, base64; Google is tried first), VERTEX_OMNI_MODEL,

@@ -1,10 +1,10 @@
-import { eq } from "drizzle-orm";
+import { and, eq, gt, or } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
 import { verifySecret } from "../auth/password.js";
 import { db } from "../db/index.js";
-import { eventTemplates, events, passwordResetTokens, sessions, users } from "../db/schema.js";
+import { eventTemplates, events, gifts, passwordResetTokens, sessions, users } from "../db/schema.js";
 import { rateLimiter } from "../lib/rateLimit.js";
 import { deleteEventObjects } from "../plugins/r2.js";
 
@@ -54,6 +54,27 @@ export async function accountRoutes(app: FastifyInstance) {
       if (!(await verifySecret(password, user.passwordHash))) {
         return reply.code(403).send({ error: "wrong_password" });
       }
+
+      // Cash gifts: we are liable for refunds and chargebacks on gifts paid to
+      // this host, and a card dispute can arrive up to 120 days later. Deleting
+      // the account would delete the gift records we need to answer it, so a
+      // host with a live (not test) gift paid in the last 120 days, or one
+      // still disputed, deletes after that window (support can help sooner).
+      const [recent] = await db
+        .select({ id: gifts.id })
+        .from(gifts)
+        .where(
+          and(
+            eq(gifts.hostId, me),
+            eq(gifts.testMode, false),
+            or(
+              eq(gifts.status, "disputed"),
+              and(eq(gifts.status, "paid"), gt(gifts.paidAt, new Date(Date.now() - 120 * 24 * 60 * 60 * 1000))),
+            ),
+          ),
+        )
+        .limit(1);
+      if (recent) return reply.code(409).send({ error: "recent_gifts" });
 
       const eventIds = await db.transaction(async (tx) => {
         const owned = await tx
