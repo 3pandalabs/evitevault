@@ -4,3 +4,6 @@ node_modules/
 .wrangler/
 *.tsbuildinfo
 .env.local
+
+# Draft panda scenes from scripts/generate-panda-scenes.mjs (review before use)
+/scripts/out/

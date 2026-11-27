@@ -25,17 +25,17 @@ export function generationAvailable(): boolean {
   return providersToTry(process.env.VIDEO_INVITE_PROVIDERS, configuredProviders()).length > 0;
 }
 
-/** Public URL of the panda scene for an occasion (served by the web app). */
+/**
+ * Public URL of the panda scene for an occasion (served by the web app). The
+ * live scenes are Anil-supplied 9:16 JPGs (1080x1920), one per occasion.
+ */
 export function pandaSceneUrl(occasion: string): string {
-  return `${env.WEB_ORIGIN}/video-invites/pandas-${occasion}.png`;
+  return `${env.WEB_ORIGIN}/video-invites/pandas-${occasion}.jpg`;
 }
 
-// Until web/scripts/generate-panda-scenes.mjs has been run (paid image edits
-// of our three-panda reference, so it needs Anil's go-ahead), every occasion
-// falls back to this one image. It is a PLACEHOLDER (the brand's three-pandas
-// logo mark, which talking models may animate poorly): after the script runs,
-// replace it with the best reviewed general-purpose scene (e.g. "party").
-export const PANDA_FALLBACK_PATH = "/video-invites/pandas-default.png";
+// Used only when an occasion's scene file is missing (e.g. an occasion added
+// to the list before its picture). A copy of the "party" scene.
+export const PANDA_FALLBACK_PATH = "/video-invites/pandas-default.jpg";
 
 function sceneText(order: Pick<VideoInvite, "tier" | "occasion">): string {
   const label = OCCASION_LABELS[order.occasion as VideoInviteOccasion] ?? "celebration";

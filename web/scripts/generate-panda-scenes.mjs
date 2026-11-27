@@ -1,7 +1,12 @@
-// Generates the panda scene images the "Simple" video invite starts from:
-// one 9:16 picture per occasion, written to
-// web/public/video-invites/pandas-<occasion>.png and served from the web app
-// (the API passes the public URL to Google / fal, which lip-sync it).
+// OPTIONAL TOOL, for FUTURE occasions. The live scenes in
+// web/public/video-invites/pandas-<occasion>.jpg were supplied by Anil (made
+// in Muse, 2026-11-26) and are NOT produced by this script.
+//
+// It makes a candidate 9:16 panda scene per occasion and writes it to
+// web/scripts/out/pandas-<occasion>.png (outside public/, so nothing goes live
+// by accident). To use one: review it, convert to a 1080x1920 JPG (~q85, under
+// ~500 KB) at web/public/video-invites/pandas-<occasion>.jpg, and add the
+// occasion to VIDEO_INVITE_OCCASIONS.
 //
 // The pandas are OUR established three characters, so they look the same in
 // every video, ad and post. This script EDITS the reference frame
@@ -15,21 +20,16 @@
 // second (an image-edit endpoint, FAL_KEY, model FAL_IMAGE_MODEL). Any Google
 // error tries fal for that occasion.
 //
-// NOT RUN YET: every image is a paid call (about $0.04 each on either
-// provider at the time of writing; 10 occasions = about $0.40, plus any
-// re-rolls). Run only with Anil's go-ahead:
+// Every image is a paid call (about $0.04 each on either provider at the time
+// of writing). Run only with Anil's go-ahead:
 //
 //   cd web
 //   GOOGLE_SA_KEY_B64=... FAL_KEY=... node scripts/generate-panda-scenes.mjs [--only wedding] [--force]
 //
-// Existing files are skipped unless --force. Review EVERY image before
-// committing it: the three pandas must match the reference, the faces must be
-// clear and front-facing with mouths visible (they get lip-synced), and there
-// must be no text anywhere. Re-run one occasion with --only <name> --force.
-//
-// Until it runs, every occasion falls back to public/video-invites/
-// pandas-default.png (see api/src/lib/videoInvites/generate.ts). Replace that
-// file with the best general-purpose result (e.g. "party") after review.
+// Existing files in out/ are skipped unless --force. Review EVERY image: the
+// three pandas must match the reference, the faces must be clear and
+// front-facing with mouths visible (they get lip-synced), and there must be no
+// text anywhere. Re-run one occasion with --only <name> --force.
 //
 // Keep OCCASIONS in step with VIDEO_INVITE_OCCASIONS in
 // api/src/lib/videoInvites/policy.ts.
@@ -55,7 +55,7 @@ const OCCASIONS = {
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REFERENCE = join(HERE, "panda-reference.png");
-const OUT_DIR = join(HERE, "..", "public", "video-invites");
+const OUT_DIR = join(HERE, "out");
 
 function prompt(scene) {
   return [

@@ -12,11 +12,10 @@
 export const VIDEO_INVITE_TIERS = ["simple", "pro"] as const;
 export type VideoInviteTier = (typeof VIDEO_INVITE_TIERS)[number];
 
-// One panda scene per occasion (web/public/video-invites/pandas-<occasion>.png,
-// made by web/scripts/generate-panda-scenes.mjs by EDITING our established
-// three-panda reference frame, so the characters are the same everywhere).
-// The pro tier ignores it: the host's photo is the scene. Keep this list in
-// step with OCCASIONS in that script.
+// One panda scene per occasion (web/public/video-invites/pandas-<occasion>.jpg,
+// 9:16, Anil-supplied, all showing our three established pandas). The pro tier
+// ignores it: the host's photo is the scene. A new occasion needs its scene
+// file too (web/scripts/generate-panda-scenes.mjs can draft one).
 export const VIDEO_INVITE_OCCASIONS = [
   "wedding",
   "birthday",

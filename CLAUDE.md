@@ -201,14 +201,17 @@ shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
   in `/metrics` `counts.videoInvitesRefundNeeded` (should be 0). Ops refunds in
   Stripe and sets the row `refunded`. A `generating` row older than 20 min
   (process died) goes back to `paid`.
-- **Panda scenes** are static files `web/public/video-invites/pandas-<occasion>.png`,
-  made by `web/scripts/generate-panda-scenes.mjs` by EDITING our established
-  three pandas (`web/scripts/panda-reference.png`, the Thanksgiving video
-  frame: glasses + white apron over blue shirt, orange t-shirt, navy suit) so
-  the characters match every video, ad and post. Google Gemini image edit
-  first, fal edit fallback; paid, run only with Anil's OK, review every image.
-  Until then every occasion uses `pandas-default.png`, a placeholder (the
-  logo mark) to replace with the best reviewed scene.
+- **Panda scenes (live) are Anil-supplied**, made in Muse on 2026-11-26:
+  `web/public/video-invites/pandas-<occasion>.jpg`, 9:16 portrait, 1080x1920,
+  JPG ~q85 (200-350 KB), one per occasion, all showing our three established
+  pandas (round glasses + white apron over a blue shirt, orange t-shirt, navy
+  suit). `pandas-default.jpg` is a copy of the party scene, used only when an
+  occasion's file is missing. Simple videos stay 9:16.
+- `web/scripts/generate-panda-scenes.mjs` is an OPTIONAL tool for future
+  occasions: it edits `web/scripts/panda-reference.png` (the Thanksgiving
+  frame) into a draft scene, Google Gemini image edit first, fal edit
+  fallback, written to `web/scripts/out/` (never straight to `public/`).
+  Paid: run only with Anil's OK, review, then convert to the JPG format above.
 - Photos and videos live under `events/<id>/` in R2, so ownership checks and
   account deletion cover them; rows cascade with the event. Privacy and terms
   pages describe the feature, Google/fal and Stripe.
