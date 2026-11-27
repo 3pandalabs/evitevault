@@ -135,6 +135,25 @@ export default function TermsPage() {
         </p>
       </Section>
 
+      <Section id="gifts" title="7a. Cash gifts">
+        <p>
+          A host may let guests send a cash gift with their RSVP. Payments are processed by Stripe; the host receives
+          gifts through a Stripe Express account they set up with Stripe and agree to Stripe&apos;s terms for. The guest
+          pays the gift plus a card processing and service fee, shown before paying; the host receives the full gift
+          amount. Payouts to the host are made about 7 days after a gift is sent.
+        </p>
+        <p>
+          <strong>Guests:</strong> gifts are non-refundable, except where a payment was made in error or fraudulently;
+          contact us and we will look into it. Gift limits apply per gift and per event.
+        </p>
+        <p>
+          <strong>Hosts:</strong> if a gift you received is refunded (for error or fraud) or disputed by the payer&apos;s
+          card issuer, you agree that we may recover that amount, including any dispute fee, from gifts you receive
+          later, or ask you to repay it. Use gifts only for genuine personal events, never to sell goods or services.
+          We may switch off gifts for an event or account we believe is being misused.
+        </p>
+      </Section>
+
       <Section id="availability" title="8. Availability and limits">
         <p>
           We work to keep RsvpVault running, but we don&apos;t guarantee it will always be available, error-free, or that

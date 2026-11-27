@@ -114,6 +114,33 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 
 `A` = admin only. `/auth/login` refuses test hosts (401); `/auth/forgot-password` sends nothing to a *.invalid address.
 
+## Cash gifts (404 unless `CASH_GIFTS=on`, or `=admins` and the caller is a real admin / an admin's test host)
+
+Stripe mode follows the HOST: live for real hosts, TEST for an admin testing as host or a test host (409 `gifts_test_unavailable` when no test key). `/auth/me` returns `features.cashGifts`.
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| H | GET | `/gifts/account` | `{mode, status: none/needs_info/pending/ready, available, reason?}`; refreshes the status from Stripe when an account exists |
+| H | POST | `/gifts/account/onboard` | `{eventId}` → `{url}`: creates the Express account if needed (US, card_payments + transfers, 7-day payout delay) and a Stripe-hosted Account Link back to the event page (`?gifts=return` / `?gifts=refresh`) |
+| H | POST | `/gifts/account/dashboard` | `{url}`: one-time Express dashboard login link. 409 `no_account` |
+| H | GET | `/events/:eventId/gifts` | Settings (`enabled`, `suggestedCents`, `message`), limits, fee rates, `receivedCents`, the gifts (name, amount, message, status). Host only |
+| H | PATCH | `/events/:eventId/gifts` | `{enabled?, suggestedCents?, message?}`. Enabling needs a `ready` account: 409 `gifts_account_not_ready` |
+| P | POST | `/public/events/:slug/gift` | `{amountCents, name?, message?}` → `{checkoutUrl, breakdown}`. Published events with gifts on and a ready host only (404 `gifts_not_available`). 400 `amount_too_small/large`, 429 `event_daily_cap` / `too_many_requests` (10/hour per IP). Destination charge to the host, `application_fee_amount` = our cut + card fee |
+| A | GET | `/admin/gifts` | Disputed first |
+
+`toPublicEvent().gifts` = `{suggestedCents, message, minCents, maxCents, fees, testMode}` or null; never amounts given. `/me/delete` answers 409 `recent_gifts` while the host has a live gift paid in the last 120 days or one disputed.
+
+### Stripe webhook endpoints (all to `POST /webhooks/stripe`)
+
+| Endpoint (Stripe dashboard) | Events | Secret env |
+|---|---|---|
+| Platform, live ("Your account") | `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed` | `STRIPE_WEBHOOK_SECRET` |
+| Connect, live ("Connected accounts") | `account.updated` | `STRIPE_CONNECT_WEBHOOK_SECRET` |
+| Platform, test | same as platform live | `STRIPE_TEST_WEBHOOK_SECRET` |
+| Connect, test | `account.updated` | `STRIPE_TEST_CONNECT_WEBHOOK_SECRET` |
+
+Any configured secret that verifies the signature is accepted; events not tagged rsvpvault are answered 200 and ignored.
+
 ## Public invitation
 
 | | Method | Path | Notes |

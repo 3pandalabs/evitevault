@@ -48,6 +48,11 @@ type CountsRow = {
   marked_test_accounts: number;
   video_invite_revenue_cents: number;
   video_invites_test_mode: number;
+  gifts_paid: number;
+  gifts_disputed: number;
+  gift_volume_cents: number;
+  gift_platform_fee_cents: number;
+  gift_hosts_ready: number;
 };
 
 type DatabaseRow = {
@@ -99,7 +104,14 @@ export async function metricsRoutes(app: FastifyInstance) {
         (select coalesce(sum(v.price_cents), 0) from video_invites v join users u on u.id = v.host_id
            where v.paid_at is not null and not v.test_mode and v.status <> 'refunded'
              and u.role = 'host' and u.test_owner_id is null and not u.is_internal and not u.marked_test)::int as video_invite_revenue_cents,
-        (select count(*) from video_invites where test_mode)::int as video_invites_test_mode
+        (select count(*) from video_invites where test_mode)::int as video_invites_test_mode,
+        -- Cash gifts (live only; test-mode gifts never count). giftsDisputed is
+        -- a work item: the platform is liable, so each one needs ops action.
+        (select count(*) from gifts where not test_mode and status = 'paid')::int as gifts_paid,
+        (select count(*) from gifts where not test_mode and status = 'disputed')::int as gifts_disputed,
+        (select coalesce(sum(amount_cents), 0) from gifts where not test_mode and status = 'paid')::int as gift_volume_cents,
+        (select coalesce(sum(platform_fee_cents), 0) from gifts where not test_mode and status = 'paid')::int as gift_platform_fee_cents,
+        (select count(*) from users where stripe_account_status = 'ready')::int as gift_hosts_ready
     `);
 
     const database = await db.execute<DatabaseRow>(sql`
@@ -138,6 +150,11 @@ export async function metricsRoutes(app: FastifyInstance) {
         markedTestAccounts: c.marked_test_accounts,
         videoInviteRevenueCents: c.video_invite_revenue_cents,
         videoInvitesTestMode: c.video_invites_test_mode,
+        giftsPaid: c.gifts_paid,
+        giftsDisputed: c.gifts_disputed,
+        giftVolumeCents: c.gift_volume_cents,
+        giftPlatformFeeCents: c.gift_platform_fee_cents,
+        giftHostsReady: c.gift_hosts_ready,
       },
       traffic: {
         // Rolling 60 minutes, in-process — see metrics/collector.ts. Resets on

@@ -191,7 +191,7 @@ The first PAID feature. A host gets a short 9:16 video for an event:
   `clip-<occasion>.jpg`, then `pandas-<occasion>.jpg`); make posters with
   `node web/scripts/make-clip-posters.mjs` (local ffmpeg) after adding clips.
   Every remake counts toward the free daily cap as before.
-- **Narrator voiceover (Simple, 2026-11-26):** the host's "message to read
+- **Narrator voiceover (Simple, 2026-11-26, migration 0013):** the host's "message to read
   out" (prefilled from the event, `defaultNarration`; same `cleanScript` /
   `scriptProblem` rules and 200-character cap as a Pro script, errors
   `narration_*`; empty = music only) is spoken by ONE fixed warm voice
@@ -334,6 +334,61 @@ marked-test accounts), COPIED not imported, with RsvpVault's names. Routes in
   price, switching, the guest-mail guard, customer counting, flag rules). No
   PGlite in this repo yet, so the DB paths are covered by the pure rules plus
   typecheck.
+
+## Cash gifts with the RSVP (2026-11-26, migration 0012, `api/src/lib/gifts`)
+
+A guest sends the host a cash gift from the invitation. Rules (fees, caps,
+states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
+`api/ROUTES.md` "Cash gifts"; web: `web/src/app/dashboard/events/[eventId]/cash-gifts.tsx`
+(host) and `web/src/app/e/[slug]/send-gift.tsx` (guest).
+
+- **`CASH_GIFTS` = `on` | `admins` | off**, the same shape as `VIDEO_INVITES`
+  (`lib/gifts/access.ts`, reusing `featureMode` / `videoInvitesVisibleTo` and
+  `adminStanding`). Off for an account = host routes 404, the card renders
+  nothing, the public page offers no gift. `/auth/me` `features.cashGifts`.
+- **Stripe Connect destination charges, Express accounts, Stripe-hosted
+  onboarding (Account Links), Express dashboard (login links).** Live on the
+  org account. The platform is the merchant of record and LIABLE for refunds
+  and chargebacks. The host's account is created US, `card_payments` +
+  `transfers`, payouts delayed **7 days** (`settings.payouts.schedule.delay_days`)
+  so a dispute can be absorbed. `users.stripe_account_id/status`; status from
+  `accountStatus()` (none / needs_info / pending / ready), refreshed by
+  `account.updated` (Connect webhook) and on every `GET /gifts/account`. Gifts
+  can only be switched on, and only offered, while the account is `ready`.
+- **Fees** (`giftBreakdown`, env-configurable): the guest pays gift A + our
+  cut P (`GIFT_PLATFORM_FEE_BPS`, 150 = 1.5%) + the card fee S, grossed up so
+  Stripe's 2.9% + 30c (`GIFT_STRIPE_PERCENT_BPS`, `GIFT_STRIPE_FIXED_CENTS`)
+  on the WHOLE total is covered. `application_fee_amount = P + S`, so the
+  platform nets P after Stripe's fee and the host receives exactly A. The
+  guest sees the breakdown before paying (web `lib/gifts.ts` mirrors the math;
+  Checkout shows the same two lines). Test proves host = A and platform net ≈ P
+  for many amounts.
+- **Risk controls:** $5 min / $250 max per gift (`GIFT_MIN_CENTS`,
+  `GIFT_MAX_CENTS`); $2,000 per event per UTC day over gifts paid or in
+  checkout (`GIFT_EVENT_DAILY_CAP_CENTS`); 10 gift checkouts per IP per hour;
+  Stripe Radar defaults; 7-day payout delay; disputes logged as "GIFT
+  DISPUTED" and counted in `/metrics` `counts.giftsDisputed` (should be 0, each
+  one is ops work); terms §7a lets us recover refunded/disputed gifts from the
+  host's later gifts or ask them to repay; guests are told gifts are
+  non-refundable except error or fraud. A host can't delete their account while
+  a live gift paid in the last 120 days (or a dispute) is on record (409
+  `recent_gifts`): we'd lose the records a dispute needs.
+- **Test mode never moves real money.** Stripe mode follows the HOST
+  (`hostStripeMode`): an admin testing as host or a test host uses
+  `STRIPE_TEST_SECRET_KEY` and a separate test connected account
+  (`users.stripe_test_account_id/status`); gifts are `gifts.test_mode` and
+  excluded from metrics. No test key = test mode is refused
+  (`gifts_test_unavailable`), never a live charge.
+- **Webhook:** the existing `POST /webhooks/stripe` handles gifts first
+  (`routeGiftEvent` / `applyGiftEvent`, idempotent, every move conditional on
+  the status it leaves), then video invites. It accepts any of four signing
+  secrets (live/test × platform/Connect); the endpoint list and event types
+  are in ROUTES.md. Refunds and disputes match gifts by payment intent.
+- **Privacy:** amounts are host-only; the public page gets only whether a
+  gift may be sent and how (`toPublicEvent().gifts`). Privacy page lists gift
+  data and Stripe Express onboarding; terms §7a.
+- `/metrics` counts: `giftsPaid`, `giftsDisputed`, `giftVolumeCents`,
+  `giftPlatformFeeCents`, `giftHostsReady` (live only).
 
 ## Not used here
 

@@ -113,6 +113,12 @@ export default function PrivacyPage() {
             optional photo a visitor posts. Photos are stored in Cloudflare R2.
           </li>
           <li>
+            <strong>Cash gifts (optional):</strong> if a guest sends the host a gift, the amount, the fees, the
+            guest&apos;s optional name and message, and the payment status and Stripe references. Only the host and our
+            staff see these; the invitation page never shows who gave or how much. Card details go to Stripe, never to
+            us.
+          </li>
+          <li>
             <strong>Delivery records:</strong> when an invitation email was sent, and when the guest first and last
             opened their invitation.
           </li>
@@ -184,8 +190,10 @@ export default function PrivacyPage() {
             first; fal.ai (which uses ElevenLabs for the voice) only if Google fails.
           </li>
           <li>
-            <strong>Stripe</strong> (USA): takes payment for video invites. Your card details go to Stripe, never to us;
-            we receive the payment status and amount.
+            <strong>Stripe</strong> (USA): takes payment for video invites and cash gifts. Your card details go to Stripe,
+            never to us; we receive the payment status and amount. A host who turns on cash gifts sets up a Stripe
+            Express account with Stripe directly: Stripe collects their identity and bank details to pay gifts out, under
+            Stripe&apos;s own privacy policy, and we only learn whether the account is ready.
           </li>
           <li>
             <strong>Google Fonts</strong>: some invitation designs load typefaces from Google&apos;s font service, which

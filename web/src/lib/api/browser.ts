@@ -63,6 +63,14 @@ export function submitRsvp(slug: string, input: RsvpInput) {
   });
 }
 
+/** A guest's cash gift: returns the Stripe Checkout URL to send them to. */
+export function startGift(slug: string, input: { amountCents: number; name?: string | null; message?: string | null }) {
+  return request<{ checkoutUrl: string }>(`/public/events/${encodeURIComponent(slug)}/gift`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export type GuestbookInput = {
   token?: string;
   authorName?: string;
