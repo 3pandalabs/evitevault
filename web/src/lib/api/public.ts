@@ -21,6 +21,8 @@ export type PublicEvent = {
   // The flattened card from the designer, when the host has saved one. Used as
   // the link-preview image; the page itself renders live HTML, not this.
   cardImageUrl: string | null;
+  /** The host's paid video invite, shown at the top of the page. Null when none. */
+  videoInviteUrl?: string | null;
   // Set once the host has an album to point guests at, usually after the day.
   photoAlbumUrl: string | null;
   theme: {

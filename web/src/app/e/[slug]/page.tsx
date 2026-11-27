@@ -135,6 +135,19 @@ export default async function InvitationPage({ params, searchParams }: PageProps
         )}
 
         <div className="mx-auto w-full max-w-2xl px-4 py-8 sm:px-6 sm:py-12">
+          {/* The host's paid video invite (9:16). A plain <video>: the src is a
+              presigned R2 URL, same expiry caveat as the cover image above. */}
+          {event.videoInviteUrl ? (
+            <div className="mb-8 flex justify-center">
+              <video
+                src={event.videoInviteUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="max-h-[70vh] w-full max-w-xs rounded-xl bg-black shadow-lg"
+              />
+            </div>
+          ) : null}
           {!isPhotoLayout ? (
             <header className="text-center">
               {event.hostName ? (

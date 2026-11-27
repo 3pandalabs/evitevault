@@ -164,6 +164,50 @@ real sign-up before calling `notifyNewUser`. Fire-and-forget through the shared
 gateway (this app's sender, one message off the daily allowance): a mailer
 failure only logs, never touches the sign-up. Same shape as AdVault's.
 
+## Video invites (paid, 2026-11-26)
+
+The first PAID feature. A host buys a short 9:16 video for an event:
+**Simple** ($3, our three pandas say the host's words in an occasion scene)
+or **Pro** ($5, the host's own photo says them; requires the consent tick
+"This is me, or I have consent from everyone in this photo.", stored with the
+time and exact sentence). Rules in `api/src/lib/videoInvites/policy.ts`
+(tested), routes in `api/ROUTES.md` "Video invites", job in
+`api/src/jobs/videoInvites.ts`, web card
+`web/src/app/dashboard/events/[eventId]/video-invite.tsx`; the public page
+shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
+
+- **Off unless `VIDEO_INVITES=on`.** Host routes 404 and the card renders
+  nothing. On but no provider or no Stripe: 503 `video_invites_unavailable`.
+  Every key is optional; the API always boots.
+- **Money first, then generation.** An order is created `pending_payment`
+  with a Stripe Checkout session (`metadata.app=rsvpvault`,
+  `kind=video_invite`, `order_id`). Only the signature-verified webhook
+  (`POST /webhooks/stripe`, raw-body parser in `index.ts`) moves it to `paid`,
+  and the job only ever claims `paid` rows (conditional UPDATE, one at a time).
+  The org Stripe account is shared: everything not tagged rsvpvault is
+  answered 200 and ignored.
+- **Google first, fal fallback** (`VIDEO_INVITE_PROVIDERS`, default
+  `vertex,fal`), like AdVault's Omni path. Google = Gemini Omni on Vertex
+  (`lib/videoInvites/google.ts`, copied from AdVault's `lib/ai/google/omni.ts`,
+  `GOOGLE_SA_KEY_B64`), image-to-video where the model speaks the line itself
+  and its generated audio IS the voice. fal = ElevenLabs TTS + a talking-avatar
+  model (`FAL_AVATAR_ENDPOINT`). Any Google error tries fal. The order records
+  `provider`, and a fallback reason stays in `error` for ops.
+- **Script cap 200 characters** (~13 s): Omni makes at most 15 s clips, and
+  every provider bills per second. Bracketed tags and links are refused or
+  stripped (`cleanScript` / `scriptProblem`).
+- **Never charge for nothing.** Two attempts, then `failed` +
+  `refund_needed`; logged as "VIDEO INVITE FAILED, REFUND NEEDED" and counted
+  in `/metrics` `counts.videoInvitesRefundNeeded` (should be 0). Ops refunds in
+  Stripe and sets the row `refunded`. A `generating` row older than 20 min
+  (process died) goes back to `paid`.
+- **Panda scenes** are static files `web/public/video-invites/pandas-<occasion>.png`,
+  made by `web/scripts/generate-panda-scenes.mjs` (paid fal calls; run only
+  with Anil's OK). Until then every occasion uses `pandas-default.png`.
+- Photos and videos live under `events/<id>/` in R2, so ownership checks and
+  account deletion cover them; rows cascade with the event. Privacy and terms
+  pages describe the feature, Google/fal and Stripe.
+
 ## Not used here
 
 No Temporal, no native mobile app (`android/` is only a TWA shell), no Supabase. The hourly job above is deliberately

@@ -11,9 +11,11 @@ import {
   guests,
   rsvpLog,
   users,
+  videoInvites,
   type Event,
   type Guest,
 } from "../db/schema.js";
+import { isEnabled as videoInvitesEnabled } from "../lib/videoInvites/policy.js";
 import { currentHour, visitorHash } from "../lib/analytics.js";
 import { eventEndsAt, hasEventEnded } from "../lib/eventTime.js";
 import { buildIcs, googleCalendarUrl } from "../lib/ics.js";
@@ -92,6 +94,17 @@ async function loadGuestByToken(eventId: string, token: string | undefined): Pro
   return g ?? null;
 }
 
+async function publicVideoUrl(eventId: string): Promise<string | null> {
+  if (!videoInvitesEnabled(env.VIDEO_INVITES)) return null;
+  const [v] = await db
+    .select({ key: videoInvites.videoKey })
+    .from(videoInvites)
+    .where(and(eq(videoInvites.eventId, eventId), eq(videoInvites.status, "ready")))
+    .orderBy(desc(videoInvites.finishedAt))
+    .limit(1);
+  return v?.key ? presignDownload(v.key) : null;
+}
+
 async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
   const { event } = row;
 
@@ -149,6 +162,9 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
     // in web/src/app/e/[slug]/page.tsx about why that is survivable for a
     // crawler and not for anything a guest is expected to keep.
     cardImageUrl: event.cardImageKey ? await presignDownload(event.cardImageKey) : null,
+    // The host's paid video invite (newest ready one), shown at the top of the
+    // page. Null while the feature is off, so turning it off hides them all.
+    videoInviteUrl: await publicVideoUrl(event.id),
     // Host-supplied and http(s)-validated on the way in (routes/events.ts).
     // Safe to hand to every visitor: it is the same link the host mails out,
     // and an album's own sharing settings decide what it opens onto.

@@ -86,6 +86,15 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | H | POST | `/storage/presign-download` | Authorized by the key's `events/<id>/` prefix |
 | P | POST | `/public/events/:slug/guestbook/presign-upload` | Only when the event allows guest photos |
 
+## Video invites (paid; 404 unless `VIDEO_INVITES=on`)
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| H | GET | `/events/:eventId/video-invite` | `available` (a provider AND Stripe configured), prices, occasions, caps, the event's latest order (`state`: paying/making/ready/failed) with a presigned `videoUrl` when ready |
+| H | POST | `/events/:eventId/video-invite/photo/presign-upload` | Pro photo, key `events/<id>/video-photo/<uuid>` |
+| H | POST | `/events/:eventId/video-invite/checkout` | `{tier, occasion, script, photoKey?, attested?}` → `{checkoutUrl}`. 400 `script_*` / `photo_required` / `attestation_required`, 409 `video_invite_in_progress`, 503 `video_invites_unavailable`. Creates the order `pending_payment`; nothing is generated here |
+| P | POST | `/webhooks/stripe` | Signature over the raw body. Ignores anything not `metadata.app=rsvpvault, kind=video_invite`. Paid session → order `paid` (amount checked); expired → `cancelled` |
+
 ## Public invitation
 
 | | Method | Path | Notes |

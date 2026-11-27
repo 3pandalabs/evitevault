@@ -10,7 +10,7 @@ import { geistSans } from "@/lib/fonts";
 /** The one public mailbox, same as the other 3PandaLabs apps publish. Also the API's SUPPORT_EMAIL default. */
 export const SUPPORT_EMAIL = "support@3pandalabs.com";
 export const PRIVACY_EMAIL = "privacy@3pandalabs.com";
-export const LAST_UPDATED = "2026-11-13";
+export const LAST_UPDATED = "2026-11-26";
 
 export type TocEntry = { id: string; title: string };
 
