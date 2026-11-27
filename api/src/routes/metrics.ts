@@ -38,6 +38,9 @@ type CountsRow = {
   active_sessions: number;
   video_invites_ready: number;
   video_invites_refund_needed: number;
+  greetings: number;
+  greeting_hosts: number;
+  greetings_last_7_days: number;
 };
 
 type DatabaseRow = {
@@ -73,7 +76,10 @@ export async function metricsRoutes(app: FastifyInstance) {
         (select count(*) from video_invites where status = 'ready')::int as video_invites_ready,
         -- A work item, not a statistic: paid orders we could not deliver and
         -- have not refunded yet. Should be 0.
-        (select count(*) from video_invites where refund_needed and status <> 'refunded')::int as video_invites_refund_needed
+        (select count(*) from video_invites where refund_needed and status <> 'refunded')::int as video_invites_refund_needed,
+        (select count(*) from greetings)::int as greetings,
+        (select count(distinct host_id) from greetings)::int as greeting_hosts,
+        (select count(*) from greetings where created_at > now() - interval '7 days')::int as greetings_last_7_days
     `);
 
     const database = await db.execute<DatabaseRow>(sql`
@@ -102,6 +108,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         activeSessions: c.active_sessions,
         videoInvitesReady: c.video_invites_ready,
         videoInvitesRefundNeeded: c.video_invites_refund_needed,
+        greetings: c.greetings,
+        greetingHosts: c.greeting_hosts,
+        greetingsLast7Days: c.greetings_last_7_days,
       },
       traffic: {
         // Rolling 60 minutes, in-process — see metrics/collector.ts. Resets on
