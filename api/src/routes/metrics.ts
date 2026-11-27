@@ -36,6 +36,9 @@ type CountsRow = {
   attending_guests: number;
   guestbook_posts: number;
   active_sessions: number;
+  greetings: number;
+  greeting_hosts: number;
+  greetings_last_7_days: number;
 };
 
 type DatabaseRow = {
@@ -67,7 +70,10 @@ export async function metricsRoutes(app: FastifyInstance) {
         (select count(*) from guests)::int as guests,
         (select count(*) from guests where rsvp_status = 'attending')::int as attending_guests,
         (select count(*) from guestbook_posts where status = 'visible')::int as guestbook_posts,
-        (select count(*) from sessions where expires_at > now())::int as active_sessions
+        (select count(*) from sessions where expires_at > now())::int as active_sessions,
+        (select count(*) from greetings)::int as greetings,
+        (select count(distinct host_id) from greetings)::int as greeting_hosts,
+        (select count(*) from greetings where created_at > now() - interval '7 days')::int as greetings_last_7_days
     `);
 
     const database = await db.execute<DatabaseRow>(sql`
@@ -94,6 +100,9 @@ export async function metricsRoutes(app: FastifyInstance) {
         attendingGuests: c.attending_guests,
         guestbookPosts: c.guestbook_posts,
         activeSessions: c.active_sessions,
+        greetings: c.greetings,
+        greetingHosts: c.greeting_hosts,
+        greetingsLast7Days: c.greetings_last_7_days,
       },
       traffic: {
         // Rolling 60 minutes, in-process — see metrics/collector.ts. Resets on
