@@ -697,7 +697,15 @@ export default function EventDetailPage() {
       </Card>
 
       {/* Paid add-on; renders nothing while the API has it switched off. */}
-      <VideoInviteCard eventId={eventId} title={event.title} />
+      <VideoInviteCard
+        eventId={eventId}
+        title={event.title}
+        defaults={{
+          headline: event.title,
+          when: `${formatEventDate(event.startsAt, event.timezone)} · ${formatEventTime(event.startsAt, event.timezone)}`,
+          where: event.locationName ?? "",
+        }}
+      />
 
       <PhotoAlbumCard
         eventId={eventId}

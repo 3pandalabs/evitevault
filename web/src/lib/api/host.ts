@@ -482,8 +482,16 @@ export const deleteAccount = (password: string) =>
 
 export type VideoInviteTier = "simple" | "pro";
 
+export type VideoInviteLines = { kicker: string; headline: string; when: string; where: string };
+
 export type VideoInviteInfo = {
   available: boolean;
+  /** Per tier: can it be made right now (Simple: ffmpeg; Pro: Google/fal; paid: Stripe). */
+  tiers?: Record<VideoInviteTier, boolean>;
+  /** Max characters per Simple text line. */
+  lineMax?: Record<keyof VideoInviteLines, number>;
+  /** Free Simple videos per host per day (when Simple is free). */
+  freePerDay?: number;
   prices: Record<VideoInviteTier, number>;
   occasions: { id: string; label: string }[];
   maxScriptChars: number;
@@ -493,6 +501,7 @@ export type VideoInviteInfo = {
     tier: VideoInviteTier;
     occasion: string;
     script: string;
+    lines?: VideoInviteLines | null;
     state: "paying" | "making" | "ready" | "failed" | "none";
     createdAt: string;
     videoUrl: string | null;
@@ -522,7 +531,16 @@ export async function uploadVideoInvitePhoto(eventId: string, file: File): Promi
 
 export async function startVideoInviteCheckout(
   eventId: string,
-  input: { tier: VideoInviteTier; occasion: string; script: string; photoKey?: string | null; attested?: boolean },
-): Promise<{ checkoutUrl: string; estimatedSeconds: number }> {
+  input: {
+    tier: VideoInviteTier;
+    occasion: string;
+    /** Pro: what the photo says. */
+    script?: string;
+    /** Simple: the lines written on the template clip. */
+    lines?: VideoInviteLines;
+    photoKey?: string | null;
+    attested?: boolean;
+  },
+): Promise<{ checkoutUrl?: string; estimatedSeconds?: number; queued?: boolean }> {
   return hostFetch(`/events/${eventId}/video-invite/checkout`, { method: "POST", body: JSON.stringify(input) });
 }

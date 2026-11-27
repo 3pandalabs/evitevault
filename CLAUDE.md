@@ -164,40 +164,62 @@ real sign-up before calling `notifyNewUser`. Fire-and-forget through the shared
 gateway (this app's sender, one message off the daily allowance): a mailer
 failure only logs, never touches the sign-up. Same shape as AdVault's.
 
-## Video invites (paid, 2026-11-26)
+## Video invites (2026-11-26)
 
-The first PAID feature. A host buys a short 9:16 video for an event:
-**Simple** ($3, our three pandas say the host's words in an occasion scene)
-or **Pro** ($5, the host's own photo says them; requires the consent tick
-"This is me, or I have consent from everyone in this photo.", stored with the
-time and exact sentence). Rules in `api/src/lib/videoInvites/policy.ts`
+The first PAID feature. A host gets a short 9:16 video for an event:
+
+- **Simple** ($3 by default, may be FREE): a TEMPLATE video, made in seconds
+  in the API container by ffmpeg, no Google/fal. The occasion's pre-made 8 s
+  9:16 clip (our three pandas in the lower half, clean background in the top
+  ~40%) with the host's lines written into the top area: kicker ("You're
+  invited to"), headline, when, where. Layout rules (auto-shrink, headline wraps
+  in two, block centred in the top area) are pure in `policy.ts`
+  (`layoutTextLines`, tested); `lib/videoInvites/compose.ts` draws them. Host
+  text NEVER enters the filter graph: each line is a file in a temp dir, drawn
+  with drawtext `textfile=` + `expansion=none`, ffmpeg spawned with an argument
+  array in that dir. The clip's own audio is kept. Font: bundled Geist Regular
+  (OFL, `api/assets/fonts/`, copied into the image); ffmpeg comes from
+  `apk add ffmpeg` in `api/Dockerfile`.
+- **Clips: `web/public/video-invites/clip-<occasion>.mp4`** (served by the web
+  app, fetched by the API from `WEB_ORIGIN`), plus `clip-default.mp4` as the
+  fallback. Today they are PLACEHOLDERS (the occasion JPG with a slow zoom,
+  silent, 8 s); Anil's Muse clips replace them with the same file names.
+- **Free Simple**: `VIDEO_INVITE_PRICE_SIMPLE_CENTS=0` skips Stripe; the
+  order is inserted `paid` and queued at once, at most 5 per host per UTC day
+  (429 `free_daily_limit`). A failed free order needs no refund. Pro can never
+  be free (it pays for Google/fal).
+- **Pro** ($5): the host's own photo says their words; requires the consent
+  tick "This is me, or I have consent from everyone in this photo.", stored
+  with the time and exact sentence. Google first, fal fallback (below). Rules in `api/src/lib/videoInvites/policy.ts`
 (tested), routes in `api/ROUTES.md` "Video invites", job in
 `api/src/jobs/videoInvites.ts`, web card
 `web/src/app/dashboard/events/[eventId]/video-invite.tsx`; the public page
 shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
 
 - **Off unless `VIDEO_INVITES=on`.** Host routes 404 and the card renders
-  nothing. On but no provider or no Stripe: 503 `video_invites_unavailable`.
-  Every key is optional; the API always boots.
-- **Money first, then generation.** An order is created `pending_payment`
+  nothing. Per tier: Simple needs ffmpeg, Pro needs Google or fal, and a paid
+  tier also needs Stripe; otherwise 503 `video_invites_unavailable`. Every key
+  is optional; the API always boots.
+- **Money first, then generation (paid orders).** An order is created `pending_payment`
   with a Stripe Checkout session (`metadata.app=rsvpvault`,
   `kind=video_invite`, `order_id`). Only the signature-verified webhook
   (`POST /webhooks/stripe`, raw-body parser in `index.ts`) moves it to `paid`,
   and the job only ever claims `paid` rows (conditional UPDATE, one at a time).
   The org Stripe account is shared: everything not tagged rsvpvault is
   answered 200 and ignored.
-- **Google first, fal fallback** (`VIDEO_INVITE_PROVIDERS`, default
+- **Pro: Google first, fal fallback** (`VIDEO_INVITE_PROVIDERS`, default
   `vertex,fal`), like AdVault's Omni path. Google = Gemini Omni on Vertex
   (`lib/videoInvites/google.ts`, copied from AdVault's `lib/ai/google/omni.ts`,
   `GOOGLE_SA_KEY_B64`), image-to-video where the model speaks the line itself
   and its generated audio IS the voice. fal = ElevenLabs TTS + a talking-avatar
   model (`FAL_AVATAR_ENDPOINT`). Any Google error tries fal. The order records
-  `provider`, and a fallback reason stays in `error` for ops.
-- **Script cap 200 characters** (~13 s): Omni makes at most 15 s clips, and
+  `provider` (`template` for Simple), and a fallback reason stays in `error`
+  for ops.
+- **Pro script cap 200 characters** (~13 s): Omni makes at most 15 s clips, and
   every provider bills per second. Bracketed tags and links are refused or
   stripped (`cleanScript` / `scriptProblem`).
-- **Never charge for nothing.** Two attempts, then `failed` +
-  `refund_needed`; logged as "VIDEO INVITE FAILED, REFUND NEEDED" and counted
+- **Never charge for nothing.** Two attempts, then `failed` (+
+  `refund_needed` when it was paid); logged as "VIDEO INVITE FAILED, REFUND NEEDED" and counted
   in `/metrics` `counts.videoInvitesRefundNeeded` (should be 0). Ops refunds in
   Stripe and sets the row `refunded`. A `generating` row older than 20 min
   (process died) goes back to `paid`.
@@ -205,8 +227,9 @@ shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
   `web/public/video-invites/pandas-<occasion>.jpg`, 9:16 portrait, 1080x1920,
   JPG ~q85 (200-350 KB), one per occasion, all showing our three established
   pandas (round glasses + white apron over a blue shirt, orange t-shirt, navy
-  suit). `pandas-default.jpg` is a copy of the party scene, used only when an
-  occasion's file is missing. Simple videos stay 9:16.
+  suit). Since the template change they are the Simple form's live PREVIEW
+  background (and the source of the placeholder clips); `pandas-default.jpg`
+  is a copy of the party scene.
 - `web/scripts/generate-panda-scenes.mjs` is an OPTIONAL tool for future
   occasions: it edits `web/scripts/panda-reference.png` (the Thanksgiving
   frame) into a draft scene, Google Gemini image edit first, fal edit
@@ -214,7 +237,8 @@ shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
   Paid: run only with Anil's OK, review, then convert to the JPG format above.
 - Photos and videos live under `events/<id>/` in R2, so ownership checks and
   account deletion cover them; rows cascade with the event. Privacy and terms
-  pages describe the feature, Google/fal and Stripe.
+  pages describe the feature (Simple is made on our server; only Pro goes to
+  Google/fal) and Stripe.
 
 ## Not used here
 

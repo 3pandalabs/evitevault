@@ -71,6 +71,13 @@
       "when": 1795740917459,
       "tag": "0009_video_invites",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795744674224,
+      "tag": "0010_video_invite_text_lines",
+      "breakpoints": true
     }
   ]
 }

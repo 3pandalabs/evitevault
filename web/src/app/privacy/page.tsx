@@ -71,10 +71,12 @@ export default function PrivacyPage() {
             <strong>Designs:</strong> the template and colour or font choices for each event, and any templates you save.
           </li>
           <li>
-            <strong>Video invites (paid, optional):</strong> the words you want the video to say, the occasion, and for a
-            Pro video the photo you upload and a record that you confirmed it is you or that you have consent from
-            everyone in it (with the time). The finished video is stored in Cloudflare R2 and shown on your invitation.
-            We keep the order (price, status, Stripe payment reference); we never see or store your card details.
+            <strong>Video invites (optional):</strong> the occasion and, for a Simple video, the lines you want written
+            on screen (we make it ourselves from our own panda clip); for a Pro video, the words you want it to say,
+            the photo you upload and a record that you confirmed it is you or that you have consent from everyone in
+            it (with the time). The finished video is stored in Cloudflare R2 and shown on your invitation. We keep
+            the order (price, status, Stripe payment reference for paid ones); we never see or store your card
+            details.
           </li>
           <li>
             <strong>Announcements</strong> you send to your guests: subject, message, which guests it went to, and when.
@@ -173,9 +175,10 @@ export default function PrivacyPage() {
             content.
           </li>
           <li>
-            <strong>Google Cloud (Vertex AI)</strong> (USA) and <strong>fal.ai</strong> (USA): only if you order a video
-            invite. They receive the photo (your upload, or our panda scene) and the words you typed, and return the
-            video. Google is tried first; fal.ai (which uses ElevenLabs for the voice) only if Google fails.
+            <strong>Google Cloud (Vertex AI)</strong> (USA) and <strong>fal.ai</strong> (USA): only if you order a Pro
+            video invite. They receive your photo and the words you typed, and return the video. Google is tried
+            first; fal.ai (which uses ElevenLabs for the voice) only if Google fails. Simple video invites are made on
+            our own server and are not sent to them.
           </li>
           <li>
             <strong>Stripe</strong> (USA): takes payment for video invites. Your card details go to Stripe, never to us;

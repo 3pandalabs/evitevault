@@ -74,6 +74,7 @@ export const env = {
   // metadata.app=rsvpvault; POST /webhooks/stripe ignores everything else.
   STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? "",
   STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  // "0" makes Simple free (no Stripe; 5 per host per day). Pro is never free.
   VIDEO_INVITE_PRICE_SIMPLE_CENTS: process.env.VIDEO_INVITE_PRICE_SIMPLE_CENTS,
   VIDEO_INVITE_PRICE_PRO_CENTS: process.env.VIDEO_INVITE_PRICE_PRO_CENTS,
 

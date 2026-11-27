@@ -90,9 +90,9 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 
 | | Method | Path | Notes |
 |---|---|---|---|
-| H | GET | `/events/:eventId/video-invite` | `available` (a provider AND Stripe configured), prices, occasions, caps, the event's latest order (`state`: paying/making/ready/failed) with a presigned `videoUrl` when ready |
+| H | GET | `/events/:eventId/video-invite` | `available`, per-tier `tiers` (Simple: ffmpeg; Pro: Google/fal; paid tiers also need Stripe), prices (Simple may be 0 = free), occasions, `lineMax`, `freePerDay`, script cap, the event's latest order (`state`: paying/making/ready/failed, `lines` for Simple) with a presigned `videoUrl` when ready |
 | H | POST | `/events/:eventId/video-invite/photo/presign-upload` | Pro photo, key `events/<id>/video-photo/<uuid>` |
-| H | POST | `/events/:eventId/video-invite/checkout` | `{tier, occasion, script, photoKey?, attested?}` → `{checkoutUrl}`. 400 `script_*` / `photo_required` / `attestation_required`, 409 `video_invite_in_progress`, 503 `video_invites_unavailable`. Creates the order `pending_payment`; nothing is generated here |
+| H | POST | `/events/:eventId/video-invite/checkout` | Simple: `{tier:"simple", occasion, lines:{kicker, headline, when, where}}`; Pro: `{tier:"pro", occasion, script, photoKey, attested:true}`. Paid → `{checkoutUrl}` (order `pending_payment`, nothing generated until the webhook). Free Simple (price 0) → `{queued:true}` (order `paid` at once; 429 `free_daily_limit` after 5 per host per UTC day). 400 `headline_required` / `line_too_long` / `line_has_link` / `script_*` / `photo_required` / `attestation_required`, 409 `video_invite_in_progress`, 503 `video_invites_unavailable` |
 | P | POST | `/webhooks/stripe` | Signature over the raw body. Ignores anything not `metadata.app=rsvpvault, kind=video_invite`. Paid session → order `paid` (amount checked); expired → `cancelled` |
 
 ## Public invitation

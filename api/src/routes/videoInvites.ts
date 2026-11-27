@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
@@ -6,12 +6,15 @@ import { db } from "../db/index.js";
 import { users, videoInvites } from "../db/schema.js";
 import { env } from "../env.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
-import { generationAvailable } from "../lib/videoInvites/generate.js";
+import { tierAvailable } from "../lib/videoInvites/generate.js";
 import {
   ATTESTATION_TEXT,
   canTransition,
   cleanScript,
+  cleanTextLines,
   estimatedSeconds,
+  FREE_SIMPLE_PER_DAY,
+  freeLimitReached,
   hostView,
   isEnabled,
   MAX_SCRIPT_CHARS,
@@ -19,6 +22,8 @@ import {
   priceCents,
   routeStripeEvent,
   scriptProblem,
+  TEXT_LINE_MAX,
+  textLinesProblem,
   VIDEO_INVITE_OCCASIONS,
   VIDEO_INVITE_TIERS,
   type VideoInviteStatus,
@@ -27,9 +32,10 @@ import {
 import { createCheckoutSession, stripeConfigured, verifyStripeSignature } from "../lib/videoInvites/stripe.js";
 import { extForType, isAllowedImageType, presignDownload, presignUpload, videoPhotoKey } from "../plugins/r2.js";
 
-// Paid video invites (lib/videoInvites/policy.ts has the rules). Off unless
+// Video invites (lib/videoInvites/policy.ts has the rules). Off unless
 // VIDEO_INVITES=on: every host route answers 404 then, so the feature is
-// invisible. On but missing a provider or Stripe: 503 unavailable.
+// invisible. A tier is available when it can be made here (Simple: ffmpeg;
+// Pro: Google or fal) AND, if it costs money, Stripe is configured.
 
 function prices(): Record<VideoInviteTier, number> {
   return {
@@ -38,14 +44,28 @@ function prices(): Record<VideoInviteTier, number> {
   };
 }
 
-function available(): boolean {
-  return generationAvailable() && stripeConfigured();
+function availability(): Record<VideoInviteTier, boolean> {
+  const p = prices();
+  const ok = (tier: VideoInviteTier) => tierAvailable(tier) && (p[tier] === 0 || stripeConfigured());
+  return { simple: ok("simple"), pro: ok("pro") };
 }
+
+const line = (max: number) => z.string().max(max * 4).nullish();
 
 const checkoutBody = z.object({
   tier: z.enum(VIDEO_INVITE_TIERS),
   occasion: z.enum(VIDEO_INVITE_OCCASIONS),
-  script: z.string().max(2000),
+  // Pro: what the photo says.
+  script: z.string().max(2000).nullish(),
+  // Simple: the lines written on the template clip.
+  lines: z
+    .object({
+      kicker: line(TEXT_LINE_MAX.kicker),
+      headline: line(TEXT_LINE_MAX.headline),
+      when: line(TEXT_LINE_MAX.when),
+      where: line(TEXT_LINE_MAX.where),
+    })
+    .nullish(),
   photoKey: z.string().max(300).nullish(),
   attested: z.boolean().optional(),
 });
@@ -70,11 +90,15 @@ export async function videoInviteRoutes(app: FastifyInstance) {
           .where(and(eq(videoInvites.eventId, eventId), ne(videoInvites.status, "cancelled")))
           .orderBy(desc(videoInvites.createdAt))
           .limit(1);
+        const tiers = availability();
         return {
-          available: available(),
+          available: tiers.simple || tiers.pro,
+          tiers,
           prices: prices(),
           occasions: VIDEO_INVITE_OCCASIONS.map((id) => ({ id, label: OCCASION_LABELS[id] })),
           maxScriptChars: MAX_SCRIPT_CHARS,
+          lineMax: TEXT_LINE_MAX,
+          freePerDay: FREE_SIMPLE_PER_DAY,
           attestationText: ATTESTATION_TEXT,
           order: order
             ? {
@@ -82,6 +106,7 @@ export async function videoInviteRoutes(app: FastifyInstance) {
                 tier: order.tier,
                 occasion: order.occasion,
                 script: order.script,
+                lines: order.textLines ?? null,
                 state: hostView(order.status as VideoInviteStatus),
                 createdAt: order.createdAt,
                 videoUrl: order.status === "ready" && order.videoKey ? await presignDownload(order.videoKey) : null,
@@ -110,8 +135,9 @@ export async function videoInviteRoutes(app: FastifyInstance) {
       },
     );
 
-    // Creates the order and its Stripe Checkout session. Nothing is generated
-    // here: generation starts only when the webhook marks the order paid.
+    // Creates the order. Paid: with a Stripe Checkout session, and nothing is
+    // generated until the webhook marks it paid. Free Simple (price 0): queued
+    // straight away as `paid`, at most FREE_SIMPLE_PER_DAY per host per day.
     host.post(
       "/events/:eventId/video-invite/checkout",
       { schema: { params: z.object({ eventId: z.string().uuid() }), body: checkoutBody } },
@@ -120,11 +146,20 @@ export async function videoInviteRoutes(app: FastifyInstance) {
         const body = req.body as z.infer<typeof checkoutBody>;
         const event = await loadOwnedEvent(eventId, req.userId!, reply);
         if (!event) return;
-        if (!available()) return reply.code(503).send({ error: "video_invites_unavailable" });
+        if (!availability()[body.tier]) return reply.code(503).send({ error: "video_invites_unavailable" });
 
-        const script = cleanScript(body.script);
-        const problem = scriptProblem(script);
-        if (problem) return reply.code(400).send({ error: problem });
+        let script: string;
+        let textLines: ReturnType<typeof cleanTextLines> | null = null;
+        if (body.tier === "simple") {
+          textLines = cleanTextLines(body.lines ?? {});
+          const problem = textLinesProblem(textLines);
+          if (problem) return reply.code(400).send({ error: problem });
+          script = [textLines.kicker, textLines.headline, textLines.when, textLines.where].filter(Boolean).join(" · ");
+        } else {
+          script = cleanScript(body.script ?? "");
+          const problem = scriptProblem(script);
+          if (problem) return reply.code(400).send({ error: problem });
+        }
 
         let photoKey: string | null = null;
         let attestedAt: Date | null = null;
@@ -150,20 +185,40 @@ export async function videoInviteRoutes(app: FastifyInstance) {
         if (!me) return reply.code(401).send({ error: "not_authenticated" });
 
         const amount = prices()[body.tier];
-        const [order] = await db
-          .insert(videoInvites)
-          .values({
-            eventId,
-            hostId: req.userId!,
-            tier: body.tier,
-            occasion: body.occasion,
-            script,
-            photoKey,
-            attestedAt,
-            attestationText: attestedAt ? ATTESTATION_TEXT : null,
-            priceCents: amount,
-          })
-          .returning();
+        const values = {
+          eventId,
+          hostId: req.userId!,
+          tier: body.tier,
+          occasion: body.occasion,
+          script,
+          textLines,
+          photoKey,
+          attestedAt,
+          attestationText: attestedAt ? ATTESTATION_TEXT : null,
+          priceCents: amount,
+        };
+
+        if (amount === 0) {
+          // Free: no Stripe. Rate limited per host per UTC day, counting every
+          // free order made today whatever happened to it.
+          const dayStart = new Date();
+          dayStart.setUTCHours(0, 0, 0, 0);
+          const [{ n }] = await db
+            .select({ n: sql<number>`count(*)::int` })
+            .from(videoInvites)
+            .where(
+              and(
+                eq(videoInvites.hostId, req.userId!),
+                eq(videoInvites.priceCents, 0),
+                gte(videoInvites.createdAt, dayStart),
+              ),
+            );
+          if (freeLimitReached(n)) return reply.code(429).send({ error: "free_daily_limit" });
+          await db.insert(videoInvites).values({ ...values, status: "paid", paidAt: new Date() });
+          return { queued: true };
+        }
+
+        const [order] = await db.insert(videoInvites).values(values).returning();
 
         const back = `${env.WEB_ORIGIN}/dashboard/events/${eventId}`;
         try {
@@ -172,7 +227,7 @@ export async function videoInviteRoutes(app: FastifyInstance) {
             eventId,
             hostEmail: me.email,
             amountCents: amount,
-            productName: `RsvpVault video invite (${body.tier === "pro" ? "Pro: your photo" : "Simple: our pandas"})`,
+            productName: `RsvpVault video invite (${body.tier === "pro" ? "Pro: your photo" : "Simple: our pandas with your text"})`,
             successUrl: `${back}?video=paid`,
             cancelUrl: `${back}?video=cancelled`,
           });
@@ -180,7 +235,7 @@ export async function videoInviteRoutes(app: FastifyInstance) {
             .update(videoInvites)
             .set({ stripeSessionId: session.id, updatedAt: new Date() })
             .where(eq(videoInvites.id, order.id));
-          return { checkoutUrl: session.url, estimatedSeconds: estimatedSeconds(script) };
+          return { checkoutUrl: session.url, estimatedSeconds: body.tier === "pro" ? estimatedSeconds(script) : 8 };
         } catch (err) {
           req.log.error(err);
           await db
