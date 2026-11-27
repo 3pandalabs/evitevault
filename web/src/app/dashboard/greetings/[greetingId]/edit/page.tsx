@@ -1,11 +1,11 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import { getGreeting, updateGreeting } from "@/lib/api/host";
+import { PageHeader } from "../../../ui";
 import { GreetingForm, type GreetingFormValues } from "../../greeting-form";
 
 export default function EditGreetingPage() {
@@ -47,26 +47,23 @@ export default function EditGreetingPage() {
 
   return (
     <div>
-      <Link
-        href="/dashboard"
-        className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900"
-      >
-        <ArrowLeft className="size-4" />
-        Back to dashboard
-      </Link>
-
-      <h1 className="mt-4 text-2xl font-semibold">Edit greeting</h1>
+      <PageHeader
+        back={{ href: "/dashboard/greetings", label: "Back to greetings" }}
+        eyebrow="Greetings"
+        title="Edit greeting"
+        description="Change the card or its message, then download, share or email it from the preview."
+      />
 
       <GreetingForm
         initial={initial}
         greetingId={greetingId}
         submitLabel="Save changes"
-        cancelHref="/dashboard"
+        cancelHref="/dashboard/greetings"
         failureMessage="Couldn't save the greeting. Check the fields and try again."
         onSubmit={async (input) => {
           try {
             await updateGreeting(greetingId, input);
-            router.push("/dashboard");
+            router.push("/dashboard/greetings");
           } catch (err) {
             if (err instanceof ApiError && err.status === 401) {
               router.replace("/login");

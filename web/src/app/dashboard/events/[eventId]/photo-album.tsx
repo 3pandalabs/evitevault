@@ -68,7 +68,7 @@ export function PhotoAlbumCard({
   const count = recipientCounts[audience];
 
   return (
-    <Card>
+    <Card className="rounded-2xl border-zinc-200 bg-white/90 shadow-zinc-900/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Images className="size-4 text-slate-400" />

@@ -55,7 +55,7 @@ export function EventQrCode({ url, slug }: { url: string; slug: string }) {
   }
 
   return (
-    <Card>
+    <Card className="rounded-2xl border-zinc-200 bg-white/90 shadow-zinc-900/5">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <QrCode className="size-4 text-slate-400" />
@@ -76,7 +76,7 @@ export function EventQrCode({ url, slug }: { url: string; slug: string }) {
               )}
             </div>
 
-            <div className="min-w-0 flex-1">
+            <div className="min-w-[14rem] flex-1">
               <p className="text-sm text-slate-600">
                 Scanning this opens the invitation and the RSVP form. Put it on a printed card,
                 a poster, or a message — anyone who scans it can reply.

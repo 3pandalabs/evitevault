@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { PageHeader } from "../../../ui";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -65,22 +66,13 @@ export default function DesignCardPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
-      <Link
-        href={`/dashboard/events/${eventId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
-      >
-        <ArrowLeft className="size-4" />
-        {event.title}
-      </Link>
-
-      <header className="mt-4 mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Design the card</h1>
-        <p className="mt-1 max-w-2xl text-slate-600">
-          The image you send to WhatsApp, and the preview people see when the invitation link is
-          shared. The invitation page itself keeps its own layout — this is the picture of it.
-        </p>
-      </header>
+    <div>
+      <PageHeader
+        back={{ href: `/dashboard/events/${eventId}?tab=design`, label: event.title }}
+        eyebrow="Design"
+        title="Design the card"
+        description="The image you send to WhatsApp, and the preview people see when the invitation link is shared. The invitation page itself keeps its own layout — this is the picture of it."
+      />
 
       {/* Re-fetching after a save keeps coverImageKey and themeOverrides in step
           with what the API actually stored, so a reload can't surprise anyone. */}
