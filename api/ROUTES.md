@@ -95,6 +95,23 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 | H | POST | `/events/:eventId/video-invite/checkout` | Simple: `{tier:"simple", occasion, lines:{kicker, headline, when, where}}`; Pro: `{tier:"pro", occasion, script, photoKey, attested:true}`. Paid → `{checkoutUrl}` (order `pending_payment`, nothing generated until the webhook). Free Simple (price 0) → `{queued:true}` (order `paid` at once; 429 `free_daily_limit` after 5 per host per UTC day). 400 `headline_required` / `line_too_long` / `line_has_link` / `script_*` / `photo_required` / `attestation_required`, 409 `video_invite_in_progress`, 503 `video_invites_unavailable` |
 | P | POST | `/webhooks/stripe` | Signature over the raw body. Ignores anything not `metadata.app=rsvpvault, kind=video_invite`. Paid session → order `paid` (amount checked); expired → `cancelled` |
 
+## Admin tools (requireRealAdmin: role re-read from the DB; 403 inside a test host)
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| H | PATCH | `/auth/me/test-mode` | `{on}` → admin "Test as host" (403 non-admin / test host). `/auth/me` returns `testAsHost`, `testHost`, `testMode`, `isInternal`, `internalLabel`; `role` stays the REAL role |
+| A | GET | `/admin/overview` | Counts: real hosts (excl. admins, test hosts, internal, marked test), events, guests, greetings, video orders, refund queue, real revenue |
+| A | GET | `/admin/users?q=` | Up to 200, newest first; flags, events/greetings counts |
+| A | POST | `/admin/users/:id/flags` | `{isInternal?, internalLabel?, markedTest?}`. 409 `cannot_mark_test` (admins, test hosts) / `cannot_mark_internal` (test hosts). Changes no price, gate or email |
+| A | GET | `/admin/events?q=` | Up to 200; `hostTest` = ours |
+| A | GET | `/admin/video-invites?refundNeeded=1` | Orders, refund queue first |
+| A | POST | `/admin/video-invites/:id/refunded` | `failed` → `refunded` after the Stripe refund; 409 `not_failed` |
+| H | GET/POST | `/test-hosts` | Real admin (or from inside one of their test hosts): list / create (`{name}`, max 50). *.invalid email, random password |
+| H | POST | `/test-hosts/:id/switch` | `{refreshToken?}` → a new token pair for the test host (old session ended). 404 unless the caller's admin owns it |
+| H | POST | `/test-hosts/back` | Only from a session carrying the `testOwner` claim, re-checked against `users.test_owner_id` → the admin's token pair |
+
+`A` = admin only. `/auth/login` refuses test hosts (401); `/auth/forgot-password` sends nothing to a *.invalid address.
+
 ## Public invitation
 
 | | Method | Path | Notes |

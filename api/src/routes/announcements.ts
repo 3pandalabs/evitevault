@@ -6,7 +6,8 @@ import { db } from "../db/index.js";
 import { announcements, guests } from "../db/schema.js";
 import { env } from "../env.js";
 import { buildPhotoAlbumEmail } from "../lib/emails/photoAlbum.js";
-import { mailerConfigured, sendMail, type Mail } from "../lib/mailer.js";
+import { mailerConfigured, type Mail } from "../lib/mailer.js";
+import { sendGuestMail } from "../lib/testMode/index.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
 
 const eventParams = z.object({ eventId: z.string().uuid() });
@@ -92,7 +93,8 @@ export async function announcementRoutes(app: FastifyInstance) {
         };
       });
 
-      const result = await sendMail(messages, (msg) => req.log.info({ eventId }, msg));
+      // Guest mail: suppressed in test mode except to the admin (lib/testMode).
+      const result = await sendGuestMail(event.hostId, messages, (msg) => req.log.info({ eventId }, msg));
 
       const [updated] = await db
         .update(announcements)
@@ -160,7 +162,8 @@ export async function announcementRoutes(app: FastifyInstance) {
         })
         .returning();
 
-      const result = await sendMail(
+      const result = await sendGuestMail(
+        event.hostId,
         recipients.map((g) => buildPhotoAlbumEmail(event, g, event.photoAlbumUrl!, message ?? null)),
         (msg) => req.log.info({ eventId }, msg),
       );

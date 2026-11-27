@@ -6,6 +6,8 @@ declare module "fastify" {
   interface FastifyRequest {
     userId?: string;
     userRole?: UserRole;
+    /** Inside an admin's test host: the admin's id (routes/testHosts.ts). */
+    testOwnerClaim?: string;
   }
 }
 
@@ -23,6 +25,7 @@ function extractBearer(req: FastifyRequest): string | null {
 export const authPlugin = fp(async (fastify) => {
   fastify.decorateRequest("userId", undefined);
   fastify.decorateRequest("userRole", undefined);
+  fastify.decorateRequest("testOwnerClaim", undefined);
 
   fastify.addHook("onRequest", async (req) => {
     const token = extractBearer(req);
@@ -31,6 +34,7 @@ export const authPlugin = fp(async (fastify) => {
       const payload = verifyAccessToken(token);
       req.userId = payload.sub;
       req.userRole = payload.role;
+      req.testOwnerClaim = payload.testOwner;
     } catch {
       // Invalid/expired token: leave req.userId unset, requireAuth will 401.
     }

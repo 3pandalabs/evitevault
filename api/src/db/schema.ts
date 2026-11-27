@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  type AnyPgColumn,
   index,
   integer,
   jsonb,
@@ -32,9 +33,31 @@ export const users = pgTable(
     // "admin" sees the internal ops dashboard (all events, platform analytics);
     // "host" only ever sees their own rows.
     role: text("role").notNull().default("host"),
+
+    // --- Admin tools (migration 0011, lib/testMode; same model as AdVault) ---
+    // An admin with this on is treated EXACTLY like a host in host flows
+    // (paid video invites at the 50-cent test price, tagged test_mode=1), and
+    // email to guests is suppressed except to the admin's own address.
+    // Meaningless on a non-admin. Admin pages keep reading the real role.
+    testAsHost: boolean("test_as_host").notNull().default(false),
+    // A TEST HOST an admin created and switches into: non-null = always test
+    // mode, *.invalid email, random password (login refused). Deleted with
+    // its admin.
+    testOwnerId: uuid("test_owner_id").references((): AnyPgColumn => users.id, { onDelete: "cascade" }),
+    // 3PandaLabs' own account (e.g. inviting people to our own events). Real
+    // prices and real email; only excluded from customer counts and revenue.
+    isInternal: boolean("is_internal").notNull().default(false),
+    internalLabel: text("internal_label"),
+    // An ordinary sign-up that is really ours (Play reviewer login, QA): works
+    // exactly like a host, only excluded from customer counts and revenue.
+    markedTest: boolean("marked_test").notNull().default(false),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("users_role_check", sql`${t.role} in ('host','admin')`)],
+  (t) => [
+    check("users_role_check", sql`${t.role} in ('host','admin')`),
+    index("idx_users_test_owner").on(t.testOwnerId),
+  ],
 );
 
 // Revocable refresh tokens. Only the bcrypt hash is stored, so a DB leak alone
@@ -503,6 +526,9 @@ export const videoInvites = pgTable(
     // A paid order that could not be delivered. Ops refunds it in Stripe and
     // sets status = 'refunded'. Counted in /metrics so it can't be forgotten.
     refundNeeded: boolean("refund_needed").notNull().default(false),
+    // Made by an admin in test mode or a test host: charged the 50-cent test
+    // price, tagged test_mode=1 at Stripe, excluded from revenue.
+    testMode: boolean("test_mode").notNull().default(false),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

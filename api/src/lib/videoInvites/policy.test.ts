@@ -138,4 +138,22 @@ test("checkout form tags the session and the payment as rsvpvault", () => {
   assert.equal(f.get("payment_intent_data[metadata][order_id]"), "o1");
   assert.equal(f.get("line_items[0][price_data][unit_amount]"), "500");
   assert.equal(f.get("mode"), "payment");
+  assert.equal(f.get("metadata[test_mode]"), null, "real orders are not tagged test");
+});
+
+test("test-mode checkout is tagged test_mode=1 and a test host's .invalid email is not sent to Stripe", () => {
+  const f = checkoutForm({
+    orderId: "o2",
+    eventId: "e1",
+    hostEmail: null,
+    amountCents: 50,
+    productName: "RsvpVault video invite",
+    successUrl: "https://x/s",
+    cancelUrl: "https://x/c",
+    testMode: true,
+  });
+  assert.equal(f.get("metadata[test_mode]"), "1");
+  assert.equal(f.get("payment_intent_data[metadata][test_mode]"), "1");
+  assert.equal(f.get("customer_email"), null);
+  assert.equal(f.get("line_items[0][price_data][unit_amount]"), "50");
 });

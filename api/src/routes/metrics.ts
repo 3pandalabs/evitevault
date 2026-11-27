@@ -41,6 +41,13 @@ type CountsRow = {
   greetings: number;
   greeting_hosts: number;
   greetings_last_7_days: number;
+  real_hosts: number;
+  admins: number;
+  test_hosts: number;
+  internal_accounts: number;
+  marked_test_accounts: number;
+  video_invite_revenue_cents: number;
+  video_invites_test_mode: number;
 };
 
 type DatabaseRow = {
@@ -79,7 +86,20 @@ export async function metricsRoutes(app: FastifyInstance) {
         (select count(*) from video_invites where refund_needed and status <> 'refunded')::int as video_invites_refund_needed,
         (select count(*) from greetings)::int as greetings,
         (select count(distinct host_id) from greetings)::int as greeting_hosts,
-        (select count(*) from greetings where created_at > now() - interval '7 days')::int as greetings_last_7_days
+        (select count(*) from greetings where created_at > now() - interval '7 days')::int as greetings_last_7_days,
+        -- Admin tools (lib/testMode): admins, test hosts, internal and
+        -- marked-test accounts are ours, not customers. \`hosts\` above still
+        -- counts every users row, as before.
+        (select count(*) from users where role = 'host' and test_owner_id is null and not is_internal and not marked_test)::int as real_hosts,
+        (select count(*) from users where role = 'admin')::int as admins,
+        (select count(*) from users where test_owner_id is not null)::int as test_hosts,
+        (select count(*) from users where is_internal)::int as internal_accounts,
+        (select count(*) from users where marked_test)::int as marked_test_accounts,
+        -- Real money only: paid, not test-mode, not refunded, from real customers.
+        (select coalesce(sum(v.price_cents), 0) from video_invites v join users u on u.id = v.host_id
+           where v.paid_at is not null and not v.test_mode and v.status <> 'refunded'
+             and u.role = 'host' and u.test_owner_id is null and not u.is_internal and not u.marked_test)::int as video_invite_revenue_cents,
+        (select count(*) from video_invites where test_mode)::int as video_invites_test_mode
     `);
 
     const database = await db.execute<DatabaseRow>(sql`
@@ -111,6 +131,13 @@ export async function metricsRoutes(app: FastifyInstance) {
         greetings: c.greetings,
         greetingHosts: c.greeting_hosts,
         greetingsLast7Days: c.greetings_last_7_days,
+        realHosts: c.real_hosts,
+        admins: c.admins,
+        testHosts: c.test_hosts,
+        internalAccounts: c.internal_accounts,
+        markedTestAccounts: c.marked_test_accounts,
+        videoInviteRevenueCents: c.video_invite_revenue_cents,
+        videoInvitesTestMode: c.video_invites_test_mode,
       },
       traffic: {
         // Rolling 60 minutes, in-process — see metrics/collector.ts. Resets on

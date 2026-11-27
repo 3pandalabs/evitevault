@@ -80,7 +80,9 @@ export async function sendPendingInvitations(
 
     const result = await sendInvitations(event as Event, pending, log);
     const failedGuests = recipientsByAddress(pending, result.failedRecipients);
-    await markDelivered(eventId, pending, failedGuests);
+    // A test-mode host's guests are held back (lib/testMode), never marked invited.
+    const notSent = recipientsByAddress(pending, result.suppressedRecipients);
+    await markDelivered(eventId, pending, [...failedGuests, ...notSent]);
 
     summary.events += 1;
     summary.delivered += result.delivered;

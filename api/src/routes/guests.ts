@@ -140,10 +140,20 @@ export async function guestRoutes(app: FastifyInstance) {
       const mailed =
         sendInvites && event.status === "published"
           ? await sendInvitations(event, inserted, (m) => req.log.info({ eventId }, m))
-          : { delivered: 0, failed: 0, skipped: 0, failedRecipients: [], quotaExhausted: false };
+          : {
+              delivered: 0,
+              failed: 0,
+              skipped: 0,
+              failedRecipients: [],
+              quotaExhausted: false,
+              testSuppressed: 0,
+              suppressedRecipients: [],
+            };
 
       const failedGuests = recipientsByAddress(inserted, mailed.failedRecipients);
-      await markDelivered(eventId, inserted, failedGuests);
+      // Test-mode suppressed guests were not written to: never mark them invited.
+      const notSent = recipientsByAddress(inserted, mailed.suppressedRecipients);
+      await markDelivered(eventId, inserted, [...failedGuests, ...notSent]);
 
       return reply.code(201).send({
         added: inserted.length,
@@ -151,6 +161,8 @@ export async function guestRoutes(app: FastifyInstance) {
         emailed: mailed.delivered,
         emailsFailed: mailed.failed + mailed.skipped,
         failedGuests,
+        // Test mode (admin testing as host / test host): held back, not sent.
+        testNotSent: mailed.testSuppressed,
         // So the dashboard can say "added, but email isn't set up" rather than
         // implying invitations went out.
         emailConfigured: mailerConfigured(),
@@ -227,7 +239,8 @@ export async function guestRoutes(app: FastifyInstance) {
       );
 
       const failedGuests = recipientsByAddress(recipients, result.failedRecipients);
-      await markDelivered(eventId, recipients, failedGuests);
+      const notSent = recipientsByAddress(recipients, result.suppressedRecipients);
+      await markDelivered(eventId, recipients, [...failedGuests, ...notSent]);
 
       return {
         recipients: recipients.length,
@@ -237,6 +250,7 @@ export async function guestRoutes(app: FastifyInstance) {
         // exactly these — the expected recovery from a daily quota, not a rare
         // error path.
         failedGuests,
+        testNotSent: result.testSuppressed,
         emailConfigured: mailerConfigured(),
       };
     },

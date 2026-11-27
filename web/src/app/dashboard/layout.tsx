@@ -6,6 +6,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { clearTokens, getTokens } from "@/lib/api/host";
 import { Button } from "@/components/ui/button";
 import { WordmarkName, WordmarkTag } from "@/components/Wordmark";
+import { AdminBar } from "./admin-bar";
 
 // localStorage is an external store, so it is read with useSyncExternalStore
 // rather than copied into state inside an effect. Two things fall out of that
@@ -70,6 +71,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
       </header>
+      {/* Admin tools: test-mode / test-host banners and the Admin link. */}
+      <AdminBar />
       <main className="mx-auto max-w-5xl px-4 py-8">{children}</main>
     </div>
   );

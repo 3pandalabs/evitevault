@@ -417,6 +417,8 @@ export const addGuests = (id: string, guests: { name: string; email?: string | n
     emailsFailed: number;
     failedGuests: FailedGuest[];
     emailConfigured: boolean;
+    /** Test mode: invitations held back, not sent. */
+    testNotSent?: number;
   }>(`/events/${id}/guests`, {
     method: "POST",
     // Adding a guest to a published event invites them, immediately. Adding
@@ -445,6 +447,8 @@ export const sendInvitations = (id: string, includeResponded = false, guestIds?:
     failed: number;
     failedGuests: FailedGuest[];
     emailConfigured: boolean;
+    /** Test mode: invitations held back, not sent. */
+    testNotSent?: number;
   }>(`/events/${id}/guests/send-invitations`, {
     method: "POST",
     body: JSON.stringify({ includeResponded, ...(guestIds?.length ? { guestIds } : {}) }),
@@ -544,3 +548,107 @@ export async function startVideoInviteCheckout(
 ): Promise<{ checkoutUrl?: string; estimatedSeconds?: number; queued?: boolean }> {
   return hostFetch(`/events/${eventId}/video-invite/checkout`, { method: "POST", body: JSON.stringify(input) });
 }
+
+// --- Admin tools (lib/testMode in the API) ----------------------------------
+
+export type Me = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  /** The REAL role. */
+  role: "host" | "admin";
+  createdAt: string;
+  /** Admin "Test as host" switch. */
+  testAsHost: boolean;
+  /** Inside an admin's test host. */
+  testHost: boolean;
+  /** Admin testing as host, or a test host: 50-cent charges, guest email held back. */
+  testMode: boolean;
+  isInternal: boolean;
+  internalLabel: string | null;
+};
+
+export const getMe = () => hostFetch<Me>("/auth/me");
+
+export const setTestMode = (on: boolean) =>
+  hostFetch<{ testAsHost: boolean }>("/auth/me/test-mode", { method: "PATCH", body: JSON.stringify({ on }) });
+
+export type TestHost = { id: string; name: string; createdAt: string };
+
+export const listTestHosts = () => hostFetch<{ hosts: TestHost[]; current: string | null }>("/test-hosts");
+
+export const createTestHost = (name: string) =>
+  hostFetch<TestHost>("/test-hosts", { method: "POST", body: JSON.stringify({ name }) });
+
+/** Switches this browser into a test host (or back): swaps the stored tokens. */
+async function switchTo(path: string): Promise<void> {
+  const { refresh } = getTokens();
+  const tokens = await hostFetch<{ accessToken: string; refreshToken: string }>(path, {
+    method: "POST",
+    body: JSON.stringify(refresh ? { refreshToken: refresh } : {}),
+  });
+  setTokens(tokens.accessToken, tokens.refreshToken);
+}
+
+export const switchIntoTestHost = (id: string) => switchTo(`/test-hosts/${id}/switch`);
+export const switchBackToAdmin = () => switchTo("/test-hosts/back");
+
+export type AdminOverview = Record<string, number>;
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: "host" | "admin";
+  createdAt: string;
+  testAsHost: boolean;
+  testHost: boolean;
+  isInternal: boolean;
+  internalLabel: string | null;
+  markedTest: boolean;
+  events: number;
+  greetings: number;
+};
+
+export type AdminEvent = {
+  id: string;
+  title: string;
+  status: string;
+  startsAt: string;
+  createdAt: string;
+  hostEmail: string;
+  hostTest: boolean;
+  guests: number;
+  attending: number;
+};
+
+export type AdminVideoOrder = {
+  id: string;
+  eventId: string;
+  eventTitle: string;
+  hostEmail: string;
+  tier: string;
+  status: string;
+  provider: string | null;
+  priceCents: number;
+  testMode: boolean;
+  refundNeeded: boolean;
+  stripePaymentIntent: string | null;
+  error: string | null;
+  attempts: number;
+  createdAt: string;
+  paidAt: string | null;
+};
+
+const qs = (q?: string) => (q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : "");
+
+export const adminOverview = () => hostFetch<AdminOverview>("/admin/overview");
+export const adminUsers = (q?: string) => hostFetch<{ users: AdminUser[] }>(`/admin/users${qs(q)}`);
+export const adminEvents = (q?: string) => hostFetch<{ events: AdminEvent[] }>(`/admin/events${qs(q)}`);
+export const adminVideoOrders = (refundNeeded = false) =>
+  hostFetch<{ orders: AdminVideoOrder[] }>(`/admin/video-invites${refundNeeded ? "?refundNeeded=1" : ""}`);
+export const adminSetFlags = (
+  id: string,
+  flags: { isInternal?: boolean; internalLabel?: string | null; markedTest?: boolean },
+) => hostFetch(`/admin/users/${id}/flags`, { method: "POST", body: JSON.stringify(flags) });
+export const adminMarkRefunded = (id: string) => hostFetch(`/admin/video-invites/${id}/refunded`, { method: "POST" });

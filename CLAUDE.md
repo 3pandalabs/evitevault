@@ -240,6 +240,67 @@ shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
   pages describe the feature (Simple is made on our server; only Pro goes to
   Google/fal) and Stripe.
 
+## Admin tools (2026-11-26, migration 0011, `api/src/lib/testMode`)
+
+The same model as AdVault ("Test as customer", test customers, internal and
+marked-test accounts), COPIED not imported, with RsvpVault's names. Routes in
+`api/ROUTES.md` "Admin tools"; web `/dashboard/admin` + the banner in
+`web/src/app/dashboard/admin-bar.tsx`.
+
+- **Who is admin:** `users.role = 'admin'` (CHECK allows `host`/`admin`). There
+  is no UI to grant it; an operator runs SQL against the database:
+  `UPDATE users SET role = 'admin' WHERE email = '<address>';` The JWT carries
+  the role for up to 15 minutes, so admin routes (`requireRealAdmin` in
+  `lib/testMode/index.ts`) re-read it from the database every time and refuse
+  a session inside a test host.
+- **Test as host** (`users.test_as_host`, `PATCH /auth/me/test-mode`, real
+  admins only): the admin is treated exactly like a host in host flows. Any
+  host-flow check that would read `role === "admin"` must go through
+  `hostIdentity()` / `customerFlowRole()`, never the raw role. Admin pages keep
+  the real role so the admin can always switch back. Banner on every dashboard
+  page while on.
+- **Test hosts** (`users.test_owner_id` = the admin, `routes/testHosts.ts`):
+  role host, `test-…@test.rsvpvault.invalid`, random password; `/auth/login`
+  refuses them and password reset sends nothing. The admin switches in (new
+  token pair carrying a `testOwner` claim) and back ("Back to admin" banner,
+  accepted only from a session with the claim, re-checked against the DB).
+  Not a sign-up: no "RsvpVault New user" alert. Always in test mode. Deleted
+  with their admin (FK cascade).
+- **Test mode = 50-cent payments.** Paid video invites cost `TEST_PRICE_CENTS`
+  (`chargeCents`), the Stripe session and payment are tagged `test_mode=1`, the
+  order has `video_invites.test_mode`, and revenue excludes it. Free Simple
+  stays free. A test host's .invalid email is never sent to Stripe.
+- **NO email to real guests in test mode (the safe option, deliberately).**
+  Every host-initiated guest email goes through `sendGuestMail(hostId, …)`
+  (invitations incl. the pending job, announcements, photo album, greetings):
+  in test mode ONLY the real admin's own login address is reached; every other
+  message is suppressed, counted (`testNotSent` / `testSuppressed` in the
+  responses, "Test mode: N not sent" in the UI) and never delivered. Not a
+  domain allowlist: guest lists are pasted from real contacts, and one real
+  friend in a test event must not get a real invitation. Suppressed guests
+  keep `invited_at` null (never marked invited). To see a real invitation in
+  test mode, add your own address as a guest. Guest-initiated mail (the RSVP
+  confirmation a guest asks for) is unchanged. Never add a guest send path
+  that calls `sendMail` directly.
+- **Internal** (`users.is_internal` + `internal_label`) and **marked test**
+  (`users.marked_test`), set on the Users page (`POST /admin/users/:id/flags`):
+  change NO price, gate or email; they only keep an account out of customer
+  counts and revenue. Marked test: ordinary hosts only (409 for admins and
+  test hosts); internal: never on a test host.
+- **"Real customer"** = role host, not a test host, not internal, not marked
+  test (`isRealCustomer`, and the same SQL in `routes/admin.ts` / `/metrics`).
+  `/metrics` `counts` gained `realHosts`, `admins`, `testHosts`,
+  `internalAccounts`, `markedTestAccounts`, `videoInviteRevenueCents` (real
+  customers, paid, not test, not refunded) and `videoInvitesTestMode`; `hosts`
+  still counts every users row. The `3pandalabs/admin` page should show
+  `realHosts` instead of `hosts`, and its RsvpVault Mermaid diagram needs the
+  new boundaries: admin routes (DB role check), test-host switch/back, and the
+  guest-mail guard in front of the mailer.
+- Tests: `lib/testMode/policy.test.ts` (pure: test mode, roles, 50-cent
+  price, switching, the guest-mail guard, customer counting, flag rules). No
+  PGlite in this repo yet, so the DB paths are covered by the pure rules plus
+  typecheck.
+
 ## Not used here
 
 No Temporal, no native mobile app (`android/` is only a TWA shell), no Supabase. The hourly job above is deliberately
