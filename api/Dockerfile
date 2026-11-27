@@ -18,6 +18,14 @@ COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/drizzle ./drizzle
+# The font Simple video invites are drawn with (lib/videoInvites/compose.ts
+# resolves assets/ against the working directory, /app).
+COPY --from=build /app/assets ./assets
+
+# ffmpeg draws the host's text onto the Simple video invite template clips
+# (lib/videoInvites/compose.ts). Without it Simple reports itself unavailable;
+# nothing else in the API needs it.
+RUN apk add --no-cache ffmpeg
 
 # Coolify/Traefik terminates TLS in front of this container; it only ever needs
 # to listen on plain HTTP inside the private Docker network.

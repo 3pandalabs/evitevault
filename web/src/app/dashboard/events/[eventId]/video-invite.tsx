@@ -8,42 +8,98 @@ import {
   startVideoInviteCheckout,
   uploadVideoInvitePhoto,
   type VideoInviteInfo,
+  type VideoInviteLines,
   type VideoInviteTier,
 } from "@/lib/api/host";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label, Textarea } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 
 const ERRORS: Record<string, string> = {
   script_too_short: "Write a little more: at least a short sentence.",
   script_too_long: "That's too long for one video. Keep it short and warm.",
   script_has_link: "Leave links out: the invitation already has the link.",
+  headline_required: "Add the main line (for example the names or the event).",
+  line_too_long: "One of the lines is too long. Keep each one short.",
+  line_has_link: "Leave links out: the invitation already has the link.",
   photo_required: "Add your photo first.",
   attestation_required: "Tick the box to confirm the photo.",
   video_invite_in_progress: "A video for this event is already being made.",
-  video_invites_unavailable: "Video invites are not available right now. Please try again later.",
+  video_invites_unavailable: "This video type is not available right now. Please try again later.",
+  free_daily_limit: "You've made today's free videos. Please try again tomorrow.",
   checkout_failed: "Couldn't open the payment page. Please try again.",
   upload_failed: "The photo didn't upload. Please try again.",
   unsupported_content_type: "Use a JPG, PNG or WebP photo.",
 };
 
-const money = (cents: number) => `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;
+const DEFAULT_LINE_MAX: Record<keyof VideoInviteLines, number> = { kicker: 40, headline: 60, when: 60, where: 80 };
+
+const money = (cents: number) => (cents === 0 ? "Free" : `$${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`);
 
 /**
- * Paid video invite on the event page. The host picks Simple (our three
- * pandas say their words) or Pro (their own photo says it), pays on Stripe's
- * page, and comes back here; the API makes the video in the background and
- * this card polls until it is ready. Renders nothing while the feature is off.
+ * The live preview of a Simple video: the occasion's panda scene with the
+ * host's lines in the top ~40%, roughly as the API's ffmpeg render draws them
+ * (lib/videoInvites/policy.ts layoutTextLines). Sizes are in container-width
+ * units so the 9:16 box looks the same at 360px and on a desktop.
  */
-export function VideoInviteCard({ eventId, title }: { eventId: string; title: string }) {
+function SimplePreview({ occasion, lines }: { occasion: string; lines: VideoInviteLines }) {
+  return (
+    <div
+      className="relative mx-auto aspect-[9/16] w-full max-w-[260px] overflow-hidden rounded-lg bg-slate-900 [container-type:inline-size]"
+      aria-label="Preview of your video"
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={`/video-invites/pandas-${occasion}.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      <div className="absolute inset-x-0 top-0 h-[44%] bg-gradient-to-b from-black/45 via-black/25 to-transparent" />
+      <div
+        className="absolute inset-x-[7.4%] top-[5.7%] flex h-[34%] flex-col items-center justify-center gap-[1.2cqw] text-center text-white"
+        style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}
+      >
+        {lines.kicker ? <p className="text-[4.3cqw] leading-tight opacity-90">{lines.kicker}</p> : null}
+        <p className="text-[8.2cqw] font-medium leading-[1.05] [overflow-wrap:anywhere]">
+          {lines.headline || "Your main line"}
+        </p>
+        {lines.when ? <p className="text-[4.8cqw] leading-tight">{lines.when}</p> : null}
+        {lines.where ? <p className="text-[4.3cqw] leading-tight opacity-90">{lines.where}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Video invite on the event page.
+ *   Simple: our three pandas' template clip for the occasion, with the host's
+ *           invitation text written on screen (made in seconds; may be free).
+ *   Pro:    the host's own photo comes to life and says their words.
+ * Paid orders go through Stripe's page and come back here; the API makes the
+ * video in the background and this card polls until it is ready. Renders
+ * nothing while the feature is off.
+ */
+export function VideoInviteCard({
+  eventId,
+  title,
+  defaults,
+}: {
+  eventId: string;
+  title: string;
+  /** Prefill for the Simple lines, from the event. */
+  defaults: { headline: string; when: string; where: string };
+}) {
   const [info, setInfo] = useState<VideoInviteInfo | null>(null);
   const [tier, setTier] = useState<VideoInviteTier>("simple");
   const [occasion, setOccasion] = useState("party");
+  const [lines, setLines] = useState<VideoInviteLines>({
+    kicker: "You're invited to",
+    headline: defaults.headline.slice(0, DEFAULT_LINE_MAX.headline),
+    when: defaults.when.slice(0, DEFAULT_LINE_MAX.when),
+    where: defaults.where.slice(0, DEFAULT_LINE_MAX.where),
+  });
   const [script, setScript] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [attested, setAttested] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queued, setQueued] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
@@ -68,18 +124,26 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
   const state = info?.order?.state ?? "none";
   const backFromStripe =
     typeof window !== "undefined" && new URLSearchParams(window.location.search).get("video") === "paid";
+  const waiting = state === "making" || ((backFromStripe || queued) && state !== "ready" && state !== "failed");
   useEffect(() => {
-    if (!(state === "making" || (backFromStripe && state === "paying"))) return;
-    const id = setInterval(load, 5000);
+    if (!waiting) return;
+    const id = setInterval(load, 4000);
     return () => clearInterval(id);
-  }, [state, backFromStripe, load]);
+  }, [waiting, load]);
 
   if (!info) return null;
 
   const order = info.order;
+  const lineMax = info.lineMax ?? DEFAULT_LINE_MAX;
+  const tierOk = (t: VideoInviteTier) => info.tiers?.[t] ?? info.available;
+  const price = info.prices[tier];
   const chars = script.trim().length;
+  const canSubmit = tier === "simple" ? lines.headline.trim().length > 0 : chars >= 10;
 
-  async function onPay() {
+  const setLine = (k: keyof VideoInviteLines) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setLines((prev) => ({ ...prev, [k]: e.target.value }));
+
+  async function onMake() {
     setError(null);
     setBusy(true);
     try {
@@ -89,14 +153,19 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
         if (!attested) throw new ApiError(400, "attestation_required");
         photoKey = await uploadVideoInvitePhoto(eventId, photo);
       }
-      const { checkoutUrl } = await startVideoInviteCheckout(eventId, {
+      const res = await startVideoInviteCheckout(eventId, {
         tier,
         occasion,
-        script,
-        photoKey,
-        attested: tier === "pro" ? attested : undefined,
+        ...(tier === "simple" ? { lines } : { script, photoKey, attested }),
       });
-      window.location.href = checkoutUrl;
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl;
+        return;
+      }
+      // Free: queued straight away.
+      setQueued(true);
+      setBusy(false);
+      load();
     } catch (err) {
       const code = err instanceof ApiError ? err.code : "checkout_failed";
       setError(ERRORS[code] ?? "Something went wrong. Please try again.");
@@ -127,13 +196,13 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {order?.state === "ready" && order.videoUrl ? (
+        {order?.state === "ready" && order.videoUrl && !waiting ? (
           <div className="space-y-3">
             <video
               src={order.videoUrl}
               controls
               playsInline
-              className="mx-auto max-h-[480px] w-full max-w-xs rounded-lg bg-black"
+              className="mx-auto aspect-[9/16] max-h-[480px] w-full max-w-xs rounded-lg bg-black"
             />
             <p className="text-sm text-slate-600">
               Your video invite is ready. It also plays at the top of your invitation page.
@@ -151,26 +220,26 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
               </a>
             </div>
           </div>
-        ) : order?.state === "making" || (backFromStripe && order?.state === "paying") ? (
+        ) : waiting ? (
           <div className="flex items-center gap-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-700">
             <Loader2 className="size-4 shrink-0 animate-spin" />
-            Payment received. We&apos;re making your video now. It usually takes a few minutes; you can leave this
-            page and come back.
+            {order?.tier === "pro" || tier === "pro"
+              ? "We're making your video now. It usually takes a few minutes; you can leave this page and come back."
+              : "We're making your video now. It only takes a moment."}
           </div>
         ) : order?.state === "failed" ? (
           <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">
-            We couldn&apos;t make this video. We&apos;ll refund your payment, usually within a few days. Sorry about that.
+            We couldn&apos;t make this video.{" "}
+            {info.prices[order.tier] > 0 ? "We'll refund your payment, usually within a few days. " : ""}
+            Sorry about that.
           </p>
         ) : null}
 
         {!info.available ? (
           <p className="text-sm text-slate-600">Video invites are not available right now. Please check back soon.</p>
-        ) : order?.state === "making" ? null : (
+        ) : waiting ? null : (
           <div className="space-y-4">
-            <p className="text-sm text-slate-600">
-              Turn your invitation into a short video your guests will love. Write what you&apos;d like to say and
-              we&apos;ll make the video.
-            </p>
+            <p className="text-sm text-slate-600">Turn your invitation into a short video your guests will love.</p>
 
             <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Video type">
               {(["simple", "pro"] as const).map((t) => (
@@ -179,8 +248,9 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
                   type="button"
                   role="radio"
                   aria-checked={tier === t}
+                  disabled={!tierOk(t)}
                   onClick={() => setTier(t)}
-                  className={`rounded-lg border p-3 text-left text-sm ${
+                  className={`rounded-lg border p-3 text-left text-sm disabled:opacity-50 ${
                     tier === t ? "border-slate-900 ring-1 ring-slate-900" : "border-slate-200"
                   }`}
                 >
@@ -189,7 +259,7 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
                   </span>
                   <span className="mt-1 block text-slate-600">
                     {t === "simple"
-                      ? "Our three pandas say your words, in a scene for your occasion."
+                      ? "Our three pandas, with your invitation written on screen."
                       : "Your own photo comes to life and says your words."}
                   </span>
                 </button>
@@ -197,63 +267,88 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
             </div>
 
             {tier === "simple" ? (
-              <div className="space-y-1.5">
-                <Label htmlFor="video-occasion">Occasion</Label>
-                <select
-                  id="video-occasion"
-                  value={occasion}
-                  onChange={(e) => setOccasion(e.target.value)}
-                  className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
-                >
-                  {info.occasions.map((o) => (
-                    <option key={o.id} value={o.id}>
-                      {o.label}
-                    </option>
+              <div className="grid gap-4 sm:grid-cols-[1fr_auto]">
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="video-occasion">Occasion</Label>
+                    <select
+                      id="video-occasion"
+                      value={occasion}
+                      onChange={(e) => setOccasion(e.target.value)}
+                      className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
+                    >
+                      {info.occasions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(
+                    [
+                      ["kicker", "Top line", "You're invited to"],
+                      ["headline", "Main line", "Maya & Arjun's Wedding"],
+                      ["when", "Date and time", "Saturday, Dec 12 · 6:30 PM"],
+                      ["where", "Place", "The Grand Pavilion, Edison"],
+                    ] as const
+                  ).map(([k, label, ph]) => (
+                    <div key={k} className="space-y-1.5">
+                      <Label htmlFor={`video-line-${k}`}>{label}</Label>
+                      <Input
+                        id={`video-line-${k}`}
+                        value={lines[k]}
+                        maxLength={lineMax[k]}
+                        onChange={setLine(k)}
+                        placeholder={ph}
+                      />
+                    </div>
                   ))}
-                </select>
+                </div>
+                <SimplePreview occasion={occasion} lines={lines} />
               </div>
             ) : (
-              <div className="space-y-2">
-                <Label>Your photo</Label>
-                <p className="text-xs text-slate-500">A clear, front-facing photo works best.</p>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
-                />
-                <Button variant="outline" size="sm" type="button" onClick={() => fileRef.current?.click()}>
-                  <Upload className="size-3.5" />
-                  {photo ? "Change photo" : "Choose photo"}
-                </Button>
-                {photo ? <p className="truncate text-xs text-slate-600">{photo.name}</p> : null}
-                <label className="flex items-start gap-2 text-sm text-slate-700">
+              <>
+                <div className="space-y-2">
+                  <Label>Your photo</Label>
+                  <p className="text-xs text-slate-500">A clear, front-facing photo works best.</p>
                   <input
-                    type="checkbox"
-                    checked={attested}
-                    onChange={(e) => setAttested(e.target.checked)}
-                    className="mt-0.5"
+                    ref={fileRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => setPhoto(e.target.files?.[0] ?? null)}
                   />
-                  {info.attestationText}
-                </label>
-              </div>
+                  <Button variant="outline" size="sm" type="button" onClick={() => fileRef.current?.click()}>
+                    <Upload className="size-3.5" />
+                    {photo ? "Change photo" : "Choose photo"}
+                  </Button>
+                  {photo ? <p className="truncate text-xs text-slate-600">{photo.name}</p> : null}
+                  <label className="flex items-start gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={attested}
+                      onChange={(e) => setAttested(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    {info.attestationText}
+                  </label>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="video-script">What should the video say?</Label>
+                  <Textarea
+                    id="video-script"
+                    rows={3}
+                    maxLength={info.maxScriptChars}
+                    value={script}
+                    onChange={(e) => setScript(e.target.value)}
+                    placeholder="Hi everyone! Join us for Maya's first birthday this Saturday. We can't wait to see you!"
+                  />
+                  <p className="text-xs text-slate-500">
+                    {chars}/{info.maxScriptChars} characters · about {Math.max(3, Math.round(chars / 15))} seconds
+                  </p>
+                </div>
+              </>
             )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="video-script">What should the video say?</Label>
-              <Textarea
-                id="video-script"
-                rows={3}
-                maxLength={info.maxScriptChars}
-                value={script}
-                onChange={(e) => setScript(e.target.value)}
-                placeholder="Hi everyone! Join us for Maya's first birthday this Saturday. We can't wait to see you!"
-              />
-              <p className="text-xs text-slate-500">
-                {chars}/{info.maxScriptChars} characters · about {Math.max(3, Math.round(chars / 15))} seconds
-              </p>
-            </div>
 
             {error ? (
               <p role="alert" className="text-sm text-red-600">
@@ -261,12 +356,14 @@ export function VideoInviteCard({ eventId, title }: { eventId: string; title: st
               </p>
             ) : null}
 
-            <Button onClick={() => void onPay()} disabled={busy || chars < 10}>
+            <Button onClick={() => void onMake()} disabled={busy || !canSubmit || !tierOk(tier)}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : <Clapperboard className="size-4" />}
-              {order?.state === "ready" ? "Make a new video" : "Make my video"} · {money(info.prices[tier])}
+              {order?.state === "ready" ? "Make a new video" : "Make my video"} · {money(price)}
             </Button>
             <p className="text-xs text-slate-500">
-              You&apos;ll pay securely on Stripe. If we can&apos;t make your video, we refund you.
+              {price === 0
+                ? `Free: up to ${info.freePerDay ?? 5} a day.`
+                : "You'll pay securely on Stripe. If we can't make your video, we refund you."}
             </p>
           </div>
         )}

@@ -471,8 +471,13 @@ export const videoInvites = pgTable(
 
     tier: text("tier").notNull(),
     occasion: text("occasion").notNull(),
-    // Exactly what the voice reads (already cleaned, lib/videoInvites/policy.ts).
+    // Pro: exactly what the voice reads (already cleaned,
+    // lib/videoInvites/policy.ts). Simple: the text lines joined with " · ",
+    // kept only so lists and ops have something readable.
     script: text("script").notNull(),
+    // Simple only: the lines drawn on the template clip
+    // ({kicker, headline, when, where}, cleaned). Null for Pro.
+    textLines: jsonb("text_lines"),
     // Pro only: the host's photo, under events/<eventId>/video-photo/.
     photoKey: text("photo_key"),
     // Pro only: the consent tick, with the exact sentence shown.

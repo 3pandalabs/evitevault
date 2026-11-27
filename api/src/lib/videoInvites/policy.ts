@@ -80,11 +80,164 @@ export function isEnabled(flag: string | undefined): boolean {
   return (flag ?? "").trim().toLowerCase() === "on";
 }
 
-/** Price in cents for a tier, from the env override when it is a sane value. */
+/**
+ * Price in cents for a tier, from the env override when it is a sane value.
+ * Simple may be set to 0 (free: no Stripe, straight to the render queue, rate
+ * limited per host). Pro always costs money: it pays for Google / fal.
+ */
 export function priceCents(tier: VideoInviteTier, override: string | undefined): number {
+  if (override === undefined || override.trim() === "") return DEFAULT_PRICE_CENTS[tier];
   const n = Number(override);
+  if (tier === "simple" && n === 0) return 0;
   if (Number.isInteger(n) && n >= 50 && n <= 10_000) return n;
   return DEFAULT_PRICE_CENTS[tier];
+}
+
+// Free Simple videos are cheap to render (seconds of ffmpeg) but not free to
+// store, so a host gets at most this many per UTC day.
+export const FREE_SIMPLE_PER_DAY = 5;
+
+export function freeLimitReached(madeToday: number): boolean {
+  return madeToday >= FREE_SIMPLE_PER_DAY;
+}
+
+// ---------------------------------------------------------------------------
+// Simple tier = a TEMPLATE video: one pre-made 8 s 9:16 clip per occasion
+// (pandas in the lower half, clean background in the top ~40%), with the
+// host's invitation text drawn into that top area by ffmpeg in the API
+// container (lib/videoInvites/compose.ts). No Google, no fal, no voice.
+// ---------------------------------------------------------------------------
+
+export type TextLines = {
+  /** Small line on top, e.g. "You're invited to". */
+  kicker: string;
+  /** The big line: names or the event title. Required. */
+  headline: string;
+  /** Date and time, as the host wants it written. */
+  when: string;
+  /** The place. */
+  where: string;
+};
+
+export const TEXT_LINE_MAX: Record<keyof TextLines, number> = {
+  kicker: 40,
+  headline: 60,
+  when: 60,
+  where: 80,
+};
+
+export type TextLinesProblem = "headline_required" | "line_too_long" | "line_has_link";
+
+/** Cleans every line (control characters out, whitespace collapsed). */
+export function cleanTextLines(raw: Partial<Record<keyof TextLines, string | null | undefined>>): TextLines {
+  const one = (v: string | null | undefined) =>
+    (v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  return { kicker: one(raw.kicker), headline: one(raw.headline), when: one(raw.when), where: one(raw.where) };
+}
+
+export function textLinesProblem(lines: TextLines): TextLinesProblem | null {
+  if (!lines.headline) return "headline_required";
+  for (const k of Object.keys(TEXT_LINE_MAX) as (keyof TextLines)[]) {
+    if (lines[k].length > TEXT_LINE_MAX[k]) return "line_too_long";
+    if (/(https?:\/\/|www\.)\S+/i.test(lines[k])) return "line_has_link";
+  }
+  return null;
+}
+
+/** One line of text as drawn: its words, pixel size and baseline-free y (top). */
+export type DrawnLine = { text: string; size: number; y: number; role: keyof TextLines };
+
+// The frame every template clip is scaled to before drawing.
+export const FRAME = { width: 1080, height: 1920 } as const;
+// Text lives in the top TEXT_AREA of the frame, with side margins.
+export const TEXT_AREA = { top: 110, bottom: Math.round(1920 * 0.4), side: 80 } as const;
+const BASE_SIZE: Record<keyof TextLines, number> = { kicker: 46, headline: 104, when: 52, where: 46 };
+const MIN_SIZE: Record<keyof TextLines, number> = { kicker: 32, headline: 56, when: 36, where: 32 };
+// Average glyph width as a share of the font size, for the bundled sans font.
+// Deliberately generous so a measured line never overflows the frame.
+const CHAR_WIDTH = 0.56;
+const LINE_GAP = 0.32;
+
+// Absolute floor: at this size even the longest allowed line (80 characters)
+// fits the frame, so text never runs off the edge.
+export const HARD_MIN_SIZE = 20;
+
+/**
+ * Largest size <= base at which `text` fits `width` px. `min` is the size we
+ * would rather not go below (the layout wraps the headline instead), but a
+ * line that still doesn't fit shrinks further, down to HARD_MIN_SIZE: fitting
+ * the frame beats the preferred minimum.
+ */
+export function fitSize(text: string, width: number, base: number, min: number): number {
+  if (!text) return base;
+  const fits = Math.floor(width / (text.length * CHAR_WIDTH));
+  if (fits >= min) return Math.min(base, fits);
+  return Math.max(HARD_MIN_SIZE, fits);
+}
+
+/** Splits text into two lines at the word nearest the middle. */
+export function splitInTwo(text: string): [string, string] {
+  const words = text.split(" ");
+  if (words.length < 2) return [text, ""];
+  let best = 1;
+  let bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const diff = Math.abs(words.slice(0, i).join(" ").length - words.slice(i).join(" ").length);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = i;
+    }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
+
+/**
+ * Lays the lines out in the top text area: each auto-shrinks to the frame
+ * width, the headline wraps onto two lines when even its minimum size
+ * overflows, and the block is centred vertically in the area, shrinking
+ * everything together if it is too tall. Pure, so preview and render agree
+ * on the rules and the tests can pin them.
+ */
+export function layoutTextLines(lines: TextLines): DrawnLine[] {
+  const width = FRAME.width - TEXT_AREA.side * 2;
+  const areaHeight = TEXT_AREA.bottom - TEXT_AREA.top;
+
+  const build = (scale: number): DrawnLine[] => {
+    const out: DrawnLine[] = [];
+    for (const role of ["kicker", "headline", "when", "where"] as const) {
+      const text = lines[role];
+      if (!text) continue;
+      const base = Math.round(BASE_SIZE[role] * scale);
+      const min = Math.round(MIN_SIZE[role] * scale);
+      const parts =
+        role === "headline" && text.length * CHAR_WIDTH * min > width ? splitInTwo(text).filter(Boolean) : [text];
+      // Wrapped halves share one size, so the headline reads as one block.
+      const size = Math.min(...parts.map((p) => fitSize(p, width, base, min)));
+      for (const part of parts) out.push({ role, text: part, size, y: 0 });
+    }
+    return out;
+  };
+
+  let scale = 1;
+  let drawn = build(scale);
+  const height = (d: DrawnLine[]) => d.reduce((h, l, i) => h + l.size + (i ? l.size * LINE_GAP : 0), 0);
+  while (height(drawn) > areaHeight && scale > 0.6) {
+    scale -= 0.05;
+    drawn = build(scale);
+  }
+
+  let y = TEXT_AREA.top + Math.max(0, Math.round((areaHeight - height(drawn)) / 2));
+  return drawn.map((l, i) => {
+    if (i) y += Math.round(l.size * LINE_GAP);
+    const placed = { ...l, y };
+    y += l.size;
+    return placed;
+  });
+}
+
+/** Clip file for an occasion, served from the web app. */
+export function clipFileName(occasion: string): string {
+  return `clip-${occasion}.mp4`;
 }
 
 /**
@@ -157,11 +310,17 @@ export function canTransition(from: VideoInviteStatus, to: VideoInviteStatus): b
 
 export const MAX_GENERATION_ATTEMPTS = 2;
 
-/** After a generation error: try once more, or give up and flag a refund. */
-export function afterFailure(attempts: number): { status: "paid" | "failed"; refundNeeded: boolean } {
+/**
+ * After a generation error: try once more, or give up. Giving up on a PAID
+ * order flags a refund; a free one (price 0) has nothing to refund.
+ */
+export function afterFailure(
+  attempts: number,
+  priceCents = 1,
+): { status: "paid" | "failed"; refundNeeded: boolean } {
   return attempts < MAX_GENERATION_ATTEMPTS
     ? { status: "paid", refundNeeded: false }
-    : { status: "failed", refundNeeded: true };
+    : { status: "failed", refundNeeded: priceCents > 0 };
 }
 
 // A row stuck in `generating` this long belongs to a process that died

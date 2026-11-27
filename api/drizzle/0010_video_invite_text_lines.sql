@@ -1,0 +1,1 @@
+ALTER TABLE "video_invites" ADD COLUMN IF NOT EXISTS "text_lines" jsonb;

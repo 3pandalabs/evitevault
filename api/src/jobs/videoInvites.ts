@@ -2,17 +2,19 @@ import { and, asc, eq, lt } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { videoInvites } from "../db/schema.js";
 import { env } from "../env.js";
-import { generateVideo, generationAvailable } from "../lib/videoInvites/generate.js";
+import { generateVideo, tierAvailable } from "../lib/videoInvites/generate.js";
 import { afterFailure, isEnabled, STALE_GENERATING_MS } from "../lib/videoInvites/policy.js";
 import { putVideo, videoInviteKey } from "../plugins/r2.js";
 
-// Makes paid video invites, one at a time, inside the API process — the same
+// Makes video invites, one at a time, inside the API process — the same
 // "one interval in the one container" shape as jobs/pendingInvitations.ts.
-// Never inline in a request: a clip takes minutes.
+// Never inline in a request: a Pro clip takes minutes (a Simple template
+// render takes seconds, but shares the queue).
 //
 // Safety properties:
-//   - Only `paid` rows are claimed, and `paid` is only written by the verified
-//     Stripe webhook, so nothing unpaid is ever generated.
+//   - Only `paid` rows are claimed. `paid` is written only by the verified
+//     Stripe webhook, or by the checkout route for a FREE Simple order
+//     (price 0, rate limited per host), so nothing unpaid is ever generated.
 //   - The claim is a conditional UPDATE (status paid -> generating), so two
 //     overlapping ticks can't both take the same order.
 //   - A row stuck in `generating` (the process died mid-job) is handed back to
@@ -76,7 +78,7 @@ export async function runVideoInviteTick(log: (msg: string) => void): Promise<vo
       log(`video invite ${order.id} ready via ${result.provider}`);
     } catch (err) {
       const message = (err instanceof Error ? err.message : String(err)).slice(0, 1000);
-      const next = afterFailure(attempts);
+      const next = afterFailure(attempts, order.priceCents);
       await db
         .update(videoInvites)
         .set({
@@ -89,9 +91,11 @@ export async function runVideoInviteTick(log: (msg: string) => void): Promise<vo
         })
         .where(eq(videoInvites.id, order.id));
       log(
-        next.status === "failed"
+        next.refundNeeded
           ? `VIDEO INVITE FAILED, REFUND NEEDED: order ${order.id} (${order.priceCents} cents, ${order.stripePaymentIntent ?? "no payment intent"}): ${message}`
-          : `video invite ${order.id} attempt ${attempts} failed, will retry: ${message}`,
+          : next.status === "failed"
+            ? `video invite ${order.id} (free) failed: ${message}`
+            : `video invite ${order.id} attempt ${attempts} failed, will retry: ${message}`,
       );
     }
   } finally {
@@ -101,8 +105,9 @@ export async function runVideoInviteTick(log: (msg: string) => void): Promise<vo
 
 export function startVideoInvitesJob(log: (msg: string) => void): void {
   if (!isEnabled(env.VIDEO_INVITES)) return;
-  if (!generationAvailable()) {
-    log("video invites: no provider configured (GOOGLE_SA_KEY_B64 / FAL_KEY); job not started");
+  // Simple needs only ffmpeg (in the image); Pro needs Google or fal.
+  if (!tierAvailable("simple") && !tierAvailable("pro")) {
+    log("video invites: no ffmpeg and no provider (GOOGLE_SA_KEY_B64 / FAL_KEY); job not started");
     return;
   }
   const tick = () => runVideoInviteTick(log).catch((err) => log(`video invite job error: ${String(err)}`));
