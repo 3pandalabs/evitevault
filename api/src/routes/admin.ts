@@ -2,7 +2,7 @@ import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { db } from "../db/index.js";
-import { events, users, videoInvites } from "../db/schema.js";
+import { events, gifts, users, videoInvites } from "../db/schema.js";
 import { requireRealAdmin } from "../lib/testMode/index.js";
 import { mayMarkInternal, mayMarkTest } from "../lib/testMode/policy.js";
 
@@ -42,7 +42,11 @@ export async function adminRoutes(app: FastifyInstance) {
           (select count(*) from video_invites where status in ('paid','generating'))::int as video_invites_in_queue,
           (select count(*) from video_invites where refund_needed and status <> 'refunded')::int as video_invites_refund_needed,
           (select coalesce(sum(v.price_cents), 0) from video_invites v join users u on u.id = v.host_id
-             where v.paid_at is not null and not v.test_mode and v.status <> 'refunded' and ${REAL_HOST})::int as video_revenue_cents
+             where v.paid_at is not null and not v.test_mode and v.status <> 'refunded' and ${REAL_HOST})::int as video_revenue_cents,
+          (select count(*) from gifts where not test_mode and status = 'paid')::int as gifts_paid,
+          (select count(*) from gifts where not test_mode and status = 'disputed')::int as gifts_disputed,
+          (select coalesce(sum(amount_cents), 0) from gifts where not test_mode and status = 'paid')::int as gift_volume_cents,
+          (select coalesce(sum(platform_fee_cents), 0) from gifts where not test_mode and status = 'paid')::int as gift_platform_fee_cents
       `);
       return r.rows[0];
     });
@@ -188,6 +192,34 @@ export async function adminRoutes(app: FastifyInstance) {
         return { orders: rows };
       },
     );
+
+    // --- cash gifts (disputes first: the platform is liable) ---------------------
+    admin.get("/admin/gifts", async () => {
+      const rows = await db
+        .select({
+          id: gifts.id,
+          eventTitle: events.title,
+          hostEmail: users.email,
+          guestName: gifts.guestName,
+          amountCents: gifts.amountCents,
+          platformFeeCents: gifts.platformFeeCents,
+          totalCents: gifts.totalCents,
+          status: gifts.status,
+          testMode: gifts.testMode,
+          stripePaymentIntent: gifts.stripePaymentIntent,
+          destinationAccount: gifts.destinationAccount,
+          createdAt: gifts.createdAt,
+          paidAt: gifts.paidAt,
+          disputedAt: gifts.disputedAt,
+        })
+        .from(gifts)
+        .innerJoin(events, eq(events.id, gifts.eventId))
+        .innerJoin(users, eq(users.id, gifts.hostId))
+        .where(sql`${gifts.status} <> 'expired'`)
+        .orderBy(sql`(${gifts.status} = 'disputed') desc`, desc(gifts.createdAt))
+        .limit(300);
+      return { gifts: rows };
+    });
 
     // Ops refunded the order in Stripe: record it (failed -> refunded).
     admin.post(

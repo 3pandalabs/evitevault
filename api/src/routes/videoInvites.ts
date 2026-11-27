@@ -30,6 +30,18 @@ import {
 } from "../lib/videoInvites/policy.js";
 import { createCheckoutSession, stripeConfigured, verifyStripeSignature } from "../lib/videoInvites/stripe.js";
 import { videoInvitesVisible } from "../lib/videoInvites/access.js";
+import { routeGiftEvent } from "../lib/gifts/policy.js";
+import { applyGiftEvent } from "../lib/gifts/webhook.js";
+
+/** Every configured Stripe webhook signing secret (live/test, platform/Connect). */
+function webhookSecrets(): string[] {
+  return [
+    process.env.STRIPE_WEBHOOK_SECRET,
+    process.env.STRIPE_CONNECT_WEBHOOK_SECRET,
+    process.env.STRIPE_TEST_WEBHOOK_SECRET,
+    process.env.STRIPE_TEST_CONNECT_WEBHOOK_SECRET,
+  ].filter((s): s is string => Boolean(s));
+}
 import { hostIdentity } from "../lib/testMode/index.js";
 import { chargeCents, isUndeliverableEmail } from "../lib/testMode/policy.js";
 import { extForType, isAllowedImageType, presignDownload, presignUpload, videoPhotoKey } from "../plugins/r2.js";
@@ -268,13 +280,28 @@ export async function videoInviteRoutes(app: FastifyInstance) {
   app.post("/webhooks/stripe", { config: { rawBody: true } }, async (req, reply) => {
     const raw = (req as unknown as { rawBody?: string }).rawBody;
     if (!raw) return reply.code(400).send({ error: "missing_raw_body" });
-    if (!env.STRIPE_WEBHOOK_SECRET) return reply.code(503).send({ error: "stripe_not_configured" });
+    // One URL, up to four Stripe endpoints pointing at it, each with its own
+    // signing secret: the platform endpoint (checkout, charges, disputes), the
+    // Connect endpoint (account.updated for hosts' accounts), and their TEST
+    // twins for test-mode gifts. Any configured secret that verifies is enough.
+    const secrets = webhookSecrets();
+    if (secrets.length === 0) return reply.code(503).send({ error: "stripe_not_configured" });
     const sig = req.headers["stripe-signature"];
-    if (!verifyStripeSignature(raw, typeof sig === "string" ? sig : undefined, env.STRIPE_WEBHOOK_SECRET)) {
+    const header = typeof sig === "string" ? sig : undefined;
+    if (!secrets.some((s) => verifyStripeSignature(raw, header, s))) {
       return reply.code(400).send({ error: "bad_signature" });
     }
+    const event = JSON.parse(raw);
 
-    const action = routeStripeEvent(JSON.parse(raw));
+    // Cash gifts and Connect accounts first (lib/gifts); anything else falls
+    // through to video invites.
+    const giftAction = routeGiftEvent(event);
+    if (giftAction.kind !== "none") {
+      const outcome = await applyGiftEvent(giftAction, req.log);
+      return { ok: true, gift: outcome };
+    }
+
+    const action = routeStripeEvent(event);
     if (action.kind === "ignore") return { ok: true, ignored: true };
 
     const [order] = await db.select().from(videoInvites).where(eq(videoInvites.id, action.orderId)).limit(1);

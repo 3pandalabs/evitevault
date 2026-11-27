@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { verifyPreviewToken } from "../auth/jwt.js";
@@ -7,6 +7,7 @@ import {
   eventTemplates,
   eventViews,
   events,
+  gifts,
   guestbookPosts,
   guests,
   rsvpLog,
@@ -16,7 +17,11 @@ import {
   type Guest,
 } from "../db/schema.js";
 import { isEnabled as videoInvitesEnabled } from "../lib/videoInvites/policy.js";
-import { currentHour, visitorHash } from "../lib/analytics.js";
+import { clientIp, currentHour, visitorHash } from "../lib/analytics.js";
+import { eventAcceptsGifts } from "../lib/gifts/access.js";
+import { amountProblem, CAP_STATUSES, cleanText, feeConfigFrom, giftBreakdown, limitsFrom, overDailyCap } from "../lib/gifts/policy.js";
+import { createGiftCheckout } from "../lib/gifts/stripe.js";
+import { rateLimiter } from "../lib/rateLimit.js";
 import { eventEndsAt, hasEventEnded } from "../lib/eventTime.js";
 import { buildIcs, googleCalendarUrl } from "../lib/ics.js";
 import { buildRsvpConfirmationEmail } from "../lib/emails/rsvpConfirmation.js";
@@ -105,6 +110,25 @@ async function publicVideoUrl(eventId: string): Promise<string | null> {
   return v?.key ? presignDownload(v.key) : null;
 }
 
+async function publicGifts(event: Event) {
+  const account = await eventAcceptsGifts(event);
+  if (!account) return null;
+  const limits = limitsFrom(process.env);
+  return {
+    suggestedCents: (event.giftSuggestedCents as number[] | null) ?? [],
+    message: event.giftMessage,
+    minCents: limits.minCents,
+    maxCents: limits.maxCents,
+    fees: feeConfigFrom(process.env),
+    // A test-mode host's gifts run in Stripe TEST mode (no real money).
+    testMode: account.mode === "test",
+  };
+}
+
+// A guest has no account, so gift checkouts are limited per IP: a burst of
+// sessions against a card is how card testing looks.
+const giftPerIp = rateLimiter(10, 60 * 60_000);
+
 async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
   const { event } = row;
 
@@ -169,6 +193,10 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
     // Safe to hand to every visitor: it is the same link the host mails out,
     // and an album's own sharing settings decide what it opens onto.
     photoAlbumUrl: event.photoAlbumUrl,
+    // Cash gifts: only whether a guest may send one, and how (suggested
+    // amounts, the host's note, limits, the fee rates for the breakdown).
+    // NEVER who gave or how much: amounts are host-only.
+    gifts: await publicGifts(event),
     theme: resolveTheme(row.templateTheme, event.themeOverrides),
     rsvp: {
       deadline: event.rsvpDeadline,
@@ -710,6 +738,96 @@ export async function publicEventRoutes(app: FastifyInstance) {
 
       const key = guestbookImageKey(row.event.id, extForType(contentType));
       return { key, uploadUrl: await presignUpload(key, contentType) };
+    },
+  );
+}
+
+// --- Cash gift (Stripe Connect destination charge) ---------------------------
+// Slug only, published only, like every public route. The guest pays gift +
+// card fee + our cut on Stripe Checkout; the host's Express account receives
+// exactly the gift. Rules in lib/gifts/policy.ts.
+export async function publicGiftRoutes(app: FastifyInstance) {
+  app.post(
+    "/public/events/:slug/gift",
+    {
+      schema: {
+        params: slugParams,
+        body: z.object({
+          amountCents: z.number().int(),
+          name: z.string().max(120).nullish(),
+          message: z.string().max(500).nullish(),
+        }),
+      },
+    },
+    async (req, reply) => {
+      const { slug } = req.params as z.infer<typeof slugParams>;
+      const body = req.body as { amountCents: number; name?: string | null; message?: string | null };
+      if (!giftPerIp(clientIp(req))) return reply.code(429).send({ error: "too_many_requests" });
+
+      const row = await loadPublishedEvent(slug);
+      if (!row) return reply.code(404).send({ error: "not_found" });
+      const account = await eventAcceptsGifts(row.event);
+      if (!account || !account.accountId) return reply.code(404).send({ error: "gifts_not_available" });
+
+      const limits = limitsFrom(process.env);
+      const problem = amountProblem(body.amountCents, limits);
+      if (problem) return reply.code(400).send({ error: problem, minCents: limits.minCents, maxCents: limits.maxCents });
+
+      // Per-event daily cap over gifts paid or still in checkout today (UTC).
+      const dayStart = new Date();
+      dayStart.setUTCHours(0, 0, 0, 0);
+      const [today] = await db
+        .select({ cents: sql<number>`coalesce(sum(${gifts.amountCents}), 0)::int` })
+        .from(gifts)
+        .where(
+          and(
+            eq(gifts.eventId, row.event.id),
+            inArray(gifts.status, [...CAP_STATUSES]),
+            sql`${gifts.createdAt} >= ${dayStart.toISOString()}`,
+          ),
+        );
+      if (overDailyCap(today?.cents ?? 0, body.amountCents, limits)) {
+        return reply.code(429).send({ error: "event_daily_cap" });
+      }
+
+      const b = giftBreakdown(body.amountCents, feeConfigFrom(process.env));
+      const [gift] = await db
+        .insert(gifts)
+        .values({
+          eventId: row.event.id,
+          hostId: row.event.hostId,
+          guestName: cleanText(body.name, 120),
+          guestMessage: cleanText(body.message, 500),
+          amountCents: b.giftCents,
+          platformFeeCents: b.platformCents,
+          cardFeeCents: b.cardFeeCents,
+          totalCents: b.totalCents,
+          testMode: account.mode === "test",
+          destinationAccount: account.accountId,
+        })
+        .returning({ id: gifts.id });
+
+      const back = `${env.WEB_ORIGIN}/e/${row.event.slug}`;
+      try {
+        const session = await createGiftCheckout(account.mode, {
+          giftId: gift.id,
+          eventId: row.event.id,
+          eventTitle: row.event.title,
+          destination: account.accountId,
+          giftCents: b.giftCents,
+          feesCents: b.totalCents - b.giftCents,
+          applicationFeeCents: b.applicationFeeCents,
+          successUrl: `${back}?gift=thanks`,
+          cancelUrl: `${back}?gift=cancelled`,
+          testMode: account.mode === "test",
+        });
+        await db.update(gifts).set({ stripeSessionId: session.id, updatedAt: new Date() }).where(eq(gifts.id, gift.id));
+        return { checkoutUrl: session.url, breakdown: b };
+      } catch (err) {
+        req.log.error({ err }, "gift checkout failed");
+        await db.update(gifts).set({ status: "expired", updatedAt: new Date() }).where(eq(gifts.id, gift.id));
+        return reply.code(502).send({ error: "checkout_failed" });
+      }
     },
   );
 }

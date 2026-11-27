@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import {
   adminEvents,
+  adminGifts,
   adminMarkRefunded,
   adminOverview,
   adminSetFlags,
@@ -14,6 +15,7 @@ import {
   listTestHosts,
   switchIntoTestHost,
   type AdminEvent,
+  type AdminGift,
   type AdminOverview,
   type AdminUser,
   type AdminVideoOrder,
@@ -41,6 +43,10 @@ const OVERVIEW: [string, string][] = [
   ["test_hosts", "Test hosts"],
   ["internal_accounts", "Internal"],
   ["marked_test_accounts", "Marked test"],
+  ["gifts_paid", "Gifts paid"],
+  ["gifts_disputed", "Gifts disputed"],
+  ["gift_volume_cents", "Gift volume"],
+  ["gift_platform_fee_cents", "Gift fees earned"],
 ];
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -58,6 +64,7 @@ export default function AdminPage() {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [orders, setOrders] = useState<AdminVideoOrder[]>([]);
   const [hosts, setHosts] = useState<TestHost[]>([]);
+  const [giftRows, setGiftRows] = useState<AdminGift[]>([]);
   const [userQ, setUserQ] = useState("");
   const [eventQ, setEventQ] = useState("");
   const [newHost, setNewHost] = useState("");
@@ -73,6 +80,7 @@ export default function AdminPage() {
     adminEvents().then((r) => setEvents(r.events)).catch(fail);
     adminVideoOrders().then((r) => setOrders(r.orders)).catch(fail);
     listTestHosts().then((r) => setHosts(r.hosts)).catch(() => undefined);
+    adminGifts().then((r) => setGiftRows(r.gifts)).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -157,7 +165,7 @@ export default function AdminPage() {
               <div key={k} className="rounded-lg bg-slate-50 p-3">
                 <dt className="text-xs text-slate-500">{label}</dt>
                 <dd className="text-lg font-semibold">
-                  {k === "video_revenue_cents" ? money(overview[k] ?? 0) : (overview[k] ?? 0)}
+                  {k.endsWith("_cents") ? money(overview[k] ?? 0) : (overview[k] ?? 0)}
                 </dd>
               </div>
             ))}
@@ -304,6 +312,35 @@ export default function AdminPage() {
                 </span>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cash gifts</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {giftRows.some((g) => g.status === "disputed") ? (
+            <p className="mb-2 text-sm text-amber-800">
+              Disputed gifts are listed first. We are liable: respond in Stripe, then recover from the host&apos;s future
+              gifts or ask them to repay (terms).
+            </p>
+          ) : null}
+          <div className="divide-y divide-slate-100 text-sm">
+            {giftRows.map((g) => (
+              <div key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <span className="font-medium">{g.eventTitle}</span>
+                <Badge variant="outline">{g.status}</Badge>
+                {g.testMode ? <Badge variant="outline">test</Badge> : null}
+                <span>{money(g.amountCents)}</span>
+                <span className="text-xs text-slate-500">
+                  fee {money(g.platformFeeCents)} · {g.hostEmail} · {g.guestName ?? "guest"} · {date(g.createdAt)}
+                </span>
+                {g.stripePaymentIntent ? <code className="text-xs text-slate-500">{g.stripePaymentIntent}</code> : null}
+              </div>
+            ))}
+            {giftRows.length === 0 ? <p className="py-2 text-slate-500">No gifts yet.</p> : null}
           </div>
         </CardContent>
       </Card>

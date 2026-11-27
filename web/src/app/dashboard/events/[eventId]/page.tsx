@@ -55,6 +55,7 @@ import { PhotoAlbumCard } from "./photo-album";
 import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
 import { VideoInviteCard } from "./video-invite";
+import { CashGiftsCard } from "./cash-gifts";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -709,6 +710,9 @@ export default function EventDetailPage() {
           where: event.locationName ?? "",
         }}
       />
+
+      {/* Renders nothing while CASH_GIFTS is off for this account. */}
+      <CashGiftsCard eventId={eventId} />
 
       <PhotoAlbumCard
         eventId={eventId}

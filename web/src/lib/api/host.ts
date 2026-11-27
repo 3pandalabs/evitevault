@@ -572,7 +572,7 @@ export type Me = {
    * of their test hosts. The video invite card also asks the API itself and
    * renders nothing on a 404, so the two always agree.
    */
-  features?: { videoInvites: boolean };
+  features?: { videoInvites: boolean; cashGifts?: boolean };
 };
 
 export const getMe = () => hostFetch<Me>("/auth/me");
@@ -659,3 +659,73 @@ export const adminSetFlags = (
   flags: { isInternal?: boolean; internalLabel?: string | null; markedTest?: boolean },
 ) => hostFetch(`/admin/users/${id}/flags`, { method: "POST", body: JSON.stringify(flags) });
 export const adminMarkRefunded = (id: string) => hostFetch(`/admin/video-invites/${id}/refunded`, { method: "POST" });
+
+// --- Cash gifts (CASH_GIFTS in the API; 404 = not available to this account) --
+
+export type GiftAccount = {
+  /** live = real money; test = Stripe TEST mode (admin testing as host / test host). */
+  mode: "live" | "test";
+  status: "none" | "needs_info" | "pending" | "ready";
+  available: boolean;
+  reason?: "test_unavailable" | "not_configured";
+};
+
+export type EventGift = {
+  id: string;
+  guestName: string | null;
+  guestMessage: string | null;
+  amountCents: number;
+  status: string;
+  testMode: boolean;
+  paidAt: string | null;
+};
+
+export type EventGifts = {
+  enabled: boolean;
+  suggestedCents: number[];
+  message: string | null;
+  limits: { minCents: number; maxCents: number; eventDailyCapCents: number };
+  receivedCents: number;
+  gifts: EventGift[];
+};
+
+/** Null when cash gifts are switched off for this account (the API answers 404). */
+export async function getGiftAccount(): Promise<GiftAccount | null> {
+  try {
+    return await hostFetch<GiftAccount>("/gifts/account");
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export const startGiftOnboarding = (eventId: string) =>
+  hostFetch<{ url: string }>("/gifts/account/onboard", { method: "POST", body: JSON.stringify({ eventId }) });
+
+export const openGiftDashboard = () => hostFetch<{ url: string }>("/gifts/account/dashboard", { method: "POST" });
+
+export const getEventGifts = (eventId: string) => hostFetch<EventGifts>(`/events/${eventId}/gifts`);
+
+export const updateEventGifts = (
+  eventId: string,
+  patch: { enabled?: boolean; suggestedCents?: number[]; message?: string | null },
+) => hostFetch<{ enabled: boolean }>(`/events/${eventId}/gifts`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export type AdminGift = {
+  id: string;
+  eventTitle: string;
+  hostEmail: string;
+  guestName: string | null;
+  amountCents: number;
+  platformFeeCents: number;
+  totalCents: number;
+  status: string;
+  testMode: boolean;
+  stripePaymentIntent: string | null;
+  destinationAccount: string;
+  createdAt: string;
+  paidAt: string | null;
+  disputedAt: string | null;
+};
+
+export const adminGifts = () => hostFetch<{ gifts: AdminGift[] }>("/admin/gifts");

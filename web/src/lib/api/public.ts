@@ -23,6 +23,18 @@ export type PublicEvent = {
   cardImageUrl: string | null;
   /** The host's paid video invite, shown at the top of the page. Null when none. */
   videoInviteUrl?: string | null;
+  /**
+   * Cash gifts: present only when a guest may send one. Never carries who gave
+   * or how much (amounts are host-only).
+   */
+  gifts?: {
+    suggestedCents: number[];
+    message: string | null;
+    minCents: number;
+    maxCents: number;
+    fees: { platformFeeBps: number; stripePercentBps: number; stripeFixedCents: number };
+    testMode: boolean;
+  } | null;
   // Set once the host has an album to point guests at, usually after the day.
   photoAlbumUrl: string | null;
   theme: {

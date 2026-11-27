@@ -15,11 +15,12 @@ import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contact.js";
 import { eventRoutes } from "./routes/events.js";
+import { giftRoutes } from "./routes/gifts.js";
 import { greetingRoutes } from "./routes/greetings.js";
 import { guestbookModerationRoutes } from "./routes/guestbook.js";
 import { guestRoutes } from "./routes/guests.js";
 import { metricsRoutes } from "./routes/metrics.js";
-import { publicEventRoutes } from "./routes/publicEvents.js";
+import { publicEventRoutes, publicGiftRoutes } from "./routes/publicEvents.js";
 import { storageRoutes } from "./routes/storage.js";
 import { templateRoutes } from "./routes/templates.js";
 import { testHostRoutes } from "./routes/testHosts.js";
@@ -135,12 +136,16 @@ await app.register(accountRoutes);
 // database on every request; test hosts are switched into, never logged into.
 await app.register(adminRoutes);
 await app.register(testHostRoutes);
+// Cash gifts, host side (CASH_GIFTS=on|admins|off; 404 when not visible).
+await app.register(giftRoutes);
 // Paid video invites (off unless VIDEO_INVITES=on). Its host routes are behind
 // requireAuth inside the plugin; POST /webhooks/stripe is signature-checked.
 await app.register(videoInviteRoutes);
 // Anonymous by design — registered last so it's obvious in this list that
 // everything above it is behind requireAuth.
 await app.register(publicEventRoutes);
+// Guest cash gifts (slug only; CASH_GIFTS gates it, see lib/gifts/access.ts).
+await app.register(publicGiftRoutes);
 await app.register(contactRoutes);
 await app.register(metricsRoutes);
 

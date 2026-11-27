@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { AddToCalendar } from "./add-to-calendar";
 import { Guestbook } from "./guestbook";
 import { RsvpForm } from "./rsvp-form";
+import { SendGift } from "./send-gift";
 import { fetchGuestbook, fetchPublicEvent } from "@/lib/api/public";
 import { CoverArt } from "@/lib/coverArt";
 import { googleFontsHref, themeStyle } from "@/lib/theme";
@@ -12,7 +13,7 @@ import { formatEventDate, formatEventTime, formatTimeZoneLabel } from "@/lib/uti
 // Next 15+ passes params and searchParams as promises.
 type PageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ t?: string; p?: string }>;
+  searchParams: Promise<{ t?: string; p?: string; gift?: string }>;
 };
 
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
@@ -68,7 +69,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 
 export default async function InvitationPage({ params, searchParams }: PageProps) {
   const { slug } = await params;
-  const { t: token, p: previewToken } = await searchParams;
+  const { t: token, p: previewToken, gift } = await searchParams;
 
   const event = await fetchPublicEvent(slug, token, previewToken);
   if (!event) notFound();
@@ -256,6 +257,12 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               timezone={event.timezone}
             />
           </section>
+
+          {/* Cash gifts: only when the host turned them on and their payouts
+              are set up (the API decides; amounts are never shown here). */}
+          {event.gifts ? (
+            <SendGift slug={event.slug} hostName={event.hostName} gifts={event.gifts} thanks={gift === "thanks"} />
+          ) : null}
 
           {/* Only once the host has an album to point at — which is usually
               after the day, so most invitations never render this. */}

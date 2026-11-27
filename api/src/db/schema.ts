@@ -52,6 +52,17 @@ export const users = pgTable(
     // exactly like a host, only excluded from customer counts and revenue.
     markedTest: boolean("marked_test").notNull().default(false),
 
+    // --- Cash gifts (migration 0012, lib/gifts) ---
+    // The host's Stripe Express connected account, one per Stripe mode: live
+    // for real hosts, test for an admin in test mode / a test host (test-mode
+    // gifts never touch live money). Status mirrors the Stripe account
+    // (lib/gifts/policy.ts accountStatus), refreshed by account.updated and on
+    // page load.
+    stripeAccountId: text("stripe_account_id"),
+    stripeAccountStatus: text("stripe_account_status"),
+    stripeTestAccountId: text("stripe_test_account_id"),
+    stripeTestAccountStatus: text("stripe_test_account_status"),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -225,6 +236,12 @@ export const events = pgTable(
     // looked, so every response so far is new — which is the right answer for a
     // host opening an event for the first time.
     responsesSeenAt: timestamp("responses_seen_at", { withTimezone: true }),
+
+    // Cash gifts (migration 0012): the host's per-event switch, up to four
+    // suggested amounts (whole-dollar cents) and an optional note to guests.
+    giftsEnabled: boolean("gifts_enabled").notNull().default(false),
+    giftSuggestedCents: jsonb("gift_suggested_cents"),
+    giftMessage: text("gift_message"),
 
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -546,6 +563,59 @@ export const videoInvites = pgTable(
 );
 
 export type VideoInvite = typeof videoInvites.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Cash gifts — a guest's money gift to the host with the RSVP (lib/gifts).
+// Stripe Connect destination charge: the guest pays on the platform, Stripe
+// moves `amount_cents` to the host's Express account. Amounts are never shown
+// on the public page; only the host (and admins) see this table.
+// ---------------------------------------------------------------------------
+
+export const gifts = pgTable(
+  "gifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    guestName: text("guest_name"),
+    guestMessage: text("guest_message"),
+
+    // What the host receives, our cut, the card fee the guest covered, the total charged.
+    amountCents: integer("amount_cents").notNull(),
+    platformFeeCents: integer("platform_fee_cents").notNull(),
+    cardFeeCents: integer("card_fee_cents").notNull(),
+    totalCents: integer("total_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+
+    status: text("status").notNull().default("pending"),
+    // Made in Stripe TEST mode (the host was an admin in test mode or a test host).
+    testMode: boolean("test_mode").notNull().default(false),
+    destinationAccount: text("destination_account").notNull(),
+    stripeSessionId: text("stripe_session_id").unique(),
+    stripePaymentIntent: text("stripe_payment_intent"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    refundedAt: timestamp("refunded_at", { withTimezone: true }),
+    disputedAt: timestamp("disputed_at", { withTimezone: true }),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_gifts_event").on(t.eventId),
+    index("idx_gifts_payment_intent").on(t.stripePaymentIntent),
+    check(
+      "gifts_status_check",
+      sql`${t.status} in ('pending','paid','expired','refunded','disputed','dispute_lost')`,
+    ),
+    check("gifts_amount_check", sql`${t.amountCents} > 0 and ${t.totalCents} >= ${t.amountCents}`),
+  ],
+);
+
+export type Gift = typeof gifts.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type Event = typeof events.$inferSelect;
