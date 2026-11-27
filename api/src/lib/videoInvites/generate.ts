@@ -30,8 +30,11 @@ export function pandaSceneUrl(occasion: string): string {
   return `${env.WEB_ORIGIN}/video-invites/pandas-${occasion}.png`;
 }
 
-// Until scripts/generate-panda-scenes.mjs has been run (it spends fal money,
-// so it needs Anil's go-ahead), every occasion falls back to this one image.
+// Until web/scripts/generate-panda-scenes.mjs has been run (paid image edits
+// of our three-panda reference, so it needs Anil's go-ahead), every occasion
+// falls back to this one image. It is a PLACEHOLDER (the brand's three-pandas
+// logo mark, which talking models may animate poorly): after the script runs,
+// replace it with the best reviewed general-purpose scene (e.g. "party").
 export const PANDA_FALLBACK_PATH = "/video-invites/pandas-default.png";
 
 function sceneText(order: Pick<VideoInvite, "tier" | "occasion">): string {

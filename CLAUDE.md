@@ -202,8 +202,13 @@ shows the newest ready video at the top (`toPublicEvent().videoInviteUrl`).
   Stripe and sets the row `refunded`. A `generating` row older than 20 min
   (process died) goes back to `paid`.
 - **Panda scenes** are static files `web/public/video-invites/pandas-<occasion>.png`,
-  made by `web/scripts/generate-panda-scenes.mjs` (paid fal calls; run only
-  with Anil's OK). Until then every occasion uses `pandas-default.png`.
+  made by `web/scripts/generate-panda-scenes.mjs` by EDITING our established
+  three pandas (`web/scripts/panda-reference.png`, the Thanksgiving video
+  frame: glasses + white apron over blue shirt, orange t-shirt, navy suit) so
+  the characters match every video, ad and post. Google Gemini image edit
+  first, fal edit fallback; paid, run only with Anil's OK, review every image.
+  Until then every occasion uses `pandas-default.png`, a placeholder (the
+  logo mark) to replace with the best reviewed scene.
 - Photos and videos live under `events/<id>/` in R2, so ownership checks and
   account deletion cover them; rows cascade with the event. Privacy and terms
   pages describe the feature, Google/fal and Stripe.
