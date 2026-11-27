@@ -51,8 +51,14 @@ export default function TermsPage() {
         <p>
           RsvpVault lets a host design a digital invitation, share it by link or email, collect RSVPs, run a guestbook,
           send announcements to guests, and share a photo album link afterwards. Guests use RsvpVault without an account.
-          RsvpVault is currently free to use. If we ever introduce paid features, we will tell you before anything is
-          charged, and nothing will be charged without your agreement.
+          RsvpVault is free to use, with one optional paid feature: video invites. A video invite is a one-time payment,
+          shown with its price before you pay, and taken by Stripe. If we can&apos;t make your video, we refund the
+          payment in full. Nothing else is charged, and nothing is charged without your agreement.
+        </p>
+        <p>
+          For a Pro video invite you upload a photo that will be animated to speak the words you choose. You may only
+          upload a photo of yourself, or of people who have agreed to it, and you confirm that when you order. Don&apos;t
+          use video invites to impersonate anyone, or to say anything unlawful, hateful or misleading.
         </p>
       </Section>
 

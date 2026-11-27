@@ -92,6 +92,23 @@ export function guestbookImageKey(eventId: string, ext: string): string {
   return `events/${eventId}/guestbook/${crypto.randomUUID()}.${ext}`;
 }
 
+// Video invites: the host's photo for the pro tier, and the finished MP4. Both
+// under the event prefix, so presign-download's ownership check and account
+// deletion (deleteEventObjects) cover them with no extra code.
+export function videoPhotoKey(eventId: string, ext: string): string {
+  return `events/${eventId}/video-photo/${crypto.randomUUID()}.${ext}`;
+}
+
+export function videoInviteKey(eventId: string): string {
+  return `events/${eventId}/video/${crypto.randomUUID()}.mp4`;
+}
+
+export async function putVideo(key: string, bytes: Buffer): Promise<void> {
+  await r2.send(
+    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, Body: bytes, ContentType: "video/mp4" }),
+  );
+}
+
 export function extForType(t: AllowedImageType): string {
   return t === "image/jpeg" ? "jpg" : t.slice("image/".length);
 }

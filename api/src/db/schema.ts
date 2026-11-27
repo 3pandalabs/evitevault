@@ -451,6 +451,71 @@ export const greetings = pgTable(
   (t) => [index("idx_greetings_host").on(t.hostId)],
 );
 
+// ---------------------------------------------------------------------------
+// Video invites — a PAID add-on to an event (lib/videoInvites). One row per
+// order. The lifecycle and every rule about it live in
+// lib/videoInvites/policy.ts; `status` only reaches `paid` through the
+// verified Stripe webhook, and only a `paid` row is ever generated.
+// ---------------------------------------------------------------------------
+
+export const videoInvites = pgTable(
+  "video_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    hostId: uuid("host_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+
+    tier: text("tier").notNull(),
+    occasion: text("occasion").notNull(),
+    // Exactly what the voice reads (already cleaned, lib/videoInvites/policy.ts).
+    script: text("script").notNull(),
+    // Pro only: the host's photo, under events/<eventId>/video-photo/.
+    photoKey: text("photo_key"),
+    // Pro only: the consent tick, with the exact sentence shown.
+    attestedAt: timestamp("attested_at", { withTimezone: true }),
+    attestationText: text("attestation_text"),
+
+    status: text("status").notNull().default("pending_payment"),
+    priceCents: integer("price_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+    stripeSessionId: text("stripe_session_id").unique(),
+    stripePaymentIntent: text("stripe_payment_intent"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+
+    attempts: integer("attempts").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // events/<eventId>/video/<uuid>.mp4 once ready.
+    videoKey: text("video_key"),
+    // Which provider made it: 'vertex' (Google Omni) or 'fal'. Null until ready.
+    provider: text("provider"),
+    // Internal only, never returned to the host.
+    error: text("error"),
+    // A paid order that could not be delivered. Ops refunds it in Stripe and
+    // sets status = 'refunded'. Counted in /metrics so it can't be forgotten.
+    refundNeeded: boolean("refund_needed").notNull().default(false),
+
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_video_invites_event").on(t.eventId),
+    index("idx_video_invites_status").on(t.status),
+    check("video_invites_tier_check", sql`${t.tier} in ('simple','pro')`),
+    check(
+      "video_invites_status_check",
+      sql`${t.status} in ('pending_payment','paid','generating','ready','failed','refunded','cancelled')`,
+    ),
+    check("video_invites_pro_photo_check", sql`${t.tier} <> 'pro' or (${t.photoKey} is not null and ${t.attestedAt} is not null)`),
+  ],
+);
+
+export type VideoInvite = typeof videoInvites.$inferSelect;
+
 export type User = typeof users.$inferSelect;
 export type Event = typeof events.$inferSelect;
 export type Greeting = typeof greetings.$inferSelect;

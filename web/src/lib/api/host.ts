@@ -477,3 +477,52 @@ export async function downloadGuestCsv(eventId: string, slug: string) {
 // is re-confirmed server-side; 403 `wrong_password` means it didn't match.
 export const deleteAccount = (password: string) =>
   hostFetch<void>("/me/delete", { method: "POST", body: JSON.stringify({ password }) });
+
+// --- Video invites (paid; off unless the API has VIDEO_INVITES=on) ----------
+
+export type VideoInviteTier = "simple" | "pro";
+
+export type VideoInviteInfo = {
+  available: boolean;
+  prices: Record<VideoInviteTier, number>;
+  occasions: { id: string; label: string }[];
+  maxScriptChars: number;
+  attestationText: string;
+  order: {
+    id: string;
+    tier: VideoInviteTier;
+    occasion: string;
+    script: string;
+    state: "paying" | "making" | "ready" | "failed" | "none";
+    createdAt: string;
+    videoUrl: string | null;
+  } | null;
+};
+
+/** Null when the feature is switched off (the API answers 404). */
+export async function getVideoInvite(eventId: string): Promise<VideoInviteInfo | null> {
+  try {
+    return await hostFetch<VideoInviteInfo>(`/events/${eventId}/video-invite`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Pro tier: puts the host's photo straight into R2 and returns its key. */
+export async function uploadVideoInvitePhoto(eventId: string, file: File): Promise<string> {
+  const { key, uploadUrl } = await hostFetch<{ key: string; uploadUrl: string }>(
+    `/events/${eventId}/video-invite/photo/presign-upload`,
+    { method: "POST", body: JSON.stringify({ contentType: file.type }) },
+  );
+  const put = await fetch(uploadUrl, { method: "PUT", headers: { "content-type": file.type }, body: file });
+  if (!put.ok) throw new ApiError(put.status, "upload_failed");
+  return key;
+}
+
+export async function startVideoInviteCheckout(
+  eventId: string,
+  input: { tier: VideoInviteTier; occasion: string; script: string; photoKey?: string | null; attested?: boolean },
+): Promise<{ checkoutUrl: string; estimatedSeconds: number }> {
+  return hostFetch(`/events/${eventId}/video-invite/checkout`, { method: "POST", body: JSON.stringify(input) });
+}

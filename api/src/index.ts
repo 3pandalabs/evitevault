@@ -7,6 +7,7 @@ import { db } from "./db/index.js";
 import { users } from "./db/schema.js";
 import { env } from "./env.js";
 import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
+import { startVideoInvitesJob } from "./jobs/videoInvites.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
 import { accountRoutes } from "./routes/account.js";
 import { announcementRoutes } from "./routes/announcements.js";
@@ -20,6 +21,7 @@ import { metricsRoutes } from "./routes/metrics.js";
 import { publicEventRoutes } from "./routes/publicEvents.js";
 import { storageRoutes } from "./routes/storage.js";
 import { templateRoutes } from "./routes/templates.js";
+import { videoInviteRoutes } from "./routes/videoInvites.js";
 
 const app = Fastify({
   logger: true,
@@ -32,6 +34,22 @@ const app = Fastify({
 }).withTypeProvider<ZodTypeProvider>();
 
 app.setValidatorCompiler(validatorCompiler);
+
+// The Stripe webhook (routes/videoInvites.ts) is authenticated by an HMAC over
+// the EXACT bytes received; a re-serialised body never matches. So keep the raw
+// string alongside the parsed body, only for routes that opt in with
+// `config.rawBody`. Same parser AdVault uses.
+app.addContentTypeParser("application/json", { parseAs: "string" }, (req, body: string, done) => {
+  if ((req.routeOptions?.config as { rawBody?: boolean } | undefined)?.rawBody) {
+    (req as unknown as { rawBody: string }).rawBody = body;
+  }
+  try {
+    done(null, body.length ? JSON.parse(body) : undefined);
+  } catch (err) {
+    (err as { statusCode?: number }).statusCode = 400;
+    done(err as Error, undefined);
+  }
+});
 app.setSerializerCompiler(serializerCompiler);
 
 await app.register(cors, { origin: env.CORS_ORIGINS, credentials: true });
@@ -111,6 +129,9 @@ await app.register(announcementRoutes);
 await app.register(templateRoutes);
 await app.register(storageRoutes);
 await app.register(accountRoutes);
+// Paid video invites (off unless VIDEO_INVITES=on). Its host routes are behind
+// requireAuth inside the plugin; POST /webhooks/stripe is signature-checked.
+await app.register(videoInviteRoutes);
 // Anonymous by design — registered last so it's obvious in this list that
 // everything above it is behind requireAuth.
 await app.register(publicEventRoutes);
@@ -122,6 +143,10 @@ await app.register(metricsRoutes);
 // allowance resets, instead of the host having to notice and press a button
 // again tomorrow. See jobs/pendingInvitations.ts.
 startPendingInvitationsJob((msg) => app.log.info(msg));
+
+// Makes paid video invites one at a time (jobs/videoInvites.ts). Not started
+// unless VIDEO_INVITES=on and a provider (Google or fal) is configured.
+startVideoInvitesJob((msg) => app.log.info(msg));
 
 app.listen({ port: env.PORT, host: "0.0.0.0" }).catch((err) => {
   app.log.error(err);

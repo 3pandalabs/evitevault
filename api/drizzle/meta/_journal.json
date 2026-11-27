@@ -64,6 +64,13 @@
       "when": 1795715141332,
       "tag": "0008_greetings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795740917459,
+      "tag": "0009_video_invites",
+      "breakpoints": true
     }
   ]
 }

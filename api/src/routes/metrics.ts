@@ -36,6 +36,8 @@ type CountsRow = {
   attending_guests: number;
   guestbook_posts: number;
   active_sessions: number;
+  video_invites_ready: number;
+  video_invites_refund_needed: number;
   greetings: number;
   greeting_hosts: number;
   greetings_last_7_days: number;
@@ -71,6 +73,10 @@ export async function metricsRoutes(app: FastifyInstance) {
         (select count(*) from guests where rsvp_status = 'attending')::int as attending_guests,
         (select count(*) from guestbook_posts where status = 'visible')::int as guestbook_posts,
         (select count(*) from sessions where expires_at > now())::int as active_sessions,
+        (select count(*) from video_invites where status = 'ready')::int as video_invites_ready,
+        -- A work item, not a statistic: paid orders we could not deliver and
+        -- have not refunded yet. Should be 0.
+        (select count(*) from video_invites where refund_needed and status <> 'refunded')::int as video_invites_refund_needed,
         (select count(*) from greetings)::int as greetings,
         (select count(distinct host_id) from greetings)::int as greeting_hosts,
         (select count(*) from greetings where created_at > now() - interval '7 days')::int as greetings_last_7_days
@@ -100,6 +106,8 @@ export async function metricsRoutes(app: FastifyInstance) {
         attendingGuests: c.attending_guests,
         guestbookPosts: c.guestbook_posts,
         activeSessions: c.active_sessions,
+        videoInvitesReady: c.video_invites_ready,
+        videoInvitesRefundNeeded: c.video_invites_refund_needed,
         greetings: c.greetings,
         greetingHosts: c.greeting_hosts,
         greetingsLast7Days: c.greetings_last_7_days,

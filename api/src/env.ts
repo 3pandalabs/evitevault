@@ -56,6 +56,27 @@ export const env = {
   // publish, so leaving it unset is the normal configuration.
   SUPPORT_EMAIL: process.env.SUPPORT_EMAIL || "support@3pandalabs.com",
 
+  // Paid video invites (lib/videoInvites). Every one of these is optional: the
+  // feature is off unless VIDEO_INVITES=on, and reports itself unavailable
+  // (routes 503 `video_invites_unavailable`) until both fal and Stripe are
+  // configured, so a missing key never stops the API booting.
+  VIDEO_INVITES: process.env.VIDEO_INVITES ?? "",
+  // Also read directly by lib/videoInvites (kept out of this object so those
+  // modules stay importable from tests): GOOGLE_SA_KEY_B64 (Vertex AI service
+  // account JSON, base64; Google is tried first), VERTEX_OMNI_MODEL,
+  // VIDEO_INVITE_PROVIDERS (default "vertex,fal").
+  // fal.ai: ElevenLabs TTS, then a talking-avatar model over the panda scene
+  // or the host's photo. Same org fal account AdVault uses.
+  FAL_KEY: process.env.FAL_KEY ?? "",
+  FAL_AVATAR_ENDPOINT: process.env.FAL_AVATAR_ENDPOINT || "fal-ai/kling-video/ai-avatar/v2/standard",
+  FAL_VOICE: process.env.FAL_VOICE || "Sarah",
+  // Stripe (the shared org account). Checkout sessions are tagged
+  // metadata.app=rsvpvault; POST /webhooks/stripe ignores everything else.
+  STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY ?? "",
+  STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET ?? "",
+  VIDEO_INVITE_PRICE_SIMPLE_CENTS: process.env.VIDEO_INVITE_PRICE_SIMPLE_CENTS,
+  VIDEO_INVITE_PRICE_PRO_CENTS: process.env.VIDEO_INVITE_PRICE_PRO_CENTS,
+
   // The commit this deployment was built from, reported by GET /health so that
   // "is the deployed thing the thing I merged?" is answerable with one curl
   // instead of a dashboard login.
