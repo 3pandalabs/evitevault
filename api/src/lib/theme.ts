@@ -48,6 +48,27 @@ export const COVER_ART = [
   "happy-turkey",
   "pine",
   "snowflakes",
+  // Muse-generated set (2026), one per occasion.
+  "arched-florals",
+  "confetti-arcs",
+  "autumn-harvest",
+  "pine-berry",
+  "sunburst",
+  "balloon-cluster",
+  "tiered-cake",
+  "diya-marigold",
+  "house-key",
+  "cocktail-coupe",
+  "single-stem",
+  // Muse premium batch (2026), one per style.
+  "deco-fan",
+  "pattern-band",
+  "mono-rule",
+  "wash-blooms",
+  "starburst-boomerang",
+  "foil-laurel",
+  "sketch-wreath",
+  "bauhaus-shapes",
 ] as const;
 
 // ---------------------------------------------------------------------------

@@ -25,6 +25,9 @@ export default function EditGreetingPage() {
           occasion: g.occasion ?? "",
           templateId: g.templateId,
           art: g.themeOverrides?.art ?? null,
+          headingFont: g.themeOverrides?.fonts?.heading ?? null,
+          bodyFont: g.themeOverrides?.fonts?.body ?? null,
+          accent: g.themeOverrides?.palette?.accent ?? null,
         }),
       )
       .catch((err) => {

@@ -15,6 +15,7 @@
   "dependencies": {
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "gifenc": "^1.0.3",
     "lucide-react": "^0.468.0",
     "next": "16.2.12",
     "qrcode": "^1.5.4",
