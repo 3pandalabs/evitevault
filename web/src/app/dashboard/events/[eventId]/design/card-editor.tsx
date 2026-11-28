@@ -13,9 +13,8 @@ import {
   type ThemeOverrides,
 } from "@/lib/api/host";
 import { ensureCardFonts, loadImage, loadQrCode, rasterizeSvg } from "@/lib/card/assets";
-import { renderCardToBlob, type CardFonts } from "@/lib/card/render";
+import { heroArtSize, renderCardToBlob, type CardFonts } from "@/lib/card/render";
 import {
-  CARD_SIZES,
   FRAME_LABELS,
   RATIO_LABELS,
   cardDateLines,
@@ -228,7 +227,7 @@ export function CardEditor({
   const renderExport = useCallback(async () => {
     await ensureCardFonts([fonts.heading, fonts.body]);
 
-    const { width, height } = CARD_SIZES[design.ratio];
+    const { width, height } = heroArtSize(design);
     const artSvg = document.getElementById("card-export-art")?.querySelector("svg");
     const [photo, artImg, qr] = await Promise.all([
       photoSrc ? loadImage(photoSrc).catch(() => null) : Promise.resolve(null),

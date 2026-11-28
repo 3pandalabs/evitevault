@@ -66,7 +66,18 @@ export function drawCard(ctx: CanvasRenderingContext2D, input: CardInput) {
   ctx.fillRect(0, 0, W, H);
 
   const fullBleed = design.frame === "full";
-  const hero = heroRect(design, W, H);
+  let hero = heroRect(design, W, H);
+
+  // "match": shrink the frame to the photo's own aspect so the whole photo
+  // shows with no crop and no bands. Only the bordered rectangular frames —
+  // a circle or a full-bleed card has no spare box to shrink into.
+  if (
+    design.photoFit === "match" &&
+    input.assets.photo &&
+    (design.frame === "arch" || design.frame === "rounded")
+  ) {
+    hero = fitRectToAspect(hero, input.assets.photo);
+  }
 
   drawHero(ctx, input, hero, W, H);
 
@@ -104,6 +115,21 @@ export function photoOverflow(
   };
 }
 
+/**
+ * The hero's pixel size for the current design. The cover artwork is a wide
+ * banner (coverArt's 800×300 viewBox, `slice`): rasterising it at the hero's own
+ * dimensions lets the SVG crop itself once, into the shape it will actually
+ * occupy. Rasterising at the full card size instead — which is what this used to
+ * do — made the banner fill a 4:5 portrait and then get cropped a *second* time
+ * by drawCovered, leaving a narrow off-centre sliver of the motif (two stray
+ * arcs where a wreath should be). Callers pass this to `rasterizeSvg`.
+ */
+export function heroArtSize(design: CardDesign): { width: number; height: number } {
+  const { width: W, height: H } = CARD_SIZES[design.ratio];
+  const r = heroRect(design, W, H);
+  return { width: Math.round(r.w), height: Math.round(r.h) };
+}
+
 function heroRect(design: CardDesign, W: number, H: number): Rect {
   if (design.frame === "full") return { x: 0, y: 0, w: W, h: H };
 
@@ -139,6 +165,9 @@ function drawHero(ctx: CanvasRenderingContext2D, input: CardInput, r: Rect, W: n
   ctx.clip();
 
   if (assets.photo) {
+    // For "match", `r` has already been shrunk to the photo's aspect by the
+    // caller, so cover fills it exactly — no crop, no bands. For "cover" it
+    // fills and crops as before.
     drawCovered(ctx, assets.photo, r, design.photo);
   } else if (assets.art) {
     drawCovered(ctx, assets.art, r, { zoom: 1, offsetX: 0, offsetY: 0 });
@@ -235,6 +264,22 @@ function drawCovered(
   const dx = r.x + (r.w - dw) / 2 + (photo.offsetX * Math.max(0, dw - r.w)) / 2;
   const dy = r.y + (r.h - dh) / 2 + (photo.offsetY * Math.max(0, dh - r.h)) / 2;
   ctx.drawImage(img, dx, dy, dw, dh);
+}
+
+/**
+ * Shrinks `box` to the image's aspect ratio, fitting inside it and centred.
+ * The frame (border, clip) and the photo then share this rect, so the whole
+ * photo shows with no crop and no empty bands — the frame simply takes the
+ * photo's shape. See photoFit "match" in card/spec.
+ */
+function fitRectToAspect(box: Rect, img: CanvasImageSource): Rect {
+  const { width: iw, height: ih } = intrinsicSize(img);
+  if (!iw || !ih) return box;
+
+  const scale = Math.min(box.w / iw, box.h / ih);
+  const w = iw * scale;
+  const h = ih * scale;
+  return { x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
 }
 
 function intrinsicSize(img: CanvasImageSource): { width: number; height: number } {

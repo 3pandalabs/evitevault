@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import { sendGreeting } from "@/lib/api/host";
 import { ensureCardFonts, loadImage, rasterizeSvg } from "@/lib/card/assets";
-import { drawCardToCanvas, renderCardToBlob, type CardFonts } from "@/lib/card/render";
+import { drawCardToCanvas, heroArtSize, renderCardToBlob, type CardFonts } from "@/lib/card/render";
 import { drawMotion, makeParticles, motionForArt, MOTIONS, motionLabel, type MotionKind } from "@/lib/card/motion";
 import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "@/lib/card/spec";
 import { CoverArt } from "@/lib/coverArt";
@@ -78,7 +78,7 @@ export function GreetingCard({
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendDone, setSendDone] = useState<string | null>(null);
 
-  const artKey = `${art}|${design.ratio}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
+  const artKey = `${art}|${design.ratio}|${design.frame}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
   const readyArt = artImg?.key === artKey ? artImg.img : null;
   const photoImg = loadedPhoto && loadedPhoto.src === photoSrc ? loadedPhoto.img : null;
@@ -109,7 +109,7 @@ export function GreetingCard({
     let cancelled = false;
     const svg = artHostRef.current?.querySelector("svg");
     if (!svg) return;
-    const { width, height } = CARD_SIZES[design.ratio];
+    const { width, height } = heroArtSize(design);
     rasterizeSvg(svg as SVGSVGElement, width, height)
       .then((img) => {
         if (!cancelled) setArtImg({ key: artKey, img });
@@ -169,7 +169,7 @@ export function GreetingCard({
     if (!exportArt) {
       const svg = artHostRef.current?.querySelector("svg");
       if (svg) {
-        const { width, height } = CARD_SIZES[design.ratio];
+        const { width, height } = heroArtSize(design);
         exportArt = await rasterizeSvg(svg as SVGSVGElement, width, height).catch(() => null);
       }
     }
@@ -199,7 +199,7 @@ export function GreetingCard({
     if (readyArt) return readyArt;
     const svg = artHostRef.current?.querySelector("svg");
     if (!svg) return null;
-    const { width, height } = CARD_SIZES[design.ratio];
+    const { width, height } = heroArtSize(design);
     return rasterizeSvg(svg as SVGSVGElement, width, height).catch(() => null);
   }
 
