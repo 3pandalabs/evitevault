@@ -30,7 +30,7 @@ export function buildGreetingEmail(opts: {
   const attachments: Attachment[] = [];
   let imageHtml = "";
   if (image) {
-    const ext = image.type === "image/png" ? "png" : "jpg";
+    const ext = image.type === "image/gif" ? "gif" : image.type === "image/png" ? "png" : "jpg";
     attachments.push({
       content: image.content,
       filename: `greeting.${ext}`,

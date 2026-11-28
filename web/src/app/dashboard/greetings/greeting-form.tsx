@@ -3,7 +3,7 @@
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { listTemplates, type GreetingInput, type Template } from "@/lib/api/host";
+import { listTemplates, type GreetingInput, type SentRecipient, type Template } from "@/lib/api/host";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
@@ -83,6 +83,7 @@ export function GreetingForm({
   failureMessage,
   onSubmit,
   greetingId,
+  initialRecipients,
 }: {
   initial?: Partial<GreetingFormValues>;
   submitLabel: string;
@@ -91,6 +92,8 @@ export function GreetingForm({
   onSubmit: (input: GreetingInput) => Promise<void>;
   /** Set on the edit screen — enables emailing the card (a saved greeting). */
   greetingId?: string;
+  /** Addresses this greeting has already been emailed to (edit screen only). */
+  initialRecipients?: SentRecipient[];
 }) {
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -536,6 +539,7 @@ export function GreetingForm({
                 art={previewArt}
                 photoSrc={photoSrc}
                 greetingId={greetingId}
+                initialRecipients={initialRecipients}
               />
               <p className="text-center text-xs text-slate-500">
                 Save the greeting to keep it — download or share the image to send it.
