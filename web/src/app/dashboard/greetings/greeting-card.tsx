@@ -1,13 +1,16 @@
 "use client";
 
-import { Download, Loader2, Mail, Share2 } from "lucide-react";
+import { applyPalette, GIFEncoder, quantize } from "gifenc";
+import { Download, Film, Loader2, Mail, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import { sendGreeting } from "@/lib/api/host";
 import { ensureCardFonts, rasterizeSvg } from "@/lib/card/assets";
 import { drawCardToCanvas, renderCardToBlob, type CardFonts } from "@/lib/card/render";
+import { drawMotion, makeParticles, motionForArt, MOTIONS, motionLabel, type MotionKind } from "@/lib/card/motion";
 import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "@/lib/card/spec";
 import { CoverArt } from "@/lib/coverArt";
+import { AnimatedOverlay } from "@/components/animated-overlay";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 
@@ -59,8 +62,11 @@ export function GreetingCard({
   const artHostRef = useRef<HTMLDivElement>(null);
   const [artImg, setArtImg] = useState<{ key: string; img: HTMLImageElement } | null>(null);
   const [fontsReadyKey, setFontsReadyKey] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | "download" | "share" | "send">(null);
+  const [busy, setBusy] = useState<null | "download" | "share" | "send" | "gif">(null);
   const [error, setError] = useState<string | null>(null);
+  // The card's motion layer. Defaults to a fitting animation for the artwork;
+  // the host can change it or turn it off. The GIF export bakes it in.
+  const [motion, setMotion] = useState<MotionKind>(() => motionForArt(art));
 
   const [showSend, setShowSend] = useState(false);
   const [recipients, setRecipients] = useState("");
@@ -154,7 +160,69 @@ export function GreetingCard({
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "") || "greeting";
-    return `${base}.${contentType === "image/png" ? "png" : "jpg"}`;
+    const ext = contentType === "image/gif" ? "gif" : contentType === "image/png" ? "png" : "jpg";
+    return `${base}.${ext}`;
+  }
+
+  // Resolves the rasterised cover artwork used by both the still and animated
+  // exports (the live preview rasterises its own copy).
+  async function resolveExportArt(): Promise<CanvasImageSource | null> {
+    if (readyArt) return readyArt;
+    const svg = artHostRef.current?.querySelector("svg");
+    if (!svg) return null;
+    const { width, height } = CARD_SIZES[design.ratio];
+    return rasterizeSvg(svg as SVGSVGElement, width, height).catch(() => null);
+  }
+
+  // An animated GIF loop of the card — the card has no public page, so a GIF is
+  // how motion actually reaches a recipient (it plays inline in email). Rendered
+  // entirely client-side: draw the still card once, then composite the motion
+  // layer frame by frame and encode with gifenc.
+  async function onGif() {
+    if (motion === "none") {
+      await onDownload();
+      return;
+    }
+    setBusy("gif");
+    setError(null);
+    try {
+      await ensureCardFonts([fonts.heading, fonts.body]);
+      const exportArt = await resolveExportArt();
+      const { width: cardW } = CARD_SIZES[design.ratio];
+      // ~540px wide keeps the GIF a sensible size for email.
+      const scale = 540 / cardW;
+      const base = document.createElement("canvas");
+      drawCardToCanvas(base, { design, palette, fonts, content, assets: { photo: null, art: exportArt, qr: null } }, scale);
+
+      const W = base.width;
+      const H = base.height;
+      const frameCanvas = document.createElement("canvas");
+      frameCanvas.width = W;
+      frameCanvas.height = H;
+      const fctx = frameCanvas.getContext("2d");
+      if (!fctx) throw new Error("no 2d context");
+
+      const parts = makeParticles(motion);
+      const FPS = 12;
+      const FRAMES = 24; // a 2-second loop
+      const enc = GIFEncoder();
+      for (let i = 0; i < FRAMES; i++) {
+        fctx.clearRect(0, 0, W, H);
+        fctx.drawImage(base, 0, 0);
+        drawMotion(fctx, { kind: motion, color: palette.accent, t: i / FPS, W, H, dpr: 1, parts });
+        const { data } = fctx.getImageData(0, 0, W, H);
+        const pal = quantize(data, 256);
+        const index = applyPalette(data, pal);
+        enc.writeFrame(index, W, H, { palette: pal, delay: Math.round(1000 / FPS) });
+      }
+      enc.finish();
+      const blob = new Blob([enc.bytes() as BlobPart], { type: "image/gif" });
+      triggerDownload(blob, filenameFor("image/gif"));
+    } catch {
+      setError("Couldn't make the animated GIF. Try again.");
+    } finally {
+      setBusy(null);
+    }
   }
 
   function triggerDownload(blob: Blob, filename: string) {
@@ -261,16 +329,30 @@ export function GreetingCard({
         <CoverArt art={art} palette={palette} />
       </div>
 
-      <div className="mx-auto max-w-[360px]">
+      <div className="relative mx-auto max-w-[360px] overflow-hidden rounded-xl">
         <canvas
           ref={canvasRef}
           role="img"
           aria-label={content.title || "Greeting card preview"}
           className="block w-full rounded-xl shadow-lg ring-1 ring-black/5"
         />
+        <AnimatedOverlay kind={motion} color={palette.accent} />
       </div>
 
-      <div className="flex justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <select
+          value={motion}
+          onChange={(e) => setMotion(e.target.value as MotionKind)}
+          disabled={busy !== null}
+          aria-label="Animation"
+          className="h-8 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+        >
+          {MOTIONS.map((m) => (
+            <option key={m} value={m}>
+              {motionLabel(m)}
+            </option>
+          ))}
+        </select>
         <Button type="button" variant="outline" size="sm" onClick={onDownload} disabled={busy !== null}>
           {busy === "download" ? (
             <Loader2 className="size-4 animate-spin" />
@@ -278,6 +360,17 @@ export function GreetingCard({
             <Download className="size-4" />
           )}
           Download
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onGif}
+          disabled={busy !== null || motion === "none"}
+          title="Download an animated GIF"
+        >
+          {busy === "gif" ? <Loader2 className="size-4 animate-spin" /> : <Film className="size-4" />}
+          GIF
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onShare} disabled={busy !== null}>
           {busy === "share" ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}

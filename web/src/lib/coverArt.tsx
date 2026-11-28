@@ -35,6 +35,27 @@ export const ART_LABELS: Record<string, string> = {
   "happy-turkey": "Happy turkey",
   pine: "Pine trees",
   snowflakes: "Snowflakes",
+  // Muse-generated set (2026), one per occasion.
+  "arched-florals": "Arched florals",
+  "confetti-arcs": "Confetti arcs",
+  "autumn-harvest": "Autumn harvest",
+  "pine-berry": "Pine & berry",
+  sunburst: "Sunburst",
+  "balloon-cluster": "Balloon cluster",
+  "tiered-cake": "Tiered cake",
+  "diya-marigold": "Diya & marigold",
+  "house-key": "House & key",
+  "cocktail-coupe": "Cocktail coupe",
+  "single-stem": "Single stem",
+  // Muse premium batch (2026), one per style.
+  "deco-fan": "Deco fan",
+  "pattern-band": "Pattern band",
+  "mono-rule": "Mono rule",
+  "wash-blooms": "Wash blooms",
+  "starburst-boomerang": "Atomic starburst",
+  "foil-laurel": "Foil laurel",
+  "sketch-wreath": "Sketch wreath",
+  "bauhaus-shapes": "Bauhaus shapes",
 };
 
 export const ART_CHOICES = Object.keys(ART_LABELS);
@@ -549,6 +570,379 @@ const ARTWORK: Record<string, Draw> = {
     ];
     return <>{pts.map(([x, y, s, o], i) => flake(x, y, s, o, String(i)))}</>;
   },
+
+  // --- Muse-generated set (2026) — one motif per occasion -----------------
+  // All palette-driven, centred/crop-safe for the arch, flat shapes only.
+
+  // A central floral spray filling the arch — weddings. Centred and bold so it
+  // survives the arch crop rather than stranding a garland above the opening.
+  "arched-florals": (id, p) => {
+    const bloom = (cx: number, cy: number, r: number, k: string) => (
+      <g key={k}>
+        {[0, 72, 144, 216, 288].map((a) => (
+          <ellipse key={a} cx={cx} cy={cy - r} rx={r * 0.5} ry={r} fill={p.accent} opacity="0.55" transform={`rotate(${a} ${cx} ${cy})`} />
+        ))}
+        <circle cx={cx} cy={cy} r={r * 0.5} fill={p.accent} opacity="0.9" />
+        <circle cx={cx} cy={cy} r={r * 0.22} fill={p.bg} />
+      </g>
+    );
+    const leaf = (x: number, y: number, s: number, rot: number, k: string) => (
+      <path key={k} d="M0 18 Q-12 0 0 -18 Q12 0 0 18 Z" transform={`translate(${x} ${y}) rotate(${rot}) scale(${s})`} fill={p.muted} opacity="0.5" />
+    );
+    return (
+      <>
+        <path d="M400 292 Q392 200 400 120" stroke={p.muted} strokeWidth="2.5" fill="none" opacity="0.5" />
+        <path d="M400 250 Q348 210 328 150" stroke={p.muted} strokeWidth="2" fill="none" opacity="0.45" />
+        <path d="M400 250 Q452 210 472 150" stroke={p.muted} strokeWidth="2" fill="none" opacity="0.45" />
+        {leaf(356, 212, 1, 42, "la")}
+        {leaf(444, 210, 1, -42, "lb")}
+        {leaf(378, 162, 0.8, 72, "lc")}
+        {leaf(422, 160, 0.8, -72, "ld")}
+        {bloom(330, 140, 24, "b2")}
+        {bloom(470, 140, 24, "b3")}
+        {bloom(400, 108, 36, "b1")}
+      </>
+    );
+  },
+
+  // Three sweeping arcs of confetti across the top — New Year, celebrations.
+  "confetti-arcs": (id, p) => {
+    const cols = [p.accent, p.muted, p.text];
+    return (
+      <>
+        {[70, 100, 130].map((ry, a) => (
+          <path key={a} d={`M150 ${44 + a * 26} Q400 ${44 + a * 26 - ry} 650 ${44 + a * 26}`} fill="none" stroke={cols[a]} strokeWidth="2" opacity="0.35" />
+        ))}
+        {Array.from({ length: 34 }, (_, i) => {
+          const x = 185 + ((i * 53) % 430);
+          const y = 30 + ((i * 37) % 150);
+          const rot = (i * 51) % 180;
+          return <rect key={i} x={x} y={y} width={i % 3 ? 9 : 5} height={i % 3 ? 5 : 13} rx="1.5" fill={cols[i % 3]} opacity={0.3 + ((i * 11) % 40) / 100} transform={`rotate(${rot} ${x} ${y})`} />;
+        })}
+      </>
+    );
+  },
+
+  // Falling leaves above, wheat and a pumpkin cluster below — Thanksgiving.
+  // Leaves fill the upper arch so it isn't empty over the harvest.
+  "autumn-harvest": (id, p) => {
+    const leaf = (x: number, y: number, s: number, rot: number, fill: string, k: string) => (
+      <path key={k} d="M0 16 Q-11 0 0 -16 Q11 0 0 16 Z" transform={`translate(${x} ${y}) rotate(${rot}) scale(${s})`} fill={fill} opacity="0.6" />
+    );
+    return (
+      <>
+        {leaf(300, 80, 1.1, 30, p.accent, "l1")}
+        {leaf(380, 56, 0.9, -30, p.muted, "l2")}
+        {leaf(452, 86, 1.1, 60, p.muted, "l3")}
+        {leaf(512, 64, 0.9, -20, p.accent, "l4")}
+        {leaf(340, 132, 0.8, 80, p.accent, "l5")}
+        {leaf(470, 134, 0.8, -60, p.muted, "l6")}
+        {[322, 478].map((x, i) => (
+          <g key={i} stroke={p.muted} strokeWidth="2.5" fill="none" opacity="0.6">
+            <path d={`M${x} 290 L${x} 190`} />
+            {[0, 1, 2, 3].map((j) => (
+              <g key={j}>
+                <path d={`M${x} ${204 + j * 18} q15 -6 21 -19`} />
+                <path d={`M${x} ${204 + j * 18} q-15 -6 -21 -19`} />
+              </g>
+            ))}
+          </g>
+        ))}
+        <ellipse cx="366" cy="266" rx="36" ry="30" fill={p.muted} opacity="0.7" />
+        <ellipse cx="420" cy="270" rx="46" ry="38" fill={p.accent} opacity="0.9" />
+        <path d="M420 234 q-3 -12 9 -16" stroke={p.text} strokeWidth="4" fill="none" opacity="0.5" strokeLinecap="round" />
+      </>
+    );
+  },
+
+  // Two full pine sprigs brought inward, berries and a bold star — Christmas.
+  "pine-berry": (id, p) => {
+    const sprig = (x: number, dir: number, k: string) => (
+      <g key={k} stroke={p.accent} strokeWidth="3" fill="none" opacity="0.6">
+        <path d={`M${x} 68 q${dir * 50} 50 ${dir * 34} 150`} />
+        {[0, 1, 2, 3, 4, 5].map((j) => {
+          const bx = x + dir * (4 + j * 8);
+          const by = 84 + j * 26;
+          return <g key={j}><path d={`M${bx} ${by} l${dir * 26} -13`} /><path d={`M${bx} ${by} l${dir * 26} 13`} /></g>;
+        })}
+      </g>
+    );
+    return (
+      <>
+        {sprig(272, 1, "l")}
+        {sprig(528, -1, "r")}
+        {([[292, 150], [306, 184], [340, 124], [528, 150], [514, 184], [480, 124], [400, 252], [378, 242], [422, 242]] as [number, number][]).map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="7" fill={p.accent} opacity="0.85" />
+        ))}
+        <path d="M400 52 l7 18 19 1 -15 13 6 18 -17 -10 -17 10 6 -18 -15 -13 19 -1 z" fill={p.accent} opacity="0.8" />
+      </>
+    );
+  },
+
+  // A rising sun of alternating rays with a centre disc — corporate, modern.
+  sunburst: (id, p) => (
+    <g transform="translate(400 300)">
+      {Array.from({ length: 25 }, (_, i) => {
+        const rad = ((180 + (i / 24) * 180) * Math.PI) / 180;
+        const len = i % 2 ? 160 : 118;
+        return (
+          <line
+            key={i}
+            x1={Math.cos(rad) * 68}
+            y1={Math.sin(rad) * 68}
+            x2={Math.cos(rad) * (68 + len)}
+            y2={Math.sin(rad) * (68 + len)}
+            stroke={p.accent}
+            strokeWidth="3"
+            opacity="0.4"
+          />
+        );
+      })}
+      <circle r="58" fill="none" stroke={p.accent} strokeWidth="3" opacity="0.6" />
+    </g>
+  ),
+
+  // Five overlapping balloons in a cluster with trailing strings — baby, parties.
+  "balloon-cluster": (id, p) => (
+    <>
+      {([[360, 92, 34], [422, 78, 40], [400, 132, 30], [338, 142, 26], [462, 128, 28]] as [number, number, number][]).map(([x, y, r], i) => (
+        <g key={i}>
+          <circle cx={x} cy={y} r={r} fill={i % 2 ? p.muted : p.accent} opacity={i % 2 ? 0.5 : 0.7} />
+          <path d={`M${x} ${y + r} q${i % 2 ? 10 : -10} 60 ${i % 2 ? 4 : -4} ${300 - y - r}`} stroke={p.muted} strokeWidth="1.5" fill="none" opacity="0.4" />
+        </g>
+      ))}
+    </>
+  ),
+
+  // A two-tier cake with candles under a scatter of dots — birthdays.
+  "tiered-cake": (id, p) => (
+    <>
+      {([[244, 120], [560, 110], [284, 70], [520, 80], [400, 48]] as [number, number][]).map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={i % 2 ? 4 : 6} fill={p.muted} opacity="0.5" />
+      ))}
+      <ellipse cx="400" cy="286" rx="118" ry="12" fill={p.muted} opacity="0.4" />
+      <rect x="320" y="226" width="160" height="60" rx="8" fill={p.accent} opacity="0.8" />
+      <rect x="352" y="182" width="96" height="48" rx="8" fill={p.accent} opacity="0.92" />
+      {[378, 400, 422].map((x, i) => (
+        <g key={i}>
+          <rect x={x - 2} y="150" width="4" height="34" fill={p.muted} opacity="0.7" />
+          <path d={`M${x} 150 q5 -8 0 -16 q-5 8 0 16 z`} fill={p.accent} />
+        </g>
+      ))}
+    </>
+  ),
+
+  // A marigold garland dipping across the top over a raised row of diyas —
+  // Diwali, pujas. Both centred so they clear the arch crop.
+  "diya-marigold": (id, p) => (
+    <>
+      <path d="M200 70 Q400 140 600 70" fill="none" stroke={p.muted} strokeWidth="2" opacity="0.4" />
+      {([[210, 74], [262, 98], [322, 117], [400, 128], [478, 117], [538, 98], [590, 74]] as [number, number][]).map(([x, y], i) => (
+        <g key={i}>
+          {[0, 60, 120].map((a) => (
+            <ellipse key={a} cx={x} cy={y} rx="11" ry="5" fill={p.accent} opacity="0.5" transform={`rotate(${a} ${x} ${y})`} />
+          ))}
+          <circle cx={x} cy={y} r="5" fill={p.accent} opacity="0.85" />
+        </g>
+      ))}
+      {[290, 370, 450, 520].map((x, i) => (
+        <g key={i} transform={`translate(${x} 232)`}>
+          <path d="M-28 0 Q0 24 28 0 Z" fill={p.accent} opacity="0.85" />
+          <ellipse cx="0" cy="0" rx="28" ry="6" fill={p.accent} />
+          <path d="M0 -22 Q9 -7 0 2 Q-9 -7 0 -22 Z" fill={p.accentText} opacity="0.9" />
+          <path d="M0 -30 q6 -10 0 -18" stroke={p.accent} strokeWidth="2" fill="none" opacity="0.5" />
+        </g>
+      ))}
+    </>
+  ),
+
+  // A little house with a hanging key and two leafy branches — housewarming.
+  "house-key": (id, p) => (
+    <>
+      {([[252, 1], [548, -1]] as [number, number][]).map(([x, dir], i) => (
+        <g key={i} stroke={p.muted} strokeWidth="2" fill="none" opacity="0.5">
+          <path d={`M${x} 300 q${dir * 10} -70 ${dir * 2} -132`} />
+          {[0, 1, 2].map((j) => (
+            <path key={j} d={`M${x + dir * (2 + j)} ${248 - j * 42} l${dir * 24} -10`} />
+          ))}
+        </g>
+      ))}
+      <g stroke={p.accent} strokeWidth="3" fill="none" opacity="0.7">
+        <rect x="350" y="172" width="100" height="90" />
+        <path d="M336 174 L400 120 L464 174" />
+        <rect x="388" y="214" width="24" height="48" />
+      </g>
+      <g stroke={p.accent} strokeWidth="3" fill="none" opacity="0.6">
+        <circle cx="470" cy="150" r="9" />
+        <path d="M470 159 L470 196 M470 186 l8 0 M470 178 l8 0" />
+      </g>
+    </>
+  ),
+
+  // A coupe glass with a citrus wheel and sparkler lines — cocktail parties.
+  "cocktail-coupe": (id, p) => (
+    <>
+      {([[300, 20], [500, -20]] as [number, number][]).map(([x, rot], i) => (
+        <g key={i} stroke={p.muted} strokeWidth="2" opacity="0.4" transform={`rotate(${rot} ${x} 150)`}>
+          <line x1={x} y1="88" x2={x} y2="212" />
+          {[0, 1, 2, 3].map((j) => (
+            <line key={j} x1={x - 8} y1={102 + j * 30} x2={x + 8} y2={102 + j * 30} />
+          ))}
+        </g>
+      ))}
+      <path d="M350 118 Q400 182 450 118 Z" fill={p.accent} fillOpacity="0.22" stroke={p.accent} strokeWidth="3" opacity="0.8" />
+      <line x1="400" y1="168" x2="400" y2="252" stroke={p.accent} strokeWidth="3" opacity="0.7" />
+      <line x1="366" y1="254" x2="434" y2="254" stroke={p.accent} strokeWidth="3" opacity="0.7" />
+      <circle cx="446" cy="118" r="12" fill={p.accent} opacity="0.7" />
+      <circle cx="446" cy="118" r="5" fill={p.bg} />
+      {([[400, 150], [392, 136], [408, 142]] as [number, number][]).map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r="3" fill={p.bg} opacity="0.7" />
+      ))}
+    </>
+  ),
+
+  // A single stem and bloom in a vase, off-centre — the all-purpose one.
+  "single-stem": (id, p) => (
+    <>
+      <path d="M360 300 Q356 250 376 240 L424 240 Q444 250 440 300 Z" fill={p.muted} opacity="0.4" />
+      <path d="M376 240 Q400 232 424 240" fill="none" stroke={p.muted} strokeWidth="2" opacity="0.5" />
+      <path d="M408 242 Q392 160 408 92" fill="none" stroke={p.accent} strokeWidth="3" opacity="0.6" />
+      <path d="M400 188 Q360 178 352 148 Q392 156 400 188 Z" fill={p.muted} opacity="0.5" />
+      <path d="M404 158 Q444 148 452 120 Q412 128 404 158 Z" fill={p.muted} opacity="0.5" />
+      {[0, 60, 120, 180, 240, 300].map((a) => (
+        <ellipse key={a} cx="408" cy="80" rx="10" ry="20" fill={p.accent} opacity="0.6" transform={`rotate(${a} 408 96)`} />
+      ))}
+      <circle cx="408" cy="96" r="9" fill={p.accent} />
+    </>
+  ),
+
+  // --- Muse premium batch (2026) — one motif per style -------------------
+
+  // Art-deco rayed fan from the base with stepped corner brackets — Gilded Fan.
+  "deco-fan": (id, p) => (
+    <>
+      <g transform="translate(400 296)">
+        {Array.from({ length: 21 }, (_, i) => {
+          const rad = ((180 + (i / 20) * 180) * Math.PI) / 180;
+          const len = i % 2 ? 158 : 104;
+          return <line key={i} x1={Math.cos(rad) * 48} y1={Math.sin(rad) * 48} x2={Math.cos(rad) * (48 + len)} y2={Math.sin(rad) * (48 + len)} stroke={p.accent} strokeWidth={i % 2 ? 4 : 2} opacity="0.5" />;
+        })}
+        <path d="M-50 0 A50 50 0 0 1 50 0" fill="none" stroke={p.accent} strokeWidth="3" opacity="0.75" />
+      </g>
+      {([[214, 54, 1], [586, 54, -1]] as [number, number, number][]).map(([x, y, dir], i) => (
+        <path key={i} d={`M${x} ${y} l${dir * 44} 0 l0 10 l${-dir * 30} 0 l0 10 l${-dir * 16} 0 z`} fill={p.accent} opacity="0.4" />
+      ))}
+    </>
+  ),
+
+  // A dense band of mixed festive tiles in pop colours — Bazaar Riot.
+  "pattern-band": (id, p) => {
+    const pops = [p.accent, "#00a6a6", "#ffb400", p.muted];
+    return (
+      <>
+        <rect x="170" y="42" width="460" height="86" rx="6" fill={p.accent} opacity="0.07" />
+        {Array.from({ length: 11 }, (_, i) => {
+          const x = 198 + i * 40;
+          const col = pops[i % pops.length];
+          const y = 60;
+          if (i % 4 === 0) return <circle key={i} cx={x} cy={y + 24} r="13" fill={col} opacity="0.7" />;
+          if (i % 4 === 1) return <path key={i} d={`M${x - 14} ${y + 38} l14 -30 l14 30`} fill="none" stroke={col} strokeWidth="4" opacity="0.7" />;
+          if (i % 4 === 2) return <path key={i} d={`M${x} ${y + 6} q16 12 0 28 q-16 -16 0 -28 z`} fill={col} opacity="0.7" />;
+          return <path key={i} d={`M${x} ${y + 8} l4 13 14 0 -11 9 4 14 -11 -9 -11 9 4 -14 -11 -9 14 0 z`} fill={col} opacity="0.7" />;
+        })}
+      </>
+    );
+  },
+
+  // One thin rule with a single disc — Mono Noire. The restraint is the design.
+  "mono-rule": (id, p) => (
+    <>
+      <line x1="210" y1="108" x2="590" y2="108" stroke={p.accent} strokeWidth="2" opacity="0.6" />
+      <circle cx="516" cy="108" r="16" fill={p.accent} opacity="0.85" />
+    </>
+  ),
+
+  // Loose translucent blooms over soft leaves — Washed Garden (watercolour).
+  "wash-blooms": (id, p) => (
+    <>
+      {([[360, 122, 48], [434, 102, 56], [398, 164, 42]] as [number, number, number][]).map(([x, y, r], i) => (
+        <circle key={i} cx={x} cy={y} r={r} fill={p.accent} opacity="0.28" />
+      ))}
+      {([[318, 206, 40], [482, 206, -40], [400, 246, 0]] as [number, number, number][]).map(([x, y, rot], i) => (
+        <path key={i} d="M0 32 Q-22 0 0 -32 Q22 0 0 32 Z" transform={`translate(${x} ${y}) rotate(${rot})`} fill={p.muted} opacity="0.35" />
+      ))}
+      <circle cx="400" cy="132" r="18" fill={p.accent} opacity="0.5" />
+    </>
+  ),
+
+  // Mid-century starburst, boomerangs and atomic dots — Diner '62 (retro).
+  "starburst-boomerang": (id, p) => {
+    const teal = "#2e7d74";
+    return (
+      <>
+        <g transform="translate(362 120)">
+          {Array.from({ length: 12 }, (_, i) => {
+            const a = ((i / 12) * 360 * Math.PI) / 180;
+            return <line key={i} x1={Math.cos(a) * 10} y1={Math.sin(a) * 10} x2={Math.cos(a) * (i % 2 ? 50 : 32)} y2={Math.sin(a) * (i % 2 ? 50 : 32)} stroke={p.accent} strokeWidth="3" opacity="0.7" />;
+          })}
+          <circle r="8" fill={p.accent} opacity="0.85" />
+        </g>
+        {([[476, 182, 20], [320, 232, -28]] as [number, number, number][]).map(([x, y, rot], i) => (
+          <path key={i} d="M-26 0 Q0 -20 26 0 Q0 -7 -26 0 Z" transform={`translate(${x} ${y}) rotate(${rot})`} fill={teal} opacity="0.6" />
+        ))}
+        {([[300, 98], [520, 120], [484, 250], [376, 270], [446, 86]] as [number, number][]).map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="5" fill={i % 2 ? teal : p.accent} opacity="0.6" />
+        ))}
+      </>
+    );
+  },
+
+  // Two mirrored laurel branches forming an open oval — Foil Laurel (luxe).
+  "foil-laurel": (id, p) => {
+    const branch = (dir: number, k: string) => (
+      <g key={k} stroke={p.accent} strokeWidth="2.5" fill="none" opacity="0.7">
+        <path d={`M400 254 Q${400 + dir * 96} 190 ${400 + dir * 70} 84`} />
+        {[0, 1, 2, 3, 4, 5].map((j) => {
+          const t = j / 5;
+          const x = 400 + dir * (70 + 26 * Math.sin(t * Math.PI));
+          const y = 254 - t * 170;
+          return <ellipse key={j} cx={x} cy={y} rx="13" ry="5.5" fill={p.accent} opacity="0.4" stroke="none" transform={`rotate(${dir * 48} ${x} ${y})`} />;
+        })}
+      </g>
+    );
+    return (
+      <>
+        {branch(-1, "l")}
+        {branch(1, "r")}
+        <circle cx="400" cy="72" r="5" fill={p.accent} opacity="0.7" />
+      </>
+    );
+  },
+
+  // A hand-drawn double-stroke wreath with a tiny heart — Ink & Margin.
+  "sketch-wreath": (id, p) => (
+    <>
+      <circle cx="400" cy="150" r="92" fill="none" stroke={p.accent} strokeWidth="2" opacity="0.6" />
+      <circle cx="400" cy="150" r="87" fill="none" stroke={p.accent} strokeWidth="1" opacity="0.4" />
+      {Array.from({ length: 14 }, (_, i) => {
+        const a = (i / 14) * 360;
+        const rad = (a * Math.PI) / 180;
+        const x = 400 + Math.cos(rad) * 90;
+        const y = 150 + Math.sin(rad) * 90;
+        return <path key={i} d="M0 9 Q-6 0 0 -9 Q6 0 0 9 Z" transform={`translate(${x} ${y}) rotate(${a + 90})`} fill={p.muted} opacity="0.5" />;
+      })}
+      <path d="M400 236 q-7 -9 -13 -2 q-6 7 13 15 q19 -8 13 -15 q-6 -7 -13 2 z" fill={p.accent} opacity="0.65" />
+    </>
+  ),
+
+  // Overlapping primary circle, square and triangle — Bauhaus Block (geometric).
+  "bauhaus-shapes": (id, p) => (
+    <>
+      <circle cx="356" cy="140" r="58" fill="#d0342c" opacity="0.7" />
+      <rect x="378" y="118" width="104" height="104" fill="#21409a" opacity="0.62" />
+      <path d="M400 86 L474 214 L326 214 Z" fill="#f2b705" opacity="0.72" />
+    </>
+  ),
 
   // Diagonal bands — the quiet one, for work events and anything formal.
   stripes: (id, p) => (
