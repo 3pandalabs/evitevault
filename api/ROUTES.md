@@ -116,17 +116,19 @@ credentials. See `CLAUDE.md` for the rules those routes must follow.
 
 ## Cash gifts (404 unless `CASH_GIFTS=on`, or `=admins` and the caller is a real admin / an admin's test host)
 
-Stripe mode follows the HOST: live for real hosts, TEST for an admin testing as host or a test host (409 `gifts_test_unavailable` when no test key). `/auth/me` returns `features.cashGifts`.
+Stripe mode: TEST for everyone unless `GIFTS_STRIPE_MODE=live`; then live for real hosts and still TEST for an admin testing as host or a test host (409 `gifts_test_unavailable` when no test key). `/auth/me` returns `features.cashGifts`.
 
 | | Method | Path | Notes |
 |---|---|---|---|
 | H | GET | `/gifts/account` | `{mode, status: none/needs_info/pending/ready, available, reason?}`; refreshes the status from Stripe when an account exists |
-| H | POST | `/gifts/account/onboard` | `{eventId}` → `{url}`: creates the Express account if needed (US, card_payments + transfers, 7-day payout delay) and a Stripe-hosted Account Link back to the event page (`?gifts=return` / `?gifts=refresh`) |
+| H | POST | `/gifts/account/onboard` | `{eventId}` → `{url}`: creates the Express account if needed (Accounts v2 by default: US individual, recipient + `stripe_transfers`, Express dashboard, platform fee/loss collector; then a v1 update sets the 7-day payout delay. `GIFTS_STRIPE_ACCOUNTS_API=v1` uses the old v1 Express form) and a Stripe-hosted Account Link back to the event page (`?gifts=return` / `?gifts=refresh`) |
 | H | POST | `/gifts/account/dashboard` | `{url}`: one-time Express dashboard login link. 409 `no_account` |
 | H | GET | `/events/:eventId/gifts` | Settings (`enabled`, `suggestedCents`, `message`), limits, fee rates, `receivedCents`, the gifts (name, amount, message, status). Host only |
 | H | PATCH | `/events/:eventId/gifts` | `{enabled?, suggestedCents?, message?}`. Enabling needs a `ready` account: 409 `gifts_account_not_ready` |
-| P | POST | `/public/events/:slug/gift` | `{amountCents, name?, message?}` → `{checkoutUrl, breakdown}`. Published events with gifts on and a ready host only (404 `gifts_not_available`). 400 `amount_too_small/large`, 429 `event_daily_cap` / `too_many_requests` (10/hour per IP). Destination charge to the host, `application_fee_amount` = our cut + card fee |
+| P | POST | `/public/events/:slug/gift` | `{amountCents, name?, message?}` → `{checkoutUrl, breakdown}`. Published events with gifts on and a ready host only (404 `gifts_not_available`). 400 `amount_too_small/large`, 429 `event_daily_cap` / `event_cap` / `too_many_requests` (10/hour per IP). Destination charge to the host, `application_fee_amount` = our cut + card fee |
 | A | GET | `/admin/gifts` | Disputed first |
+
+On the first paid delivery (the conditional `pending -> paid` UPDATE) the webhook emails the host "You got a gift" and the guest a receipt (address from Checkout `customer_details.email`, stored in `gifts.guest_email`). Retries send nothing. A paid event whose `livemode` doesn't match the gift's mode is refused (`mode mismatch`); only a FULL `charge.refunded` marks a gift refunded.
 
 `toPublicEvent().gifts` = `{suggestedCents, message, minCents, maxCents, fees, testMode}` or null; never amounts given. `/me/delete` answers 409 `recent_gifts` while the host has a live gift paid in the last 120 days or one disputed.
 

@@ -4,7 +4,7 @@ import { users } from "../../db/schema.js";
 import { adminStanding, hostIdentity } from "../testMode/index.js";
 import { featureMode, videoInvitesVisibleTo, type FeatureMode } from "../videoInvites/policy.js";
 import { giftsStripeConfigured, type StripeMode } from "./stripe.js";
-import type { AccountStatus } from "./policy.js";
+import { giftStripeMode, type AccountStatus } from "./policy.js";
 
 // CASH_GIFTS = on | admins | off, the same switch shape as VIDEO_INVITES
 // (featureMode / videoInvitesVisibleTo are generic). In `admins` only real
@@ -25,11 +25,12 @@ export async function giftsVisible(userId: string): Promise<boolean> {
 }
 
 /**
- * Which Stripe mode a host's gifts run in: TEST for an admin testing as host
- * or a test host (never live money), LIVE for everyone else.
+ * Which Stripe mode a host's gifts run in: TEST unless GIFTS_STRIPE_MODE=live,
+ * and always TEST for an admin testing as host or a test host (never live
+ * money). Rule in policy.ts `giftStripeMode` (tested).
  */
 export async function hostStripeMode(hostId: string): Promise<StripeMode> {
-  return (await hostIdentity(hostId)).testMode ? "test" : "live";
+  return giftStripeMode(process.env.GIFTS_STRIPE_MODE, (await hostIdentity(hostId)).testMode);
 }
 
 export type HostAccount = { mode: StripeMode; accountId: string | null; status: AccountStatus; configured: boolean };

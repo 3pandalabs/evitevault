@@ -348,7 +348,13 @@ states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
   nothing, the public page offers no gift. `/auth/me` `features.cashGifts`.
 - **Stripe Connect destination charges, Express accounts, Stripe-hosted
   onboarding (Account Links), Express dashboard (login links).** Live on the
-  org account. The platform is the merchant of record and LIABLE for refunds
+  org account. Accounts are created with **Accounts v2** (`POST
+  /v2/core/accounts`, recipient config + `stripe_transfers`, `dashboard:
+  express`, fees/losses collector `application`) because Stripe refuses v1
+  creation on this platform unless "Accounts v1 support" is enabled
+  (`GIFTS_STRIPE_ACCOUNTS_API=v1` switches back). Everything else stays v1.
+  Ready = `payouts_enabled` + `capabilities.transfers` active (a recipient
+  has no card_payments, so `charges_enabled` stays false). The platform is the merchant of record and LIABLE for refunds
   and chargebacks. The host's account is created US, `card_payments` +
   `transfers`, payouts delayed **7 days** (`settings.payouts.schedule.delay_days`)
   so a dispute can be absorbed. `users.stripe_account_id/status`; status from
@@ -363,9 +369,10 @@ states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
   guest sees the breakdown before paying (web `lib/gifts.ts` mirrors the math;
   Checkout shows the same two lines). Test proves host = A and platform net ≈ P
   for many amounts.
-- **Risk controls:** $5 min / $250 max per gift (`GIFT_MIN_CENTS`,
-  `GIFT_MAX_CENTS`); $2,000 per event per UTC day over gifts paid or in
-  checkout (`GIFT_EVENT_DAILY_CAP_CENTS`); 10 gift checkouts per IP per hour;
+- **Risk controls:** $5 min / $500 max per gift (`GIFT_MIN_CENTS`,
+  `GIFT_MAX_CENTS`); $2,000 per event per UTC day and $5,000 per event in
+  total over gifts paid or in checkout (`GIFT_EVENT_DAILY_CAP_CENTS`,
+  `GIFT_EVENT_CAP_CENTS`, 429 `event_daily_cap` / `event_cap`); 10 gift checkouts per IP per hour;
   Stripe Radar defaults; 7-day payout delay; disputes logged as "GIFT
   DISPUTED" and counted in `/metrics` `counts.giftsDisputed` (should be 0, each
   one is ops work); terms §7a lets us recover refunded/disputed gifts from the
@@ -373,6 +380,10 @@ states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
   non-refundable except error or fraud. A host can't delete their account while
   a live gift paid in the last 120 days (or a dispute) is on record (409
   `recent_gifts`): we'd lose the records a dispute needs.
+- **TEST until someone flips it (`GIFTS_STRIPE_MODE`, 2026-11-27).** Unless it
+  is exactly `live`, EVERY host's gifts use `STRIPE_TEST_SECRET_KEY` and the
+  test connected account (`giftStripeMode` in policy.ts, tested). Going live
+  = set the live key + live webhook secrets, then `GIFTS_STRIPE_MODE=live`.
 - **Test mode never moves real money.** Stripe mode follows the HOST
   (`hostStripeMode`): an admin testing as host or a test host uses
   `STRIPE_TEST_SECRET_KEY` and a separate test connected account
@@ -384,6 +395,17 @@ states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
   the status it leaves), then video invites. It accepts any of four signing
   secrets (live/test × platform/Connect); the endpoint list and event types
   are in ROUTES.md. Refunds and disputes match gifts by payment intent.
+  The pending -> paid decision is pure (`decideGiftPaid`: only from
+  pending, Stripe `livemode` must match `gifts.test_mode`, amount must
+  match); only a FULL refund ends a gift.
+- **Emails (migration 0014):** the delivery whose conditional UPDATE moved
+  the gift to paid sends "You got a gift" to the host
+  (`hostIdentity().safeTo`, so a test host's goes to its admin) and a
+  receipt to the guest (Checkout `customer_details.email`, kept in
+  `gifts.guest_email` for disputes). `lib/emails/gift.ts`, through
+  `sendMail`; a mail failure only logs. A retried event sends nothing.
+  After answering the RSVP, the guest sees "Want to send a gift too?"
+  (links to `#gift`).
 - **Privacy:** amounts are host-only; the public page gets only whether a
   gift may be sent and how (`toPublicEvent().gifts`). Privacy page lists gift
   data and Stripe Express onboarding; terms §7a.
