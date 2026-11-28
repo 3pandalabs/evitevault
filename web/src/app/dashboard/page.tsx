@@ -311,6 +311,9 @@ function EventCard({ ev, now, onDeleted }: { ev: EventSummary; now: number; onDe
                 {ev.newResponses} new
               </span>
             ) : null}
+            {ev.myRole === "cohost" ? (
+              <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">Co-host</span>
+            ) : null}
           </div>
           <Link
             href={`/dashboard/events/${ev.id}`}
@@ -355,7 +358,8 @@ function EventCard({ ev, now, onDeleted }: { ev: EventSummary; now: number; onDe
             <span className="hidden sm:inline">Edit</span>
           </Button>
         </Link>
-        <DeleteEventButton eventId={ev.id} title={ev.title} onDeleted={onDeleted} />
+        {/* Only the owner can delete; a co-host's card has no delete. */}
+        {ev.myRole !== "cohost" ? <DeleteEventButton eventId={ev.id} title={ev.title} onDeleted={onDeleted} /> : null}
       </div>
     </article>
   );

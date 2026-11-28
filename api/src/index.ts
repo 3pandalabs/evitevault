@@ -7,6 +7,7 @@ import { db } from "./db/index.js";
 import { users } from "./db/schema.js";
 import { env } from "./env.js";
 import { startPendingInvitationsJob } from "./jobs/pendingInvitations.js";
+import { startRemindersJob } from "./jobs/reminders.js";
 import { startVideoInvitesJob } from "./jobs/videoInvites.js";
 import { recordRequest, startCpuSampler } from "./metrics/collector.js";
 import { accountRoutes } from "./routes/account.js";
@@ -15,12 +16,14 @@ import { announcementRoutes } from "./routes/announcements.js";
 import { authRoutes } from "./routes/auth.js";
 import { contactRoutes } from "./routes/contact.js";
 import { eventRoutes } from "./routes/events.js";
+import { extrasRoutes } from "./routes/extras.js";
 import { giftRoutes } from "./routes/gifts.js";
 import { greetingRoutes } from "./routes/greetings.js";
 import { guestbookModerationRoutes } from "./routes/guestbook.js";
 import { guestRoutes } from "./routes/guests.js";
 import { metricsRoutes } from "./routes/metrics.js";
 import { publicEventRoutes, publicGiftRoutes } from "./routes/publicEvents.js";
+import { publicExtrasRoutes } from "./routes/publicExtras.js";
 import { storageRoutes } from "./routes/storage.js";
 import { templateRoutes } from "./routes/templates.js";
 import { testHostRoutes } from "./routes/testHosts.js";
@@ -132,6 +135,9 @@ await app.register(announcementRoutes);
 await app.register(templateRoutes);
 await app.register(storageRoutes);
 await app.register(accountRoutes);
+// Free host features (migration 0015): waitlist approval, questions,
+// co-hosts, potluck, date poll, shared album. Owner or accepted co-host.
+await app.register(extrasRoutes);
 // Admin tools (lib/testMode): the admin area re-reads the real role from the
 // database on every request; test hosts are switched into, never logged into.
 await app.register(adminRoutes);
@@ -146,6 +152,8 @@ await app.register(videoInviteRoutes);
 await app.register(publicEventRoutes);
 // Guest cash gifts (slug only; CASH_GIFTS gates it, see lib/gifts/access.ts).
 await app.register(publicGiftRoutes);
+// Guest side of the free host features (slug + invite token only).
+await app.register(publicExtrasRoutes);
 await app.register(contactRoutes);
 await app.register(metricsRoutes);
 
@@ -154,6 +162,10 @@ await app.register(metricsRoutes);
 // allowance resets, instead of the host having to notice and press a button
 // again tomorrow. See jobs/pendingInvitations.ts.
 startPendingInvitationsJob((msg) => app.log.info(msg));
+
+// Day-before reminders to guests who said yes (jobs/reminders.ts): at most one
+// per guest, through the same daily allowance, stopping at quota_exceeded.
+startRemindersJob((msg) => app.log.info(msg));
 
 // Makes paid video invites one at a time (jobs/videoInvites.ts). Not started
 // unless VIDEO_INVITES=on and a provider (Google or fal) is configured.

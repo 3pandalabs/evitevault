@@ -1,14 +1,17 @@
-import { and, count, desc, eq, gt, isNotNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, exists, gt, isNotNull, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { signPreviewToken } from "../auth/jwt.js";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { env } from "../env.js";
-import { eventTemplates, eventViews, events, guests, type Event } from "../db/schema.js";
+import { eventCohosts, eventTemplates, eventViews, events, guests, type Event } from "../db/schema.js";
 import { cardSourceHash as hashCardSource } from "../lib/cardSource.js";
 import { toCsv } from "../lib/csv.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
+import { loadManagedEvent } from "../lib/eventAccess.js";
+import { chipInSchema, playlistUrlSchema, registryLinksSchema } from "../lib/features/links.js";
+import { answerColumns, parseQuestions } from "../lib/features/questions.js";
 import { themeOverridesSchema } from "../lib/theme.js";
 import { deleteObject, eventIdForKey } from "../plugins/r2.js";
 
@@ -48,6 +51,18 @@ const eventBody = z.object({
   showGuestList: z.boolean().default(false),
   // Google Photos shared album (or any album link) for after the event.
   photoAlbumUrl: httpUrl.nullish(),
+  // --- Free host features (migration 0015). No defaults here: the columns
+  // carry them, and a PATCH must not reset what it does not mention.
+  remindersEnabled: z.boolean().optional(),
+  reminderIncludeMaybe: z.boolean().optional(),
+  registryLinks: registryLinksSchema.nullish(),
+  playlistUrl: playlistUrlSchema.nullish(),
+  chipIn: chipInSchema.nullish(),
+  approvalRequired: z.boolean().optional(),
+  waitlistEnabled: z.boolean().optional(),
+  potluckEnabled: z.boolean().optional(),
+  albumEnabled: z.boolean().optional(),
+  albumGuestUploads: z.boolean().optional(),
 });
 
 const eventPatch = eventBody.partial().extend({
@@ -106,7 +121,10 @@ export async function eventRoutes(app: FastifyInstance) {
           declined: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'declined')::int`,
           maybe: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'maybe')::int`,
           pending: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'pending')::int`,
+          waitlisted: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'waitlisted')::int`,
           headcount: sql<number>`coalesce(sum(1 + ${guests.plusOnes}) filter (where ${guests.rsvpStatus} = 'attending'), 0)::int`,
+          // "owner" for the host's own events, "cohost" for ones shared with them.
+          myRole: sql<"owner" | "cohost">`case when ${events.hostId} = ${req.userId!} then 'owner' else 'cohost' end`,
           // Responses the host hasn't looked at yet. A guest CHANGING their
           // answer counts as new, because responded_at moves — which is
           // correct: "Meera switched to declined" is exactly what a host needs
@@ -116,9 +134,25 @@ export async function eventRoutes(app: FastifyInstance) {
         .from(events)
         .leftJoin(guests, eq(guests.eventId, events.id))
         .where(
-          status
-            ? and(eq(events.hostId, req.userId!), eq(events.status, status))
-            : eq(events.hostId, req.userId!),
+          and(
+            or(
+              eq(events.hostId, req.userId!),
+              // Co-hosted (migration 0015): an accepted invitation for this account.
+              exists(
+                db
+                  .select({ one: sql`1` })
+                  .from(eventCohosts)
+                  .where(
+                    and(
+                      eq(eventCohosts.eventId, events.id),
+                      eq(eventCohosts.userId, req.userId!),
+                      eq(eventCohosts.status, "accepted"),
+                    ),
+                  ),
+              ),
+            ),
+            status ? eq(events.status, status) : undefined,
+          ),
         )
         .groupBy(events.id)
         .orderBy(desc(events.startsAt));
@@ -157,7 +191,7 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply, "view");
       if (!event) return;
 
       // Built in TS rather than interpolated into SQL: responsesSeenAt is
@@ -193,12 +227,12 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply, "view"))) return;
 
       const [updated] = await db
         .update(events)
         .set({ responsesSeenAt: new Date() })
-        .where(and(eq(events.id, eventId), eq(events.hostId, req.userId!)))
+        .where(eq(events.id, eventId))
         .returning({ responsesSeenAt: events.responsesSeenAt });
 
       return { responsesSeenAt: updated.responsesSeenAt };
@@ -219,7 +253,7 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply, "view");
       if (!event) return;
 
       return {
@@ -236,7 +270,7 @@ export async function eventRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
       const body = req.body as z.infer<typeof eventPatch>;
-      const existing = await loadOwnedEvent(eventId, req.userId!, reply);
+      const existing = await loadManagedEvent(eventId, req.userId!, reply, "edit");
       if (!existing) return;
 
       if (!keyBelongsToEvent(body.coverImageKey, eventId)) {
@@ -268,7 +302,8 @@ export async function eventRoutes(app: FastifyInstance) {
       const [updated] = await db
         .update(events)
         .set({ ...body, cardSourceHash, updatedAt: new Date() })
-        .where(and(eq(events.id, eventId), eq(events.hostId, req.userId!)))
+        // Ownership (or co-host standing) was checked by loadManagedEvent.
+        .where(eq(events.id, eventId))
         .returning();
 
       // Replacing an image leaves the old object orphaned in R2 otherwise, and
@@ -297,7 +332,7 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply, "publish");
       if (!event) return;
 
       // A published invitation with no date renders a blank hero and can't
@@ -356,12 +391,13 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply, "view");
       if (!event) return;
 
       const [tally] = await db
         .select({
           invited: count(),
+          waitlisted: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'waitlisted')::int`,
           attending: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'attending')::int`,
           declined: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'declined')::int`,
           maybe: sql<number>`count(*) filter (where ${guests.rsvpStatus} = 'maybe')::int`,
@@ -407,8 +443,9 @@ export async function eventRoutes(app: FastifyInstance) {
     { schema: { params: z.object({ eventId: z.string().uuid() }) } },
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply, "view");
       if (!event) return;
+      const questions = parseQuestions(event.rsvpQuestions);
 
       const rows = await db
         .select()
@@ -431,6 +468,8 @@ export async function eventRoutes(app: FastifyInstance) {
           "Invited at",
           "First viewed at",
           "Responded at",
+          // Custom questions (migration 0015), one column each, in order.
+          ...questions.map((q) => q.label),
         ],
         rows.map((g) => [
           g.name,
@@ -449,6 +488,7 @@ export async function eventRoutes(app: FastifyInstance) {
           g.invitedAt,
           g.firstViewedAt,
           g.respondedAt,
+          ...answerColumns(questions, g.answers),
         ]),
       );
 

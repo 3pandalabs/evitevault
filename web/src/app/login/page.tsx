@@ -50,7 +50,16 @@ export default function LoginPage() {
 
       const data = (await res.json()) as { accessToken: string; refreshToken: string };
       setTokens(data.accessToken, data.refreshToken);
-      router.push("/dashboard");
+      // A co-host invitation opened while signed out waits here (see
+      // /cohost); go back to it instead of the dashboard.
+      let next = "/dashboard";
+      try {
+        const pending = sessionStorage.getItem("ev_pending_cohost");
+        if (pending && /^[0-9a-f-]{36}$/i.test(pending)) next = `/cohost?token=${pending}`;
+      } catch {
+        // Storage blocked: the dashboard is the right fallback.
+      }
+      router.push(next);
     } catch {
       setError("Couldn't reach the server. Please try again.");
     } finally {

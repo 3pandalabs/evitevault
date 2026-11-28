@@ -84,3 +84,19 @@ export function googleCalendarUrl(ev: IcsInput): string {
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
+
+// Outlook on the web (outlook.live.com works for personal and, via redirect,
+// work accounts). Desktop Outlook users still have the .ics.
+export function outlookCalendarUrl(ev: IcsInput): string {
+  const end = ev.endsAt ?? new Date(ev.startsAt.getTime() + 2 * 60 * 60 * 1000);
+  const params = new URLSearchParams({
+    path: "/calendar/action/compose",
+    rru: "addevent",
+    subject: ev.title,
+    startdt: ev.startsAt.toISOString(),
+    enddt: end.toISOString(),
+    body: [ev.description, ev.url].filter(Boolean).join("\n\n"),
+    location: [ev.locationName, ev.locationAddress].filter(Boolean).join(", "),
+  });
+  return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+}

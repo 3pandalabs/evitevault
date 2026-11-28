@@ -10,7 +10,7 @@ import {
   sendInvitations,
 } from "../lib/invitations.js";
 import { mailerConfigured } from "../lib/mailer.js";
-import { loadOwnedEvent } from "../lib/ownership.js";
+import { loadManagedEvent } from "../lib/eventAccess.js";
 
 const eventParams = z.object({ eventId: z.string().uuid() });
 const guestParams = eventParams.extend({ guestId: z.string().uuid() });
@@ -27,7 +27,7 @@ const guestPatch = z.object({
   phone: z.string().max(40).nullish(),
   // A host can correct an RSVP on a guest's behalf — people reply by text
   // message and phone call, not only through the link.
-  rsvpStatus: z.enum(["pending", "attending", "declined", "maybe"]).optional(),
+  rsvpStatus: z.enum(["pending", "attending", "declined", "maybe", "waitlisted"]).optional(),
   plusOnes: z.number().int().min(0).max(20).optional(),
   dietaryNotes: z.string().max(1000).nullish(),
   message: z.string().max(2000).nullish(),
@@ -42,14 +42,14 @@ export async function guestRoutes(app: FastifyInstance) {
       schema: {
         params: eventParams,
         querystring: z.object({
-          status: z.enum(["pending", "attending", "declined", "maybe"]).optional(),
+          status: z.enum(["pending", "attending", "declined", "maybe", "waitlisted"]).optional(),
         }),
       },
     },
     async (req, reply) => {
       const { eventId } = req.params as z.infer<typeof eventParams>;
       const { status } = req.query as { status?: string };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const rows = await db
         .select()
@@ -91,7 +91,7 @@ export async function guestRoutes(app: FastifyInstance) {
         markInvited: boolean;
         sendInvites: boolean;
       };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply);
       if (!event) return;
 
       // Dedupe within the request too. The uq_guests_event_email index catches
@@ -203,7 +203,7 @@ export async function guestRoutes(app: FastifyInstance) {
       // comment on it. Destructuring it would only suggest it still does
       // something.
       const { guestIds } = req.body as { guestIds?: string[] };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply);
       if (!event) return;
 
       if (event.status !== "published") {
@@ -262,7 +262,7 @@ export async function guestRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { eventId, guestId } = req.params as z.infer<typeof guestParams>;
       const body = req.body as z.infer<typeof guestPatch>;
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const [existing] = await db
         .select()
@@ -279,6 +279,11 @@ export async function guestRoutes(app: FastifyInstance) {
           ...body,
           email: body.email === undefined ? undefined : body.email?.toLowerCase() ?? null,
           respondedAt: statusChanged && body.rsvpStatus !== "pending" ? new Date() : undefined,
+          // A host moving a waitlisted guest by hand settles their request
+          // (migration 0015): to "going" is an approval, anything else clears it.
+          ...(statusChanged && existing.rsvpStatus === "waitlisted" && body.rsvpStatus !== "waitlisted"
+            ? { approvalStatus: body.rsvpStatus === "attending" ? "approved" : null, waitlistReason: null }
+            : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(guests.id, guestId), eq(guests.eventId, eventId)))
@@ -303,7 +308,7 @@ export async function guestRoutes(app: FastifyInstance) {
     { schema: { params: guestParams } },
     async (req, reply) => {
       const { eventId, guestId } = req.params as z.infer<typeof guestParams>;
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const deleted = await db
         .delete(guests)
@@ -322,7 +327,7 @@ export async function guestRoutes(app: FastifyInstance) {
     { schema: { params: guestParams } },
     async (req, reply) => {
       const { eventId, guestId } = req.params as z.infer<typeof guestParams>;
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const [updated] = await db
         .update(guests)
@@ -340,7 +345,7 @@ export async function guestRoutes(app: FastifyInstance) {
     { schema: { params: eventParams } },
     async (req, reply) => {
       const { eventId } = req.params as z.infer<typeof eventParams>;
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const rows = await db
         .select({

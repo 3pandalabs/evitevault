@@ -143,6 +143,48 @@ On the first paid delivery (the conditional `pending -> paid` UPDATE) the webhoo
 
 Any configured secret that verifies the signature is accepted; events not tagged rsvpvault are answered 200 and ignored.
 
+## Free host features (migration 0015; `routes/extras.ts` host, `routes/publicExtras.ts` guest)
+
+Host routes accept the event **owner or an accepted co-host** (`lib/eventAccess.ts` `loadManagedEvent`; permissions in
+`lib/features/cohosts.ts`). Since 0015 the Events, Guests, Guestbook moderation, Announcements and Storage routes above
+do too, except `DELETE /events/:eventId` (owner only). Video invites and cash gifts stay owner only. Guest writes need
+the guest's own invite token. All guest email goes through `sendGuestMail` (test-mode guard, daily quota).
+
+| | Method | Path | Notes |
+|---|---|---|---|
+| H | PATCH | `/events/:eventId` | New fields: `remindersEnabled`, `reminderIncludeMaybe`, `registryLinks` (≤5 `{label,url}`), `playlistUrl`, `chipIn` `{venmo,cashapp,paypal}` (handles normalised; bad → 400), `approvalRequired`, `waitlistEnabled`, `potluckEnabled`, `albumEnabled`, `albumGuestUploads` |
+| H | POST | `/events/:eventId/guests/:guestId/approve` | Waitlisted → attending, one email (quota-aware: `quotaExhausted`, `emailed`, `testNotSent`). 409 `not_waitlisted` |
+| H | POST | `/events/:eventId/guests/:guestId/decline` | Waitlisted → declined; no email; the guest can't re-request (`request_declined`) |
+| H | PUT | `/events/:eventId/questions` | `{ questions: [{id,type:text\|choice\|yesno,label,options?,required}] }` ≤10; answers appear in the guest list and as CSV columns |
+| H | GET | `/events/:eventId/cohosts` | `myRole`; owner also sees pending accept links |
+| H | POST | `/events/:eventId/cohosts` | Owner only. `{name,email}`; ≤5; emails the invite (link also returned) |
+| H | DELETE | `/events/:eventId/cohosts/:cohostId` | Owner removes anyone; a co-host can remove themselves |
+| H | GET | `/cohost-invites/:token` | Signed-in preview of an invite (`problem`: `email_mismatch` / `owner_cannot_cohost` / `already_accepted`) |
+| H | POST | `/cohost-invites/:token/accept` | Only an account whose email is the invited one |
+| H | GET / POST | `/events/:eventId/potluck`, `/events/:eventId/potluck/items` | Items `{name,note?,quantity 1..100}` ≤50, with claims (guest names) |
+| H | PATCH / DELETE | `/events/:eventId/potluck/items/:itemId` | |
+| H | GET / PUT / DELETE | `/events/:eventId/poll` | PUT `{options:[{startsAt,endsAt?}]}` 2..5 future, distinct; opens the poll. DELETE removes it |
+| H | POST | `/events/:eventId/poll/pick` | `{optionId, notify}` sets the event date, closes the poll once, ONE email to guests already invited / replied / voted (never decliners) |
+| H | GET | `/events/:eventId/album` | Photos (presigned), flags, cap |
+| H | POST | `/events/:eventId/album/presign` | `{contentType,size}`; Content-Length signed into the PUT; 200 photos, 10 MB, jpeg/png/webp |
+| H | POST | `/events/:eventId/album/photos` | `{key}`; HEAD-checks size/type before the row is written |
+| H | DELETE | `/events/:eventId/album/photos/:photoId` | Deletes the R2 object too |
+| H | GET | `/events/:eventId/album.zip` | "Download all": STORE zip streamed one photo at a time |
+| P | POST | `/public/events/:slug/potluck/:itemId/claim` | `{token, quantity}` (0 releases); row-locked, 409 `not_enough_left` |
+| P | POST | `/public/events/:slug/poll/vote` | `{token, votes:[{optionId, answer:yes\|maybe\|no}]}` |
+| P | GET | `/public/events/:slug/album` | Published + album on; `?t=` marks the caller's own photos; first names only |
+| P | POST | `/public/events/:slug/album/presign` | Token required, guest uploads on, same caps |
+| P | POST | `/public/events/:slug/album/photos` | `{token,key}` |
+| P | DELETE | `/public/events/:slug/album/photos/:photoId` | `?t=`; own photos only |
+
+`GET /public/events/:slug` gains `calendar.outlookUrl` and `extras` (`publicExtras()`): co-host first names, registry,
+playlist, chip-in deep links, questions, waitlist/approval mode, potluck, open poll, album summary, and the caller's own
+answers / waitlist state. `POST /public/events/:slug/rsvp` accepts `answers` and may answer `status: "waitlisted"` with
+`waitlistReason` (`capacity` | `approval`); errors `request_declined`, `answer_required`, `invalid_answer`.
+
+Day-before reminder: `jobs/reminders.ts`, hourly, events starting 2–30 h ahead with reminders on, guests going (and maybe
+if ticked) with an email and `reminder_sent_at` null; marked from the send result; stops at `quota_exceeded`.
+
 ## Public invitation
 
 | | Method | Path | Notes |

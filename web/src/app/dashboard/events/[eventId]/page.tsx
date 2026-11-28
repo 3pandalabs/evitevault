@@ -11,6 +11,7 @@ import {
   Gift,
   ImagePlus,
   LayoutDashboard,
+  ListChecks,
   Loader2,
   Mail,
   MapPin,
@@ -65,6 +66,14 @@ import { EventQrCode } from "./qr-code";
 import { ShareButtons, GuestShareButtons, buildInviteMessage } from "./share";
 import { VideoInviteCard } from "./video-invite";
 import { CashGiftsCard } from "./cash-gifts";
+import { AlbumManager } from "./album-manager";
+import { CohostsPanel } from "./cohosts-panel";
+import { DatePollEditor } from "./date-poll-editor";
+import { ExtrasSettings } from "./extras-settings";
+import { GuestImport } from "./guest-import";
+import { PotluckEditor } from "./potluck-editor";
+import { answersSummary, QuestionsEditor } from "./questions-editor";
+import { WaitlistPanel } from "./waitlist-panel";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -73,8 +82,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 // Each stage is a tab; every tab's panels stay MOUNTED and are only hidden,
 // so a half-typed guest list or video form survives switching tabs and every
 // feature card keeps fetching/polling exactly as it did on the old long page.
-type Tab = "overview" | "design" | "guests" | "rsvps" | "gifts" | "after" | "settings";
-const TABS: Tab[] = ["overview", "design", "guests", "rsvps", "gifts", "after", "settings"];
+// "plan" (migration 0015): questions, potluck and the date poll.
+type Tab = "overview" | "design" | "guests" | "rsvps" | "plan" | "gifts" | "after" | "settings";
+const TABS: Tab[] = ["overview", "design", "guests", "rsvps", "plan", "gifts", "after", "settings"];
 
 /**
  * Which tab to open. Stripe sends the host back with ?gifts=… (Connect
@@ -383,8 +393,12 @@ export default function EventDetailPage() {
   const whenLabel = `${formatEventDate(event.startsAt, event.timezone)} at ${formatEventTime(event.startsAt, event.timezone)} ${formatTimeZoneLabel(event.startsAt, event.timezone)}`;
   // Display hints only: the API decides VIDEO_INVITES / CASH_GIFTS
   // (/auth/me features), and each card also renders nothing on the API's 404.
-  const giftsOn = me?.features?.cashGifts === true;
-  const videoOn = me?.features?.videoInvites === true;
+  // A co-host (migration 0015) manages the event but not its paid features
+  // or its deletion; the API enforces it, this just doesn't offer them.
+  const isOwner = event.myRole !== "cohost";
+  const giftsOn = me?.features?.cashGifts === true && isOwner;
+  const videoOn = me?.features?.videoInvites === true && isOwner;
+  const questions = event.rsvpQuestions ?? [];
   const hasCard = Boolean((event as EventSummary & { cardImageKey?: string | null }).cardImageKey);
 
   // Compared against the baseline captured on first load, not the live server
@@ -508,7 +522,8 @@ export default function EventDetailPage() {
     { value: "overview", label: "Overview", icon: LayoutDashboard },
     { value: "design", label: "Design", icon: Palette },
     { value: "guests", label: "Guests", icon: Users, badge: guests.length || undefined },
-    { value: "rsvps", label: "RSVPs", icon: Check, badge: newResponses || undefined },
+    { value: "rsvps", label: "RSVPs", icon: Check, badge: (newResponses || 0) + guests.filter((g) => g.rsvpStatus === "waitlisted").length || undefined },
+    { value: "plan", label: "Plan", icon: ListChecks },
     ...(giftsOn ? [{ value: "gifts" as Tab, label: "Gifts", icon: Gift }] : []),
     { value: "after", label: "After", icon: PartyPopper },
     { value: "settings", label: "Settings", icon: Settings },
@@ -995,6 +1010,17 @@ export default function EventDetailPage() {
         </Panel>
 
         {published ? (
+          <GuestImport
+            eventId={eventId}
+            existing={guests}
+            onImported={(msg) => {
+              setAddResult(msg);
+              void load();
+            }}
+          />
+        ) : null}
+
+        {published ? (
           <div className="grid gap-6 lg:grid-cols-2">
             <Panel
               title="Share it yourself"
@@ -1136,6 +1162,13 @@ export default function EventDetailPage() {
 
       {/* ---------------- RSVPs ---------------- */}
       <div hidden={!show("rsvps")} className="space-y-6">
+        <WaitlistPanel
+          eventId={eventId}
+          guests={guests}
+          capacity={event.capacity}
+          headcount={analytics.rsvp.headcount}
+          onChanged={() => void load()}
+        />
         {newResponses > 0 ? (
           <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
             <BellDot className="size-4 shrink-0" />
@@ -1185,6 +1218,9 @@ export default function EventDetailPage() {
                 { value: "maybe", label: "Maybe", count: guests.filter((g) => g.rsvpStatus === "maybe").length },
                 { value: "declined", label: "Can't come", count: guests.filter((g) => g.rsvpStatus === "declined").length },
                 { value: "pending", label: "Awaiting", count: guests.filter((g) => g.rsvpStatus === "pending").length },
+                ...(guests.some((g) => g.rsvpStatus === "waitlisted")
+                  ? [{ value: "waitlisted" as const, label: "Waitlist", count: guests.filter((g) => g.rsvpStatus === "waitlisted").length }]
+                  : []),
               ]}
             />
           </div>
@@ -1209,8 +1245,10 @@ export default function EventDetailPage() {
                     {g.rsvpStatus === "attending" ? ` · party of ${1 + g.plusOnes}` : ""}
                     {g.plusOneNames?.length ? ` (+ ${g.plusOneNames.join(", ")})` : ""}
                   </p>
-                  {g.dietaryNotes || g.message ? (
-                    <p className="mt-1 text-xs text-zinc-600">{[g.dietaryNotes, g.message].filter(Boolean).join(" · ")}</p>
+                  {g.dietaryNotes || g.message || answersSummary(questions, g.answers) ? (
+                    <p className="mt-1 text-xs text-zinc-600">
+                      {[answersSummary(questions, g.answers), g.dietaryNotes, g.message].filter(Boolean).join(" · ")}
+                    </p>
                   ) : null}
                 </li>
               ))}
@@ -1275,7 +1313,7 @@ export default function EventDetailPage() {
                         )}
                       </td>
                       <td className="max-w-[16rem] py-3 text-zinc-600">
-                        {[g.dietaryNotes, g.message].filter(Boolean).join(" · ") || "—"}
+                        {[answersSummary(questions, g.answers), g.dietaryNotes, g.message].filter(Boolean).join(" · ") || "—"}
                       </td>
                     </tr>
                   ))}
@@ -1285,6 +1323,22 @@ export default function EventDetailPage() {
             </>
           )}
         </Panel>
+      </div>
+
+      {/* ---------------- Plan (questions, potluck, date poll) ---------------- */}
+      <div hidden={!show("plan")} className="space-y-6">
+        <QuestionsEditor
+          key={`q-${questions.length}`}
+          eventId={eventId}
+          initial={questions}
+          onSaved={(q) => setEvent((e) => (e ? { ...e, rsvpQuestions: q } : e))}
+        />
+        <PotluckEditor
+          eventId={eventId}
+          enabled={event.potluckEnabled ?? false}
+          onToggled={(on) => setEvent((e) => (e ? { ...e, potluckEnabled: on } : e))}
+        />
+        <DatePollEditor eventId={eventId} timezone={event.timezone} onPicked={() => void load()} />
       </div>
 
       {/* ---------------- Gifts ---------------- */}
@@ -1310,6 +1364,11 @@ export default function EventDetailPage() {
             This is for after the day: share one album link with everyone, and keep a copy of the guest list.
           </p>
         ) : null}
+        <AlbumManager
+          eventId={eventId}
+          slug={event.slug}
+          onChanged={(patch) => setEvent((e) => (e ? { ...e, ...patch } : e))}
+        />
         <PhotoAlbumCard
           eventId={eventId}
           albumUrl={event.photoAlbumUrl ?? null}
@@ -1369,8 +1428,13 @@ export default function EventDetailPage() {
           </dl>
         </Panel>
 
+        <ExtrasSettings key={event.id} event={event} onSaved={(e) => setEvent((prev) => (prev ? { ...prev, ...e } : e))} />
+
+        <CohostsPanel eventId={eventId} isOwner={isOwner} />
+
         {/* Last and visually set apart, so it is never the thing a host
-            reaches for by accident. */}
+            reaches for by accident. Owner only: a co-host can't delete. */}
+        {isOwner ? (
         <Panel title="Delete this event" tone="danger">
           <p className="mb-4 max-w-prose text-sm text-zinc-600">
             Removes the invitation, its guest list and every RSVP. Anyone holding the link — or a
@@ -1383,6 +1447,7 @@ export default function EventDetailPage() {
             onDeleted={() => router.replace("/dashboard")}
           />
         </Panel>
+        ) : null}
       </div>
     </div>
   );

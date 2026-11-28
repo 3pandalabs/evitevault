@@ -412,6 +412,47 @@ states, webhook routing) are pure in `lib/gifts/policy.ts` (tested); routes in
 - `/metrics` counts: `giftsPaid`, `giftsDisputed`, `giftVolumeCents`,
   `giftPlatformFeeCents`, `giftHostsReady` (live only).
 
+## Free host features (2026-11-27, migration 0015, `api/src/lib/features`)
+
+All free, no new env vars. Pure rules in `lib/features/*.ts` (tested in
+`features.test.ts`, `zip.test.ts`; web `lib/guestImport.test.ts`); host routes
+`routes/extras.ts`, guest routes `routes/publicExtras.ts` (shaped only by
+`publicExtras()`, spread into `toPublicEvent()` as `extras`); ROUTES.md "Free
+host features".
+
+- **Co-hosts** (`event_cohosts`): invited by email, accepted only by a signed-in
+  account with that email (`/cohost?token=`, kept across login in
+  sessionStorage). `loadManagedEvent` (lib/eventAccess.ts) = owner or accepted
+  co-host and is now what the events/guests/announcements/guestbook/storage
+  routes use. A co-host can NOT delete the event, transfer it, manage co-hosts
+  or touch paid features: `DELETE /events/:id`, video invites and cash gifts
+  keep `loadOwnedEvent`. Mail a co-host triggers is sent as the OWNER
+  (`sendGuestMail(event.hostId)`), so test mode follows the owner.
+- **Waitlist + approval**: `rsvp_status` gained `'waitlisted'` (never counted in
+  headcount) with `approval_status` / `waitlist_reason`. `decideRsvp` decides
+  what a "going" becomes. Approval = one email (quota-aware); decline = none.
+- **Day-before reminder** (`jobs/reminders.ts`): same three properties as the
+  invitations job (no double-send via `reminder_sent_at` from the send result,
+  soonest first, stop at quota). Only going (+ maybe if ticked). Never pending
+  guests: the one-invitation rule still holds.
+- **Date poll**: picking an option is a conditional update (`open` → `closed`),
+  which is the dedupe for its ONE notice email, sent only to guests already in
+  touch (invited / replied / voted), never decliners.
+- **Shared album** (`album_photos`, R2 `events/<id>/album/`): 200 photos, 10 MB,
+  jpeg/png/webp; resized in the browser; Content-Length signed into the PUT and
+  HEAD-checked before the row is written. Visible only via the invitation link
+  (published + album on), 10-minute presigned URLs. "Download all" is a STORE
+  zip streamed by `lib/features/zip.ts`. Account deletion's
+  `deleteEventObjects` covers the prefix.
+- **Chip in** (Venmo / Cash App / PayPal.me handles → deep links): a separate,
+  dashed "Chip in directly" box that says the money goes straight to the host,
+  never mixed with the Stripe cash-gift card.
+- Guest import is browser-only CSV parsing (`web/src/lib/guestImport.ts`,
+  Google Contacts export understood) into the existing `POST /events/:id/guests`.
+- Migration numbering: 0014 belongs to cash gifts (PR #88). Drizzle applies a
+  migration only if its journal `when` is later than the last applied one, so
+  0014 must be deployed BEFORE 0015, or re-stamped after it.
+
 ## Not used here
 
 No Temporal, no native mobile app (`android/` is only a TWA shell), no Supabase. The hourly job above is deliberately

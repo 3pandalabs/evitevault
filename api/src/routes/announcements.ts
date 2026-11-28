@@ -8,7 +8,7 @@ import { env } from "../env.js";
 import { buildPhotoAlbumEmail } from "../lib/emails/photoAlbum.js";
 import { mailerConfigured, type Mail } from "../lib/mailer.js";
 import { sendGuestMail } from "../lib/testMode/index.js";
-import { loadOwnedEvent } from "../lib/ownership.js";
+import { loadManagedEvent } from "../lib/eventAccess.js";
 
 const eventParams = z.object({ eventId: z.string().uuid() });
 const AUDIENCES = ["all", "attending", "pending", "maybe", "declined"] as const;
@@ -28,7 +28,7 @@ export async function announcementRoutes(app: FastifyInstance) {
 
   app.get("/events/:eventId/announcements", { schema: { params: eventParams } }, async (req, reply) => {
     const { eventId } = req.params as z.infer<typeof eventParams>;
-    if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+    if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
     const rows = await db
       .select()
@@ -57,7 +57,7 @@ export async function announcementRoutes(app: FastifyInstance) {
         body: string;
         audience: (typeof AUDIENCES)[number];
       };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply);
       if (!event) return;
 
       const recipients = await db
@@ -135,7 +135,7 @@ export async function announcementRoutes(app: FastifyInstance) {
         audience: (typeof AUDIENCES)[number];
         message?: string | null;
       };
-      const event = await loadOwnedEvent(eventId, req.userId!, reply);
+      const event = await loadManagedEvent(eventId, req.userId!, reply);
       if (!event) return;
 
       if (!event.photoAlbumUrl) {
