@@ -365,7 +365,7 @@ export function GreetingCard({
         <CoverArt art={art} palette={palette} />
       </div>
 
-      <div className="relative mx-auto max-w-[260px] overflow-hidden rounded-xl">
+      <div className="relative mx-auto max-w-[340px] overflow-hidden rounded-xl">
         <canvas
           ref={canvasRef}
           role="img"
