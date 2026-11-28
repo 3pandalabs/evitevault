@@ -201,11 +201,17 @@ export function GreetingForm({
   // invited" line is invitation copy. A greeting shows only its title, who it's
   // from, the message and the footer.
   const previewDesign = selectedTemplate
-    ? resolveCardDesign(selectedTemplate.theme.card, {
-        showQr: false,
-        eyebrow: "",
-        ...(frame ? { frame: frame as CardFrame } : {}),
-      })
+    ? {
+        ...resolveCardDesign(selectedTemplate.theme.card, {
+          showQr: false,
+          eyebrow: "",
+          ...(frame ? { frame: frame as CardFrame } : {}),
+        }),
+        // A greeting photo is shown whole: the frame takes the photo's own
+        // aspect ratio — no crop, no bands. See photoFit in card/spec.
+        // Render-only; never stored in the greeting.
+        photoFit: "match" as const,
+      }
     : null;
   const previewArt = art ?? selectedTemplate?.theme.art ?? "plain";
   const previewContent: CardContentData = {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoverArt } from "@/lib/coverArt";
 import { ensureCardFonts, loadImage, loadQrCode, rasterizeSvg } from "@/lib/card/assets";
-import { drawCardToCanvas, photoOverflow, type CardAssets, type CardFonts } from "@/lib/card/render";
+import { drawCardToCanvas, heroArtSize, photoOverflow, type CardAssets, type CardFonts } from "@/lib/card/render";
 import {
   CARD_SIZES,
   qrInkFor,
@@ -62,7 +62,7 @@ export function CardCanvas({
   const [loadedQr, setLoadedQr] = useState<{ key: string; img: HTMLImageElement } | null>(null);
   const [readyFonts, setReadyFonts] = useState<string | null>(null);
 
-  const artKey = `${art}|${design.ratio}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
+  const artKey = `${art}|${design.ratio}|${design.frame}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
   const qrInk = qrInkFor(palette);
   const qrKey = `${qrUrl}|${qrInk}`;
@@ -104,7 +104,7 @@ export function CardCanvas({
     const svg = artHostRef.current?.querySelector("svg");
     if (!svg) return;
 
-    const { width, height } = CARD_SIZES[design.ratio];
+    const { width, height } = heroArtSize(design);
     rasterizeSvg(svg as SVGSVGElement, width, height)
       .then((img) => {
         if (!cancelled) setLoadedArt({ key: artKey, img });

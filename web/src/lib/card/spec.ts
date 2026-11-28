@@ -24,6 +24,16 @@ export type CardDesign = {
   eyebrow: string;
   showMessage: boolean;
   showQr: boolean;
+  /**
+   * How an uploaded photo sits in its frame. "cover" (the default, and what the
+   * invitation designer uses) fills the frame and crops the overflow — paired
+   * with drag-to-pan there. "match" shrinks the frame itself to the photo's own
+   * aspect ratio so the whole photo shows with no crop and no empty bands beside
+   * it — for the greeting card, where the photo is the gift and losing the top
+   * of someone's head to a frame crop is the wrong trade. Render-only: it is
+   * never stored or sent to the API, so it isn't part of CardDesignOverrides.
+   */
+  photoFit?: "cover" | "match";
 };
 
 export type CardPalette = {
