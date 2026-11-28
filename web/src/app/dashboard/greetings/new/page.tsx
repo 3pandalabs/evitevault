@@ -24,8 +24,11 @@ export default function NewGreetingPage() {
         failureMessage="Couldn't create the greeting. Check the fields and try again."
         onSubmit={async (input) => {
           try {
-            await createGreeting(input);
-            router.push("/dashboard/greetings");
+            // Land on the saved greeting (not the list) so "Send by email",
+            // Download and GIF are right there — a greeting must exist before
+            // it can be emailed.
+            const created = await createGreeting(input);
+            router.push(`/dashboard/greetings/${created.id}/edit`);
           } catch (err) {
             if (err instanceof ApiError && err.status === 401) {
               router.replace("/login");
