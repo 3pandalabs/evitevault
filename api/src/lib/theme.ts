@@ -11,12 +11,33 @@ const hexColor = z
 // Font choices are an allowlist rather than free text for the same reason, and
 // because each maps to a font actually bundled by the web app.
 export const FONT_CHOICES = [
+  // Sans-serif
   "inter",
-  "playfair",
-  "lora",
   "dm-sans",
   "space-grotesk",
+  "poppins",
+  "montserrat",
+  "raleway",
+  "work-sans",
+  "nunito",
+  "josefin-sans",
+  "quicksand",
+  "outfit",
+  // Serif
+  "playfair",
+  "lora",
   "cormorant",
+  "merriweather",
+  "eb-garamond",
+  "crimson-text",
+  "abril-fatface",
+  // Script / display
+  "dancing-script",
+  "caveat",
+  "pacifico",
+  "great-vibes",
+  "lobster",
+  "bebas-neue",
 ] as const;
 
 export const LAYOUTS = ["classic", "poster", "minimal", "photo"] as const;

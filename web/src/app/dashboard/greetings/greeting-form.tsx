@@ -7,7 +7,7 @@ import { listTemplates, type GreetingInput, type Template } from "@/lib/api/host
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { resolveCardDesign, type CardContent as CardContentData, type CardPalette } from "@/lib/card/spec";
+import { resolveCardDesign, type CardContent as CardContentData, type CardFrame, type CardPalette } from "@/lib/card/spec";
 import { ART_CHOICES, ART_LABELS, CoverArt, type ArtPalette } from "@/lib/coverArt";
 import { ALL_FONTS } from "@/lib/fontStacks";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,17 @@ export type GreetingFormValues = {
   bodyFont: string | null;
   /** Accent-colour override; null keeps the design's own accent. */
   accent: string | null;
+  /** Card shape (frame) override; null keeps the design's own shape. */
+  frame: string | null;
 };
+
+// The card shapes a host can pick, mapped to the renderer's frames.
+const SHAPES: { frame: CardFrame; label: string }[] = [
+  { frame: "arch", label: "Arch" },
+  { frame: "circle", label: "Oval" },
+  { frame: "rounded", label: "Rounded" },
+  { frame: "full", label: "Full photo" },
+];
 
 // Preset accent swatches — a curated row so a host recolours a design in one
 // tap, the way Evite offers colourways per card.
@@ -91,6 +101,7 @@ export function GreetingForm({
   const [templateId, setTemplateId] = useState<string | null>(initial?.templateId ?? null);
   const [art, setArt] = useState<string | null>(initial?.art ?? null);
   const [accent, setAccent] = useState<string | null>(initial?.accent ?? null);
+  const [frame, setFrame] = useState<string | null>(initial?.frame ?? null);
   // Concrete fonts the card uses. Defaults to the chosen design's pairing and
   // follows it when the design changes, until the host overrides it here.
   const [fonts, setFonts] = useState<{ heading: string; body: string }>({
@@ -169,6 +180,7 @@ export function GreetingForm({
         themeOverrides: {
           ...(art ? { art } : {}),
           ...(accent ? { palette: { accent } } : {}),
+          ...(frame ? { card: { frame: frame as CardFrame } } : {}),
           fonts: { heading: fonts.heading, body: fonts.body },
         },
       });
@@ -189,7 +201,11 @@ export function GreetingForm({
   // invited" line is invitation copy. A greeting shows only its title, who it's
   // from, the message and the footer.
   const previewDesign = selectedTemplate
-    ? resolveCardDesign(selectedTemplate.theme.card, { showQr: false, eyebrow: "" })
+    ? resolveCardDesign(selectedTemplate.theme.card, {
+        showQr: false,
+        eyebrow: "",
+        ...(frame ? { frame: frame as CardFrame } : {}),
+      })
     : null;
   const previewArt = art ?? selectedTemplate?.theme.art ?? "plain";
   const previewContent: CardContentData = {
@@ -442,6 +458,38 @@ export function GreetingForm({
                         style={{ background: c }}
                       />
                     ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedTemplate ? (
+                <div className="space-y-2 border-t border-slate-100 pt-5">
+                  <div>
+                    <Label>Card shape</Label>
+                    <p className="text-xs text-slate-500">
+                      The outline the card — and your photo — sit in.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {SHAPES.map((s) => {
+                      const on = previewDesign?.frame === s.frame;
+                      return (
+                        <button
+                          key={s.frame}
+                          type="button"
+                          onClick={() => setFrame(s.frame)}
+                          aria-pressed={on}
+                          className={cn(
+                            "rounded-lg border px-3 py-1.5 text-sm transition",
+                            on
+                              ? "border-slate-900 font-medium text-slate-900"
+                              : "border-slate-300 text-slate-600 hover:border-slate-400",
+                          )}
+                        >
+                          {s.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}

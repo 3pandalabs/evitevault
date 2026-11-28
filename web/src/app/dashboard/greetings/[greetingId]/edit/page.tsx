@@ -28,6 +28,7 @@ export default function EditGreetingPage() {
           headingFont: g.themeOverrides?.fonts?.heading ?? null,
           bodyFont: g.themeOverrides?.fonts?.body ?? null,
           accent: g.themeOverrides?.palette?.accent ?? null,
+          frame: g.themeOverrides?.card?.frame ?? null,
         }),
       )
       .catch((err) => {
