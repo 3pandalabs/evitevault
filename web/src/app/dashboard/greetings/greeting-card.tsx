@@ -376,22 +376,30 @@ export function GreetingCard({
           {busy === "share" ? <Loader2 className="size-4 animate-spin" /> : <Share2 className="size-4" />}
           Share
         </Button>
-        {greetingId ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSend((v) => !v)}
-            disabled={busy !== null}
-            aria-expanded={showSend}
-          >
-            <Mail className="size-4" />
-            Send by email
-          </Button>
-        ) : null}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowSend((v) => !v)}
+          disabled={busy !== null}
+          aria-expanded={showSend}
+        >
+          <Mail className="size-4" />
+          Send by email
+        </Button>
       </div>
 
       {error ? <p role="alert" className="text-center text-xs text-red-600">{error}</p> : null}
+
+      {showSend && !greetingId ? (
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-left text-xs text-slate-600">
+          <p className="font-medium text-slate-700">Send by email</p>
+          <p className="mt-1">
+            Save the greeting first — then you can email this card to a list of addresses, right
+            here. No RSVP, no reply needed.
+          </p>
+        </div>
+      ) : null}
 
       {greetingId && showSend ? (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-left">
