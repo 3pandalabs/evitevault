@@ -99,6 +99,37 @@ export function GreetingForm({
   });
   const fontsTouched = useRef(Boolean(initial?.headingFont || initial?.bodyFont));
 
+  // An uploaded cover photo, kept as an object URL and used only for the live
+  // card render + export (download/share/email/GIF). Not persisted — a saved
+  // greeting reopened later won't have it until we add R2 storage.
+  const [photoSrc, setPhotoSrc] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Free the object URL when it changes or on unmount.
+    return () => {
+      if (photoSrc) URL.revokeObjectURL(photoSrc);
+    };
+  }, [photoSrc]);
+
+  function onPhotoPick(file: File | undefined) {
+    if (!file) return;
+    setPhotoError(null);
+    if (!/^image\/(jpeg|png|webp|avif)$/.test(file.type)) {
+      setPhotoError("Use a JPG, PNG, WebP or AVIF image.");
+      return;
+    }
+    if (file.size > 12 * 1024 * 1024) {
+      setPhotoError("That image is over 12MB — pick a smaller one.");
+      return;
+    }
+    setPhotoSrc((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  }
+
   const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
 
   const [submitting, setSubmitting] = useState(false);
@@ -243,6 +274,50 @@ export function GreetingForm({
               <CardTitle>Design</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <div>
+                  <Label>Your photo</Label>
+                  <p className="text-xs text-slate-500">
+                    Optional — upload a photo and it fills the centre of the card, in place of the
+                    artwork.
+                  </p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/avif"
+                  className="hidden"
+                  onChange={(e) => onPhotoPick(e.target.files?.[0])}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {photoSrc ? "Change photo" : "Upload photo"}
+                  </Button>
+                  {photoSrc ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setPhotoSrc((prev) => {
+                          if (prev) URL.revokeObjectURL(prev);
+                          return null;
+                        });
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+                {photoError ? <p className="text-xs text-red-600">{photoError}</p> : null}
+              </div>
+
               <TemplatePicker
                 templates={templates}
                 value={templateId}
@@ -404,6 +479,7 @@ export function GreetingForm({
                 fonts={previewFonts}
                 content={previewContent}
                 art={previewArt}
+                photoSrc={photoSrc}
                 greetingId={greetingId}
               />
               <p className="text-center text-xs text-slate-500">

@@ -5,7 +5,7 @@ import { Download, Film, Loader2, Mail, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
 import { sendGreeting } from "@/lib/api/host";
-import { ensureCardFonts, rasterizeSvg } from "@/lib/card/assets";
+import { ensureCardFonts, loadImage, rasterizeSvg } from "@/lib/card/assets";
 import { drawCardToCanvas, renderCardToBlob, type CardFonts } from "@/lib/card/render";
 import { drawMotion, makeParticles, motionForArt, MOTIONS, motionLabel, type MotionKind } from "@/lib/card/motion";
 import { CARD_SIZES, type CardContent, type CardDesign, type CardPalette } from "@/lib/card/spec";
@@ -48,6 +48,7 @@ export function GreetingCard({
   fonts,
   content,
   art,
+  photoSrc,
   greetingId,
 }: {
   design: CardDesign;
@@ -55,12 +56,16 @@ export function GreetingCard({
   fonts: CardFonts;
   content: CardContent;
   art: string;
+  /** An uploaded cover photo (object URL). Fills the card frame when set,
+   *  taking the artwork's place. Client-side only — not persisted. */
+  photoSrc?: string | null;
   /** When present, the card can be emailed. Only a saved greeting has an id. */
   greetingId?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const artHostRef = useRef<HTMLDivElement>(null);
   const [artImg, setArtImg] = useState<{ key: string; img: HTMLImageElement } | null>(null);
+  const [loadedPhoto, setLoadedPhoto] = useState<{ src: string; img: HTMLImageElement } | null>(null);
   const [fontsReadyKey, setFontsReadyKey] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "download" | "share" | "send" | "gif">(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +81,27 @@ export function GreetingCard({
   const artKey = `${art}|${design.ratio}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
   const readyArt = artImg?.key === artKey ? artImg.img : null;
+  const photoImg = loadedPhoto && loadedPhoto.src === photoSrc ? loadedPhoto.img : null;
+
+  // The uploaded cover photo, decoded for the canvas. Takes the artwork's place
+  // in the card frame when present.
+  useEffect(() => {
+    if (!photoSrc) {
+      setLoadedPhoto(null);
+      return;
+    }
+    let cancelled = false;
+    loadImage(photoSrc)
+      .then((img) => {
+        if (!cancelled) setLoadedPhoto({ src: photoSrc, img });
+      })
+      .catch(() => {
+        /* a bad image just leaves the artwork in place */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [photoSrc]);
 
   // The template's artwork is SVG; the renderer draws bitmaps. Rasterise it once
   // at full card width and reuse that for both the preview and the export.
@@ -106,7 +132,10 @@ export function GreetingCard({
     };
   }, [fonts.heading, fonts.body, fontKey]);
 
-  const assets = useMemo(() => ({ photo: null, art: readyArt, qr: null }), [readyArt]);
+  const assets = useMemo(
+    () => ({ photo: photoImg as CanvasImageSource | null, art: readyArt, qr: null }),
+    [photoImg, readyArt],
+  );
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -149,7 +178,7 @@ export function GreetingCard({
       palette,
       fonts,
       content,
-      assets: { photo: null, art: exportArt, qr: null },
+      assets: { photo: await resolvePhoto(), art: exportArt, qr: null },
     });
   }
 
@@ -174,6 +203,12 @@ export function GreetingCard({
     return rasterizeSvg(svg as SVGSVGElement, width, height).catch(() => null);
   }
 
+  async function resolvePhoto(): Promise<CanvasImageSource | null> {
+    if (photoImg) return photoImg;
+    if (!photoSrc) return null;
+    return loadImage(photoSrc).catch(() => null);
+  }
+
   // An animated GIF loop of the card — the card has no public page, so a GIF is
   // how motion actually reaches a recipient (it plays inline in email). Rendered
   // entirely client-side: draw the still card once, then composite the motion
@@ -188,11 +223,12 @@ export function GreetingCard({
     try {
       await ensureCardFonts([fonts.heading, fonts.body]);
       const exportArt = await resolveExportArt();
+      const exportPhoto = await resolvePhoto();
       const { width: cardW } = CARD_SIZES[design.ratio];
       // ~540px wide keeps the GIF a sensible size for email.
       const scale = 540 / cardW;
       const base = document.createElement("canvas");
-      drawCardToCanvas(base, { design, palette, fonts, content, assets: { photo: null, art: exportArt, qr: null } }, scale);
+      drawCardToCanvas(base, { design, palette, fonts, content, assets: { photo: exportPhoto, art: exportArt, qr: null } }, scale);
 
       const W = base.width;
       const H = base.height;
