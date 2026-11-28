@@ -467,9 +467,10 @@ export function GreetingForm({
           </div>
         </div>
 
-        {/* The card floats with the scroll — it moves with the page rather than
-            being pinned. This is the image the greeting becomes. */}
-        <div className="lg:self-start">
+        {/* The card stays visible as the host scrolls — pinned below the sticky
+            header (top-20 clears it). Kept compact so the whole card fits while
+            pinned. This is the image the greeting becomes. */}
+        <div className="lg:sticky lg:top-20 lg:self-start">
           {previewDesign && previewPalette && previewFonts ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-slate-700">Card preview</p>
