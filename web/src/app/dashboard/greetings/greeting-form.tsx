@@ -392,9 +392,10 @@ export function GreetingForm({
           </div>
         </div>
 
-        {/* The card, floating alongside the form (not pinned) so it scrolls
-            with the fields. This is the image the greeting becomes. */}
-        <div className="lg:self-start">
+        {/* The card floats with the scroll — pinned near the top so it stays in
+            view while the host works down the form. This is the image the
+            greeting becomes. */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
           {previewDesign && previewPalette && previewFonts ? (
             <div className="space-y-3">
               <p className="text-sm font-medium text-slate-700">Card preview</p>
