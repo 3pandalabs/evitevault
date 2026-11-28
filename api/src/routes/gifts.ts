@@ -15,6 +15,7 @@ import {
 } from "../lib/gifts/policy.js";
 import { createExpressAccount, expressLoginLink, onboardingLink, retrieveAccount } from "../lib/gifts/stripe.js";
 import { loadOwnedEvent } from "../lib/ownership.js";
+import { hostIdentity } from "../lib/testMode/index.js";
 
 // Host side of cash gifts (lib/gifts/policy.ts has the rules). Behind
 // CASH_GIFTS: off (or admins and the caller isn't a real admin / their test
@@ -69,7 +70,10 @@ export async function giftRoutes(app: FastifyInstance) {
         }
         let accountId = account.accountId;
         if (!accountId) {
-          const created = await createExpressAccount(account.mode, req.userId!);
+          // A test host's own address is .invalid: use its admin's (safeTo), like guest mail.
+          const contactEmail = (await hostIdentity(req.userId!)).safeTo[0];
+          if (!contactEmail) return reply.code(409).send({ error: "gifts_unavailable" });
+          const created = await createExpressAccount(account.mode, req.userId!, contactEmail);
           accountId = created.id;
           await db
             .update(users)

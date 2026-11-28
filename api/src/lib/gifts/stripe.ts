@@ -63,8 +63,10 @@ export const STRIPE_V2_VERSION_DEFAULT = "2026-11-18.endive";
  * Express dashboard, and the platform as fee and loss collector (required
  * for an Express dashboard, and true anyway: we are liable for disputes).
  */
-export function expressAccountV2Body(userId: string): Record<string, unknown> {
+export function expressAccountV2Body(userId: string, contactEmail: string): Record<string, unknown> {
   return {
+    // Required with the recipient configuration; Stripe emails onboarding notices here.
+    contact_email: contactEmail,
     dashboard: "express",
     identity: { country: "us", entity_type: "individual" },
     configuration: { recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } } },
@@ -125,11 +127,11 @@ export type StripeAccount = {
   requirements?: { currently_due?: string[] | null; disabled_reason?: string | null } | null;
 };
 
-export async function createExpressAccount(mode: StripeMode, userId: string): Promise<StripeAccount> {
+export async function createExpressAccount(mode: StripeMode, userId: string, contactEmail: string): Promise<StripeAccount> {
   if (accountsApi() === "v1") {
     return call(mode, "POST", "/accounts", expressAccountForm(userId), `rsvpvault-acct-${mode}-${userId}`);
   }
-  const created = await callV2<{ id: string }>(mode, "/v2/core/accounts", expressAccountV2Body(userId), `rsvpvault-acct2-${mode}-${userId}`);
+  const created = await callV2<{ id: string }>(mode, "/v2/core/accounts", expressAccountV2Body(userId, contactEmail), `rsvpvault-acct2-${mode}-${userId}`);
   // Payout hold through v1 (interoperable with v2 accounts). The v2 object
   // carries no v1 status fields, so the result reads as needs_info until
   // onboarding finishes and account.updated / GET /gifts/account refresh it.

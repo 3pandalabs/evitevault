@@ -350,7 +350,8 @@ test("Accounts v2 by default: recipient + stripe_transfers, Express dashboard, p
   assert.equal(accountsApi(undefined), "v2");
   assert.equal(accountsApi("v1"), "v1");
   assert.equal(accountsApi("anything"), "v2");
-  const b = expressAccountV2Body("u1") as {
+  const b = expressAccountV2Body("u1", "host@example.com") as {
+    contact_email: string;
     dashboard: string;
     identity: { country: string };
     configuration: { recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: boolean } } } } };
@@ -358,6 +359,7 @@ test("Accounts v2 by default: recipient + stripe_transfers, Express dashboard, p
     metadata: Record<string, string>;
   };
   assert.equal(b.dashboard, "express");
+  assert.equal(b.contact_email, "host@example.com");
   assert.equal(b.identity.country, "us");
   assert.equal(b.configuration.recipient.capabilities.stripe_balance.stripe_transfers.requested, true);
   assert.deepEqual(b.defaults.responsibilities, { fees_collector: "application", losses_collector: "application" });
