@@ -125,7 +125,10 @@ export async function greetingRoutes(app: FastifyInstance) {
     image: z
       .object({
         content: z.string().max(10_000_000),
-        type: z.enum(["image/png", "image/jpeg"]),
+        // GIF so an animated card actually animates in the recipient's inbox —
+        // a flattened PNG/JPG of an animated card loses the motion the host
+        // chose. The browser builds the GIF and sends it inline.
+        type: z.enum(["image/png", "image/jpeg", "image/gif"]),
       })
       .nullish(),
     // Override the card title as the subject / the saved message as the body.
@@ -165,6 +168,25 @@ export async function greetingRoutes(app: FastifyInstance) {
       // Guest mail: suppressed in test mode except to the admin (lib/testMode).
       const result = await sendGuestMail(greeting.hostId, messages, (m) => req.log.info({ greetingId }, m));
 
+      // Record who the card was sent to, appending to whatever is already on
+      // the greeting. Deduped by lowercased email, newest send time kept, so
+      // sending the same card to new people grows the list rather than
+      // replacing it. Only when the mailer actually ran — with no mailer
+      // nothing left, so nothing is recorded.
+      let sentRecipients = greeting.sentRecipients ?? [];
+      if (mailerConfigured()) {
+        const byEmail = new Map(sentRecipients.map((r) => [r.email.toLowerCase(), r]));
+        const sentAt = new Date().toISOString();
+        for (const r of body.recipients) {
+          byEmail.set(r.email.toLowerCase(), { email: r.email, name: r.name ?? null, sentAt });
+        }
+        sentRecipients = Array.from(byEmail.values());
+        await db
+          .update(greetings)
+          .set({ sentRecipients, updatedAt: new Date() })
+          .where(and(eq(greetings.id, greetingId), eq(greetings.hostId, greeting.hostId)));
+      }
+
       return reply.code(201).send({
         recipientCount: body.recipients.length,
         delivered: result.delivered,
@@ -172,6 +194,7 @@ export async function greetingRoutes(app: FastifyInstance) {
         skipped: result.skipped,
         testSuppressed: result.testSuppressed,
         emailConfigured: mailerConfigured(),
+        sentRecipients,
       });
     },
   );

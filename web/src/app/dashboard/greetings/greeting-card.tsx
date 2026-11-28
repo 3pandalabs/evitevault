@@ -4,7 +4,7 @@ import { applyPalette, GIFEncoder, quantize } from "gifenc";
 import { Download, Film, Loader2, Mail, Share2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
-import { sendGreeting } from "@/lib/api/host";
+import { sendGreeting, type SentRecipient } from "@/lib/api/host";
 import { ensureCardFonts, loadImage, rasterizeSvg } from "@/lib/card/assets";
 import { drawCardToCanvas, heroArtSize, renderCardToBlob, type CardFonts } from "@/lib/card/render";
 import { drawMotion, makeParticles, motionForArt, MOTIONS, motionLabel, type MotionKind } from "@/lib/card/motion";
@@ -50,6 +50,7 @@ export function GreetingCard({
   art,
   photoSrc,
   greetingId,
+  initialRecipients,
 }: {
   design: CardDesign;
   palette: CardPalette;
@@ -61,6 +62,8 @@ export function GreetingCard({
   photoSrc?: string | null;
   /** When present, the card can be emailed. Only a saved greeting has an id. */
   greetingId?: string;
+  /** Addresses this greeting has already been emailed to, shown and appended to. */
+  initialRecipients?: SentRecipient[];
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const artHostRef = useRef<HTMLDivElement>(null);
@@ -77,6 +80,9 @@ export function GreetingCard({
   const [recipients, setRecipients] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendDone, setSendDone] = useState<string | null>(null);
+  // Who the card has already been emailed to — seeded from the saved greeting
+  // and appended with each send's response.
+  const [sentRecipients, setSentRecipients] = useState<SentRecipient[]>(initialRecipients ?? []);
 
   const artKey = `${art}|${design.ratio}|${design.frame}|${palette.bg}|${palette.accent}|${palette.muted}|${palette.text}`;
   const fontKey = `${fonts.heading}|${fonts.body}`;
@@ -213,6 +219,44 @@ export function GreetingCard({
   // how motion actually reaches a recipient (it plays inline in email). Rendered
   // entirely client-side: draw the still card once, then composite the motion
   // layer frame by frame and encode with gifenc.
+  // Bakes the current motion into an animated GIF of the card. Shared by the
+  // GIF download and the email send, so a greeting animates the same way
+  // whichever way it leaves the app. Caller guarantees motion !== "none".
+  async function buildGifBlob(): Promise<Blob> {
+    await ensureCardFonts([fonts.heading, fonts.body]);
+    const exportArt = await resolveExportArt();
+    const exportPhoto = await resolvePhoto();
+    const { width: cardW } = CARD_SIZES[design.ratio];
+    // ~540px wide keeps the GIF a sensible size for email.
+    const scale = 540 / cardW;
+    const base = document.createElement("canvas");
+    drawCardToCanvas(base, { design, palette, fonts, content, assets: { photo: exportPhoto, art: exportArt, qr: null } }, scale);
+
+    const W = base.width;
+    const H = base.height;
+    const frameCanvas = document.createElement("canvas");
+    frameCanvas.width = W;
+    frameCanvas.height = H;
+    const fctx = frameCanvas.getContext("2d");
+    if (!fctx) throw new Error("no 2d context");
+
+    const parts = makeParticles(motion);
+    const FPS = 12;
+    const FRAMES = 24; // a 2-second loop
+    const enc = GIFEncoder();
+    for (let i = 0; i < FRAMES; i++) {
+      fctx.clearRect(0, 0, W, H);
+      fctx.drawImage(base, 0, 0);
+      drawMotion(fctx, { kind: motion, color: palette.accent, t: i / FPS, W, H, dpr: 1, parts });
+      const { data } = fctx.getImageData(0, 0, W, H);
+      const pal = quantize(data, 256);
+      const index = applyPalette(data, pal);
+      enc.writeFrame(index, W, H, { palette: pal, delay: Math.round(1000 / FPS) });
+    }
+    enc.finish();
+    return new Blob([enc.bytes() as BlobPart], { type: "image/gif" });
+  }
+
   async function onGif() {
     if (motion === "none") {
       await onDownload();
@@ -221,39 +265,7 @@ export function GreetingCard({
     setBusy("gif");
     setError(null);
     try {
-      await ensureCardFonts([fonts.heading, fonts.body]);
-      const exportArt = await resolveExportArt();
-      const exportPhoto = await resolvePhoto();
-      const { width: cardW } = CARD_SIZES[design.ratio];
-      // ~540px wide keeps the GIF a sensible size for email.
-      const scale = 540 / cardW;
-      const base = document.createElement("canvas");
-      drawCardToCanvas(base, { design, palette, fonts, content, assets: { photo: exportPhoto, art: exportArt, qr: null } }, scale);
-
-      const W = base.width;
-      const H = base.height;
-      const frameCanvas = document.createElement("canvas");
-      frameCanvas.width = W;
-      frameCanvas.height = H;
-      const fctx = frameCanvas.getContext("2d");
-      if (!fctx) throw new Error("no 2d context");
-
-      const parts = makeParticles(motion);
-      const FPS = 12;
-      const FRAMES = 24; // a 2-second loop
-      const enc = GIFEncoder();
-      for (let i = 0; i < FRAMES; i++) {
-        fctx.clearRect(0, 0, W, H);
-        fctx.drawImage(base, 0, 0);
-        drawMotion(fctx, { kind: motion, color: palette.accent, t: i / FPS, W, H, dpr: 1, parts });
-        const { data } = fctx.getImageData(0, 0, W, H);
-        const pal = quantize(data, 256);
-        const index = applyPalette(data, pal);
-        enc.writeFrame(index, W, H, { palette: pal, delay: Math.round(1000 / FPS) });
-      }
-      enc.finish();
-      const blob = new Blob([enc.bytes() as BlobPart], { type: "image/gif" });
-      triggerDownload(blob, filenameFor("image/gif"));
+      triggerDownload(await buildGifBlob(), filenameFor("image/gif"));
     } catch {
       setError("Couldn't make the animated GIF. Try again.");
     } finally {
@@ -325,12 +337,20 @@ export function GreetingCard({
     setBusy("send");
     setSendError(null);
     try {
-      const { blob, contentType } = await buildBlob();
+      // An animated card is sent as a GIF so the motion survives in the inbox;
+      // a still card stays a PNG/JPG. Same renderer either way.
+      const { blob, contentType } =
+        motion !== "none"
+          ? { blob: await buildGifBlob(), contentType: "image/gif" as const }
+          : await buildBlob();
       const image = { content: await blobToBase64(blob), type: contentType };
       const res = await sendGreeting(greetingId, {
         recipients: emails.map((email) => ({ email })),
         image,
       });
+      // The response carries the full appended list; mirror it so the host sees
+      // the new names without a reload.
+      if (res.sentRecipients) setSentRecipients(res.sentRecipients);
       if (!res.emailConfigured) {
         setSendError("Email isn't set up yet, so nothing was sent.");
       } else if (res.delivered === 0) {
@@ -460,8 +480,33 @@ export function GreetingCard({
             {busy === "send" ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
             Send greeting
           </Button>
+
+          {sentRecipients.length > 0 ? (
+            <div className="mt-1 border-t border-slate-200 pt-2">
+              <p className="text-xs font-medium text-slate-700">
+                Already sent to ({sentRecipients.length})
+              </p>
+              <ul className="mt-1 max-h-40 space-y-0.5 overflow-y-auto">
+                {sentRecipients.map((r) => (
+                  <li key={r.email} className="flex justify-between gap-3 text-xs text-slate-600">
+                    <span className="truncate">{r.name ? `${r.name} · ${r.email}` : r.email}</span>
+                    <span className="shrink-0 text-slate-400">{formatSentAt(r.sentAt)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
+}
+
+// A short, local date for when a recipient was last sent the card. Falls back
+// to the raw value if the stored string isn't a parseable date.
+function formatSentAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

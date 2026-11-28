@@ -485,6 +485,16 @@ export const greetings = pgTable(
     templateId: uuid("template_id").references(() => eventTemplates.id, { onDelete: "set null" }),
     themeOverrides: jsonb("theme_overrides"),
 
+    // Who this greeting has been emailed to, accumulated across every send.
+    // Greetings have no guests table, so the record lives here as a plain list
+    // — one entry per address, deduped by lowercased email, with the time of
+    // the most recent send to it. The host sees it on the edit screen and it
+    // grows as they send the card on to more people.
+    sentRecipients: jsonb("sent_recipients")
+      .$type<{ email: string; name: string | null; sentAt: string }[]>()
+      .notNull()
+      .default([]),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

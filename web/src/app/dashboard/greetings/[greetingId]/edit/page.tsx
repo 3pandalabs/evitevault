@@ -4,7 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api/browser";
-import { getGreeting, updateGreeting } from "@/lib/api/host";
+import { getGreeting, updateGreeting, type SentRecipient } from "@/lib/api/host";
 import { PageHeader } from "../../../ui";
 import { GreetingForm, type GreetingFormValues } from "../../greeting-form";
 
@@ -13,11 +13,13 @@ export default function EditGreetingPage() {
   const { greetingId } = useParams<{ greetingId: string }>();
 
   const [initial, setInitial] = useState<GreetingFormValues | null>(null);
+  const [recipients, setRecipients] = useState<SentRecipient[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     getGreeting(greetingId)
-      .then((g) =>
+      .then((g) => {
+        setRecipients(g.sentRecipients ?? []);
         setInitial({
           title: g.title,
           message: g.message ?? "",
@@ -29,8 +31,8 @@ export default function EditGreetingPage() {
           bodyFont: g.themeOverrides?.fonts?.body ?? null,
           accent: g.themeOverrides?.palette?.accent ?? null,
           frame: g.themeOverrides?.card?.frame ?? null,
-        }),
-      )
+        });
+      })
       .catch((err) => {
         if (err instanceof ApiError && err.status === 401) {
           router.replace("/login");
@@ -61,6 +63,7 @@ export default function EditGreetingPage() {
       <GreetingForm
         initial={initial}
         greetingId={greetingId}
+        initialRecipients={recipients}
         submitLabel="Save changes"
         cancelHref="/dashboard/greetings"
         failureMessage="Couldn't save the greeting. Check the fields and try again."

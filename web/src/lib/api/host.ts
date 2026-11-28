@@ -252,6 +252,8 @@ export type GreetingSummary = {
   updatedAt: string;
   // Only on the full row (GET /greetings/:id); the list projection omits it.
   themeOverrides?: ThemeOverrides | null;
+  // Who the card has been emailed to so far (full row only).
+  sentRecipients?: SentRecipient[];
 };
 
 export type GreetingInput = {
@@ -277,12 +279,18 @@ export const updateGreeting = (id: string, patch: Partial<GreetingInput>) =>
 export const deleteGreeting = (id: string) =>
   hostFetch<void>(`/greetings/${id}`, { method: "DELETE" });
 
+// One address a greeting has been emailed to. Accumulated on the greeting and
+// shown on the edit screen, so the host can see who already has the card.
+export type SentRecipient = { email: string; name: string | null; sentAt: string };
+
 export type GreetingSendResult = {
   recipientCount: number;
   delivered: number;
   failed: number;
   skipped: number;
   emailConfigured: boolean;
+  // The full, deduped list after this send — the UI replaces its view with it.
+  sentRecipients: SentRecipient[];
 };
 
 // Emails the greeting to a raw address list. The card image is rendered in the
@@ -291,7 +299,7 @@ export const sendGreeting = (
   id: string,
   body: {
     recipients: { email: string; name?: string | null }[];
-    image?: { content: string; type: "image/png" | "image/jpeg" } | null;
+    image?: { content: string; type: "image/png" | "image/jpeg" | "image/gif" } | null;
     subject?: string | null;
     message?: string | null;
   },
