@@ -12,6 +12,7 @@ const ERRORS: Record<string, string> = {
   amount_too_small: "Please choose a larger amount.",
   amount_too_large: "Please choose a smaller amount.",
   event_daily_cap: "This invitation can't take more gifts today. Please try again tomorrow.",
+  event_cap: "This invitation can't take more gifts.",
   too_many_requests: "Too many tries. Please wait a bit and try again.",
   gifts_not_available: "Gifts aren't available for this invitation right now.",
   checkout_failed: "Couldn't open the payment page. Please try again.",
@@ -54,7 +55,7 @@ export function SendGift({ slug, hostName, gifts, thanks }: { slug: string; host
 
   if (thanks) {
     return (
-      <section className="ev-surface mt-8 rounded-2xl p-5 shadow-sm sm:p-8">
+      <section id="gift" className="ev-surface mt-8 scroll-mt-6 rounded-2xl p-5 shadow-sm sm:p-8">
         <h2 className="ev-heading flex items-center gap-2 text-xl font-semibold">
           <Gift className="size-5" />
           Thank you!
@@ -67,7 +68,7 @@ export function SendGift({ slug, hostName, gifts, thanks }: { slug: string; host
   const field = "w-full rounded-lg border border-black/10 bg-white/80 px-3 py-2 text-sm text-slate-900";
 
   return (
-    <section className="ev-surface mt-8 rounded-2xl p-5 shadow-sm sm:p-8">
+    <section id="gift" className="ev-surface mt-8 scroll-mt-6 rounded-2xl p-5 shadow-sm sm:p-8">
       <h2 className="ev-heading flex items-center gap-2 text-xl font-semibold">
         <Gift className="size-5" />
         Send a gift

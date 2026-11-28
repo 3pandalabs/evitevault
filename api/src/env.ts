@@ -67,7 +67,11 @@ export const env = {
   // STRIPE_TEST_WEBHOOK_SECRET + STRIPE_TEST_CONNECT_WEBHOOK_SECRET (extra
   // signing secrets accepted by POST /webhooks/stripe), GIFT_PLATFORM_FEE_BPS
   // (150), GIFT_STRIPE_PERCENT_BPS (290), GIFT_STRIPE_FIXED_CENTS (30),
-  // GIFT_MIN_CENTS (500), GIFT_MAX_CENTS (25000), GIFT_EVENT_DAILY_CAP_CENTS (200000).
+  // GIFT_MIN_CENTS (500), GIFT_MAX_CENTS (50000), GIFT_EVENT_DAILY_CAP_CENTS (200000),
+  // GIFT_EVENT_CAP_CENTS (500000, per event all time), GIFTS_STRIPE_MODE (`live`
+  // = real hosts use STRIPE_SECRET_KEY; anything else, unset included = EVERY
+  // host uses STRIPE_TEST_SECRET_KEY), GIFTS_STRIPE_ACCOUNTS_API (v2 default | v1),
+  // STRIPE_V2_API_VERSION (Stripe-Version for v2 calls).
   // Also read directly by lib/videoInvites (kept out of this object so those
   // modules stay importable from tests): GOOGLE_SA_KEY_B64 (Vertex AI service
   // account JSON, base64; Google is tried first), VERTEX_OMNI_MODEL,

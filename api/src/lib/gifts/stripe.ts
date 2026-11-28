@@ -44,7 +44,65 @@ async function call<T>(
   return body;
 }
 
-/** The form for a new Express account (exported for tests). */
+// Account creation API. Stripe now refuses POST /v1/accounts for new Connect
+// platforms unless "Accounts v1 support" is switched on in the Dashboard, so
+// the default is Accounts v2 (POST /v2/core/accounts). Everything else
+// (retrieve, account links, login links, payout schedule, account.updated)
+// stays on v1, which Stripe keeps interoperable with v2 accounts.
+// GIFTS_STRIPE_ACCOUNTS_API=v1 switches creation back to the v1 Express form.
+export function accountsApi(raw: string | undefined = process.env.GIFTS_STRIPE_ACCOUNTS_API): "v1" | "v2" {
+  return (raw ?? "").trim().toLowerCase() === "v1" ? "v1" : "v2";
+}
+
+/** Stripe-Version for v2 calls (v2 requires one). */
+export const STRIPE_V2_VERSION_DEFAULT = "2026-11-18.endive";
+
+/**
+ * Accounts v2 body (exported for tests): an individual in the US, recipient
+ * configuration with stripe_transfers (all a destination charge needs), the
+ * Express dashboard, and the platform as fee and loss collector (required
+ * for an Express dashboard, and true anyway: we are liable for disputes).
+ */
+export function expressAccountV2Body(userId: string, contactEmail: string): Record<string, unknown> {
+  return {
+    // Required with the recipient configuration; Stripe emails onboarding notices here.
+    contact_email: contactEmail,
+    dashboard: "express",
+    identity: { country: "us", entity_type: "individual" },
+    configuration: { recipient: { capabilities: { stripe_balance: { stripe_transfers: { requested: true } } } } },
+    defaults: { currency: "usd", responsibilities: { fees_collector: "application", losses_collector: "application" } },
+    metadata: { app: "rsvpvault", user_id: userId },
+  };
+}
+
+/** The 7-day payout hold, set with v1 on any account (exported for tests). */
+export function payoutHoldForm(): URLSearchParams {
+  return new URLSearchParams({
+    "settings[payouts][schedule][interval]": "daily",
+    "settings[payouts][schedule][delay_days]": "7",
+  });
+}
+
+async function callV2<T>(mode: StripeMode, path: string, body: Record<string, unknown>, idempotencyKey: string): Promise<T> {
+  const key = stripeKey(mode);
+  if (!key) throw new Error(`stripe ${mode} key not configured`);
+  const res = await fetch(`https://api.stripe.com${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${key}`,
+      "content-type": "application/json",
+      "stripe-version": process.env.STRIPE_V2_API_VERSION || STRIPE_V2_VERSION_DEFAULT,
+      "idempotency-key": idempotencyKey,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const out = (await res.json().catch(() => ({}))) as T & { error?: { message?: string } };
+  if (!res.ok) throw new Error(`stripe POST ${path} ${res.status}: ${out.error?.message ?? ""}`.trim());
+  return out;
+}
+
+/** The v1 form for a new Express account (GIFTS_STRIPE_ACCOUNTS_API=v1; exported for tests). */
 export function expressAccountForm(userId: string): URLSearchParams {
   return new URLSearchParams({
     type: "express",
@@ -69,8 +127,15 @@ export type StripeAccount = {
   requirements?: { currently_due?: string[] | null; disabled_reason?: string | null } | null;
 };
 
-export function createExpressAccount(mode: StripeMode, userId: string): Promise<StripeAccount> {
-  return call(mode, "POST", "/accounts", expressAccountForm(userId), `rsvpvault-acct-${mode}-${userId}`);
+export async function createExpressAccount(mode: StripeMode, userId: string, contactEmail: string): Promise<StripeAccount> {
+  if (accountsApi() === "v1") {
+    return call(mode, "POST", "/accounts", expressAccountForm(userId), `rsvpvault-acct-${mode}-${userId}`);
+  }
+  const created = await callV2<{ id: string }>(mode, "/v2/core/accounts", expressAccountV2Body(userId, contactEmail), `rsvpvault-acct2-${mode}-${userId}`);
+  // Payout hold through v1 (interoperable with v2 accounts). The v2 object
+  // carries no v1 status fields, so the result reads as needs_info until
+  // onboarding finishes and account.updated / GET /gifts/account refresh it.
+  return call(mode, "POST", `/accounts/${encodeURIComponent(created.id)}`, payoutHoldForm(), `rsvpvault-hold-${mode}-${created.id}`);
 }
 
 export function retrieveAccount(mode: StripeMode, accountId: string): Promise<StripeAccount> {

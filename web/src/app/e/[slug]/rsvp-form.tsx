@@ -46,6 +46,7 @@ export function RsvpForm({
   you,
   calendar,
   timezone,
+  giftsAvailable = false,
 }: {
   slug: string;
   token?: string;
@@ -55,6 +56,8 @@ export function RsvpForm({
   /** The event's own zone, so "ended at" is written on the same clock as the
       rest of the invitation rather than the reader's. */
   timezone: string;
+  /** The host takes cash gifts: after answering, point the guest at the gift card. */
+  giftsAvailable?: boolean;
 }) {
   const router = useRouter();
 
@@ -170,6 +173,13 @@ export function RsvpForm({
             <p className="ev-muted mt-1 text-sm">
               {confirmed ? "Thanks — your response has been saved." : "Your response is recorded."}
             </p>
+            {giftsAvailable ? (
+              <p className="mt-2 text-sm">
+                <a href="#gift" className="font-medium underline underline-offset-2">
+                  Want to send a gift too?
+                </a>
+              </p>
+            ) : null}
           </div>
         </div>
 

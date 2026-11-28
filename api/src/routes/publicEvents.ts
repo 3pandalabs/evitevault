@@ -19,7 +19,7 @@ import {
 import { isEnabled as videoInvitesEnabled } from "../lib/videoInvites/policy.js";
 import { clientIp, currentHour, visitorHash } from "../lib/analytics.js";
 import { eventAcceptsGifts } from "../lib/gifts/access.js";
-import { amountProblem, CAP_STATUSES, cleanText, feeConfigFrom, giftBreakdown, limitsFrom, overDailyCap } from "../lib/gifts/policy.js";
+import { amountProblem, CAP_STATUSES, cleanText, feeConfigFrom, giftBreakdown, limitsFrom, overDailyCap, overEventCap } from "../lib/gifts/policy.js";
 import { createGiftCheckout } from "../lib/gifts/stripe.js";
 import { rateLimiter } from "../lib/rateLimit.js";
 import { eventEndsAt, hasEventEnded } from "../lib/eventTime.js";
@@ -788,6 +788,14 @@ export async function publicGiftRoutes(app: FastifyInstance) {
         );
       if (overDailyCap(today?.cents ?? 0, body.amountCents, limits)) {
         return reply.code(429).send({ error: "event_daily_cap" });
+      }
+      // Per-event all-time cap over the same statuses.
+      const [allTime] = await db
+        .select({ cents: sql<number>`coalesce(sum(${gifts.amountCents}), 0)::int` })
+        .from(gifts)
+        .where(and(eq(gifts.eventId, row.event.id), inArray(gifts.status, [...CAP_STATUSES])));
+      if (overEventCap(allTime?.cents ?? 0, body.amountCents, limits)) {
+        return reply.code(429).send({ error: "event_cap" });
       }
 
       const b = giftBreakdown(body.amountCents, feeConfigFrom(process.env));

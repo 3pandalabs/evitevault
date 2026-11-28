@@ -30,9 +30,18 @@ export type GiftLimits = {
   maxCents: number;
   /** Per event, per UTC day, gifts paid or in checkout. */
   eventDailyCapCents: number;
+  /** Per event, all time, gifts paid or in checkout (a lost card or a stolen one can't fund a whole wedding). */
+  eventTotalCapCents: number;
 };
 
-export const DEFAULT_LIMITS: GiftLimits = { minCents: 500, maxCents: 25_000, eventDailyCapCents: 200_000 };
+// Owner decision 2026-11-27: $500 per gift (spec example), $2,000 per event per
+// day, $5,000 per event in total. All env-configurable.
+export const DEFAULT_LIMITS: GiftLimits = {
+  minCents: 500,
+  maxCents: 50_000,
+  eventDailyCapCents: 200_000,
+  eventTotalCapCents: 500_000,
+};
 
 function intEnv(raw: string | undefined, fallback: number, min: number, max: number): number {
   if (raw === undefined || raw.trim() === "") return fallback;
@@ -54,6 +63,7 @@ export function limitsFrom(env: Record<string, string | undefined>): GiftLimits 
     minCents,
     maxCents: Math.max(minCents, intEnv(env.GIFT_MAX_CENTS, DEFAULT_LIMITS.maxCents, 100, 1_000_000)),
     eventDailyCapCents: intEnv(env.GIFT_EVENT_DAILY_CAP_CENTS, DEFAULT_LIMITS.eventDailyCapCents, 100, 10_000_000),
+    eventTotalCapCents: intEnv(env.GIFT_EVENT_CAP_CENTS, DEFAULT_LIMITS.eventTotalCapCents, 100, 100_000_000),
   };
 }
 
@@ -101,6 +111,27 @@ export function overDailyCap(todayCents: number, giftCents: number, limits: Gift
   return todayCents + giftCents > limits.eventDailyCapCents;
 }
 
+/** Would this gift push the event over its all-time cap? */
+export function overEventCap(eventCents: number, giftCents: number, limits: GiftLimits): boolean {
+  return eventCents + giftCents > limits.eventTotalCapCents;
+}
+
+/**
+ * Which Stripe mode a host's gifts run in. GIFTS_STRIPE_MODE must be exactly
+ * `live` for real money; anything else (unset included) keeps EVERY host on
+ * the TEST key. A host in test mode (admin testing as host, test host) is
+ * always TEST, even when gifts are live.
+ */
+export function giftStripeMode(raw: string | undefined, hostTestMode: boolean): "live" | "test" {
+  return (raw ?? "").trim().toLowerCase() === "live" && !hostTestMode ? "live" : "test";
+}
+
+/** A plausible email address from Stripe, lower-cased; anything else is null. */
+export function cleanEmail(raw: string | null | undefined): string | null {
+  const t = (raw ?? "").trim().toLowerCase();
+  return t.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t) && !t.endsWith(".invalid") ? t : null;
+}
+
 /** Host's suggested amounts: up to 4, whole dollars, inside the limits, unique, sorted. */
 export function cleanSuggestedAmounts(raw: number[], limits: GiftLimits): number[] {
   const ok = raw
@@ -125,11 +156,20 @@ export type AccountLike = {
   payouts_enabled?: boolean;
   details_submitted?: boolean;
   requirements?: { currently_due?: string[] | null; disabled_reason?: string | null } | null;
+  /** v1 view of capabilities ("active" / "inactive" / "pending"). */
+  capabilities?: { transfers?: string; card_payments?: string } | null;
 };
 
+/**
+ * Ready = can receive a destination charge's transfer and be paid out. An
+ * Accounts v2 recipient-only account (the default since 2026-11-27) has
+ * transfers but no card_payments, so charges_enabled stays false on it:
+ * readiness is `transfers` active + payouts enabled. A v1 Express account
+ * with card_payments still counts via charges_enabled.
+ */
 export function accountStatus(a: AccountLike | null | undefined): AccountStatus {
   if (!a) return "none";
-  if (a.charges_enabled && a.payouts_enabled) return "ready";
+  if (a.payouts_enabled && (a.capabilities?.transfers === "active" || a.charges_enabled)) return "ready";
   if (!a.details_submitted || (a.requirements?.currently_due?.length ?? 0) > 0) return "needs_info";
   return "pending";
 }
@@ -173,12 +213,15 @@ type Obj = {
   payment_status?: string;
   payment_intent?: string | null;
   amount_total?: number | null;
+  customer_details?: { email?: string | null } | null;
+  refunded?: boolean;
   charge?: string | null;
   status?: string;
   charges_enabled?: boolean;
   payouts_enabled?: boolean;
   details_submitted?: boolean;
   requirements?: AccountLike["requirements"];
+  capabilities?: AccountLike["capabilities"];
 };
 
 export type StripeEventIn = {
@@ -191,7 +234,16 @@ export type StripeEventIn = {
 export type GiftWebhookAction =
   | { kind: "none" }
   | { kind: "account_updated"; accountId: string; live: boolean; status: AccountStatus }
-  | { kind: "gift_paid"; giftId: string; sessionId: string; paymentIntent: string | null; amountTotal: number | null }
+  | {
+      kind: "gift_paid";
+      giftId: string;
+      sessionId: string;
+      paymentIntent: string | null;
+      amountTotal: number | null;
+      /** Stripe's livemode: must match the gift's mode (a test event can never pay a live gift). */
+      live: boolean;
+      guestEmail: string | null;
+    }
   | { kind: "gift_expired"; giftId: string }
   | { kind: "gift_refunded"; paymentIntent: string }
   | { kind: "gift_disputed"; paymentIntent: string }
@@ -215,17 +267,36 @@ export function routeGiftEvent(e: StripeEventIn): GiftWebhookAction {
       sessionId: obj.id!,
       paymentIntent: obj.payment_intent ?? null,
       amountTotal: obj.amount_total ?? null,
+      live: e.livemode === true,
+      guestEmail: obj.customer_details?.email ?? null,
     };
   }
   if (isGiftSession && e.type === "checkout.session.expired") return { kind: "gift_expired", giftId: meta.gift_id! };
 
   // Charge / dispute events carry the payment intent, which a paid gift stores.
-  if (e.type === "charge.refunded" && obj.payment_intent) return { kind: "gift_refunded", paymentIntent: obj.payment_intent };
+  // Only a FULL refund ends a gift; a partial one leaves it paid (ops sees it in Stripe).
+  if (e.type === "charge.refunded" && obj.payment_intent && obj.refunded === true) return { kind: "gift_refunded", paymentIntent: obj.payment_intent };
   if (e.type === "charge.dispute.created" && obj.payment_intent) return { kind: "gift_disputed", paymentIntent: obj.payment_intent };
   if (e.type === "charge.dispute.closed" && obj.payment_intent) {
     return { kind: "gift_dispute_closed", paymentIntent: obj.payment_intent, won: obj.status === "won" };
   }
   return { kind: "none" };
+}
+
+export type GiftRow = { status: GiftStatus; totalCents: number; testMode: boolean };
+export type PaidDecision = "apply" | "already" | "amount_mismatch" | "mode_mismatch";
+
+/**
+ * What a "checkout paid" event does to a gift row. Pure, so idempotency is
+ * testable: only `apply` writes (and the write is still conditional on
+ * status = pending), and only a write that changed a row sends the emails.
+ */
+export function decideGiftPaid(g: GiftRow, a: { amountTotal: number | null; live: boolean }): PaidDecision {
+  // Only from pending: disputed -> paid is the dispute-won path, never a replayed checkout.
+  if (g.status !== "pending") return "already";
+  if (a.live === g.testMode) return "mode_mismatch";
+  if (a.amountTotal !== null && a.amountTotal !== g.totalCents) return "amount_mismatch";
+  return "apply";
 }
 
 /** The exact Stripe event types this app needs (documented in ROUTES.md and the PR). */

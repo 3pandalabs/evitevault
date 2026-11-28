@@ -1,8 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index.js";
-import { gifts } from "../../db/schema.js";
+import { events, gifts, type Gift } from "../../db/schema.js";
 import { saveAccountStatus } from "./access.js";
-import { canGiftTransition, type GiftStatus, type GiftWebhookAction } from "./policy.js";
+import { env } from "../../env.js";
+import { buildGiftReceiptEmail, buildGiftReceivedEmail } from "../emails/gift.js";
+import { sendMail, type Mail } from "../mailer.js";
+import { hostIdentity } from "../testMode/index.js";
+import { cleanEmail, decideGiftPaid, type GiftStatus, type GiftWebhookAction } from "./policy.js";
 
 // Applies one routed Stripe event to gifts / connected accounts. Idempotent:
 // Stripe retries, and every status move is conditional on the status it
@@ -23,21 +27,36 @@ export async function applyGiftEvent(
     case "gift_paid": {
       const [g] = await db.select().from(gifts).where(eq(gifts.id, action.giftId)).limit(1);
       if (!g) return "unknown gift";
-      if (!canGiftTransition(g.status as GiftStatus, "paid")) return `already ${g.status}`;
-      if (action.amountTotal !== null && action.amountTotal !== g.totalCents) {
+      const decision = decideGiftPaid(
+        { status: g.status as GiftStatus, totalCents: g.totalCents, testMode: g.testMode },
+        action,
+      );
+      if (decision === "already") return `already ${g.status}`;
+      if (decision === "mode_mismatch") {
+        // A test-mode event naming a live gift (or the reverse): never pays it.
+        log.error({ giftId: g.id, live: action.live, testMode: g.testMode }, "gift stripe mode mismatch");
+        return "mode mismatch";
+      }
+      if (decision === "amount_mismatch") {
         log.error({ giftId: g.id, amountTotal: action.amountTotal, expected: g.totalCents }, "gift amount mismatch");
         return "amount mismatch";
       }
-      await db
+      const updated = await db
         .update(gifts)
         .set({
           status: "paid",
           paidAt: new Date(),
           stripeSessionId: action.sessionId,
           stripePaymentIntent: action.paymentIntent,
+          guestEmail: cleanEmail(action.guestEmail),
           updatedAt: new Date(),
         })
-        .where(and(eq(gifts.id, g.id), eq(gifts.status, "pending")));
+        .where(and(eq(gifts.id, g.id), eq(gifts.status, "pending")))
+        .returning();
+      // Only the delivery whose UPDATE moved the row sends mail: a retried or
+      // duplicate event (completed + async_payment_succeeded) changes nothing
+      // and sends nothing.
+      if (updated[0]) await sendGiftEmails(updated[0], log);
       return "paid";
     }
 
@@ -73,5 +92,59 @@ export async function applyGiftEvent(
         .set({ status: action.won ? "paid" : "dispute_lost", updatedAt: new Date() })
         .where(and(eq(gifts.stripePaymentIntent, action.paymentIntent), eq(gifts.status, "disputed")));
       return action.won ? "dispute won" : "dispute lost";
+  }
+}
+
+type Log = { info: (o: object, m: string) => void; error: (o: object, m: string) => void };
+
+/**
+ * "You got a gift" to the host and a receipt to the guest. Fire-and-forget
+ * through the shared gateway: a mail failure only logs, the gift stays paid.
+ * The host address comes from hostIdentity().safeTo, so a test host's mail
+ * goes to the admin who owns it (never a .invalid address).
+ */
+async function sendGiftEmails(g: Gift, log: Log): Promise<void> {
+  try {
+    const [event] = await db
+      .select({ id: events.id, slug: events.slug, title: events.title, hostName: events.hostDisplayName })
+      .from(events)
+      .where(eq(events.id, g.eventId))
+      .limit(1);
+    if (!event) return;
+    const hostTo = (await hostIdentity(g.hostId)).safeTo[0];
+    const mail: Mail[] = [];
+    if (hostTo) {
+      mail.push(
+        buildGiftReceivedEmail({
+          to: hostTo,
+          origin: env.WEB_ORIGIN,
+          eventId: event.id,
+          eventTitle: event.title,
+          guestName: g.guestName,
+          guestMessage: g.guestMessage,
+          amountCents: g.amountCents,
+          testMode: g.testMode,
+        }),
+      );
+    }
+    if (g.guestEmail) {
+      mail.push(
+        buildGiftReceiptEmail({
+          to: g.guestEmail,
+          origin: env.WEB_ORIGIN,
+          slug: event.slug,
+          eventTitle: event.title,
+          hostName: event.hostName,
+          amountCents: g.amountCents,
+          platformFeeCents: g.platformFeeCents,
+          cardFeeCents: g.cardFeeCents,
+          totalCents: g.totalCents,
+          testMode: g.testMode,
+        }),
+      );
+    }
+    if (mail.length) await sendMail(mail, (m) => log.info({ giftId: g.id }, m));
+  } catch (err) {
+    log.error({ err, giftId: g.id }, "gift emails failed");
   }
 }

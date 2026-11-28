@@ -1,0 +1,1 @@
+ALTER TABLE "gifts" ADD COLUMN IF NOT EXISTS "guest_email" text;

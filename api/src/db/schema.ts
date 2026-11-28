@@ -589,6 +589,9 @@ export const gifts = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     guestName: text("guest_name"),
     guestMessage: text("guest_message"),
+    // From Stripe Checkout (customer_details.email) once paid: where the receipt goes,
+    // and the record a dispute needs. Never shown on a public page.
+    guestEmail: text("guest_email"),
 
     // What the host receives, our cut, the card fee the guest covered, the total charged.
     amountCents: integer("amount_cents").notNull(),
