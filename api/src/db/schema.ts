@@ -7,6 +7,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -243,6 +244,32 @@ export const events = pgTable(
     giftSuggestedCents: jsonb("gift_suggested_cents"),
     giftMessage: text("gift_message"),
 
+    // --- Free host features (migration 0015) ---
+    // Day-before reminder email to guests who said yes (and, optionally,
+    // maybe). Default on; jobs/reminders.ts, lib/features/reminders.ts.
+    remindersEnabled: boolean("reminders_enabled").notNull().default(true),
+    reminderIncludeMaybe: boolean("reminder_include_maybe").notNull().default(false),
+    // [{ label, url }] (http(s) only, max 5) and one playlist link.
+    registryLinks: jsonb("registry_links").$type<{ label: string; url: string }[]>(),
+    playlistUrl: text("playlist_url"),
+    // { venmo?, cashapp?, paypal? } handles; the guest page builds the deep
+    // links (lib/features/chipIn.ts). No money touches us.
+    chipIn: jsonb("chip_in").$type<{ venmo?: string | null; cashapp?: string | null; paypal?: string | null }>(),
+    // Every "going" waits for the host's OK (lib/features/rsvpRules.ts).
+    approvalRequired: boolean("approval_required").notNull().default(false),
+    // At capacity: a "going" joins the waitlist instead of being refused.
+    waitlistEnabled: boolean("waitlist_enabled").notNull().default(true),
+    // Host-defined questions (lib/features/questions.ts).
+    rsvpQuestions: jsonb("rsvp_questions"),
+    potluckEnabled: boolean("potluck_enabled").notNull().default(false),
+    // null = no poll; 'open' = guests vote; 'closed' = a date was picked.
+    datePollStatus: text("date_poll_status"),
+    datePollClosedAt: timestamp("date_poll_closed_at", { withTimezone: true }),
+    // Shared photo album stored by us (album_photos), distinct from the
+    // pasted photoAlbumUrl link above.
+    albumEnabled: boolean("album_enabled").notNull().default(false),
+    albumGuestUploads: boolean("album_guest_uploads").notNull().default(true),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -305,6 +332,17 @@ export const guests = pgTable(
     lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
     respondedAt: timestamp("responded_at", { withTimezone: true }),
 
+    // --- Free host features (migration 0015) ---
+    // Set from the send result of the day-before reminder: never twice.
+    reminderSentAt: timestamp("reminder_sent_at", { withTimezone: true }),
+    // Answers to the event's custom questions: { [questionId]: string }.
+    answers: jsonb("answers").$type<Record<string, string>>(),
+    // Approval / waitlist: null = not involved; 'pending' while waitlisted.
+    approvalStatus: text("approval_status"),
+    // Why they are waitlisted: 'capacity' | 'approval'.
+    waitlistReason: text("waitlist_reason"),
+    approvalNotifiedAt: timestamp("approval_notified_at", { withTimezone: true }),
+
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -318,7 +356,7 @@ export const guests = pgTable(
     uniqueIndex("uq_guests_event_email")
       .on(t.eventId, sql`lower(${t.email})`)
       .where(sql`${t.email} is not null`),
-    check("guests_rsvp_status_check", sql`${t.rsvpStatus} in ('pending','attending','declined','maybe')`),
+    check("guests_rsvp_status_check", sql`${t.rsvpStatus} in ('pending','attending','declined','maybe','waitlisted')`),
     check("guests_source_check", sql`${t.source} in ('invited','public')`),
     check("guests_plus_ones_check", sql`${t.plusOnes} >= 0`),
   ],
@@ -625,6 +663,140 @@ export const gifts = pgTable(
 );
 
 export type Gift = typeof gifts.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Free host features (migration 0015). Everything below cascades with its
+// event. Pure rules in lib/features/*.ts (tested); routes in routes/extras.ts
+// (host) and routes/publicExtras.ts (guest, slug + invite token only).
+// ---------------------------------------------------------------------------
+
+// A co-host manages the event and its guests, but cannot delete it, transfer
+// it, manage other co-hosts, or touch paid features (lib/features/cohosts.ts).
+export const eventCohosts = pgTable(
+  "event_cohosts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    invitedBy: uuid("invited_by").references(() => users.id, { onDelete: "set null" }),
+    // Null until accepted by a signed-in account whose email matches.
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    email: text("email").notNull(),
+    inviteToken: uuid("invite_token").notNull().unique().defaultRandom(),
+    status: text("status").notNull().default("invited"),
+    invitedAt: timestamp("invited_at", { withTimezone: true }).notNull().defaultNow(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("uq_event_cohosts_email").on(t.eventId, sql`lower(${t.email})`),
+    index("idx_event_cohosts_user").on(t.userId),
+    check("event_cohosts_status_check", sql`${t.status} in ('invited','accepted')`),
+  ],
+);
+
+export const potluckItems = pgTable(
+  "potluck_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    note: text("note"),
+    quantity: integer("quantity").notNull().default(1),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("idx_potluck_items_event").on(t.eventId),
+    check("potluck_items_quantity_check", sql`${t.quantity} between 1 and 100`),
+  ],
+);
+
+export const potluckClaims = pgTable(
+  "potluck_claims",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    itemId: uuid("item_id")
+      .notNull()
+      .references(() => potluckItems.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    guestId: uuid("guest_id")
+      .notNull()
+      .references(() => guests.id, { onDelete: "cascade" }),
+    quantity: integer("quantity").notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique("uq_potluck_claims_item_guest").on(t.itemId, t.guestId),
+    index("idx_potluck_claims_event").on(t.eventId),
+    check("potluck_claims_quantity_check", sql`${t.quantity} >= 1`),
+  ],
+);
+
+export const datePollOptions = pgTable(
+  "date_poll_options",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_date_poll_options_event").on(t.eventId)],
+);
+
+export const datePollVotes = pgTable(
+  "date_poll_votes",
+  {
+    optionId: uuid("option_id")
+      .notNull()
+      .references(() => datePollOptions.id, { onDelete: "cascade" }),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    guestId: uuid("guest_id")
+      .notNull()
+      .references(() => guests.id, { onDelete: "cascade" }),
+    answer: text("answer").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: "date_poll_votes_pk", columns: [t.optionId, t.guestId] }),
+    index("idx_date_poll_votes_event").on(t.eventId),
+    check("date_poll_votes_answer_check", sql`${t.answer} in ('yes','maybe','no')`),
+  ],
+);
+
+// Photos stored in R2 under events/<id>/album/. Only people holding the
+// invitation link see them (presigned, 10-minute URLs).
+export const albumPhotos = pgTable(
+  "album_photos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    imageKey: text("image_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    guestId: uuid("guest_id").references(() => guests.id, { onDelete: "set null" }),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "set null" }),
+    uploaderName: text("uploader_name"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("idx_album_photos_event").on(t.eventId, t.createdAt)],
+);
+
+export type EventCohost = typeof eventCohosts.$inferSelect;
+export type PotluckItem = typeof potluckItems.$inferSelect;
+export type AlbumPhoto = typeof albumPhotos.$inferSelect;
 
 export type User = typeof users.$inferSelect;
 export type Event = typeof events.$inferSelect;

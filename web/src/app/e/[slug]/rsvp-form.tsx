@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarOff, CalendarPlus, Check, HelpCircle, Loader2, Pencil, X } from "lucide-react";
+import { CalendarOff, CalendarPlus, Check, Hourglass, HelpCircle, Loader2, Pencil, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ApiError, submitRsvp, type RsvpResult } from "@/lib/api/browser";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { cn, formatEventDate, formatEventTime } from "@/lib/utils";
 import { Confetti } from "./confetti";
+import { missingRequired, RsvpQuestions } from "./rsvp-questions";
 
 type Status = "attending" | "declined" | "maybe";
 
@@ -17,6 +18,7 @@ const STATUS_LABELS: Record<string, string> = {
   attending: "Going",
   maybe: "Maybe",
   declined: "Can't make it",
+  waitlisted: "On the waitlist",
 };
 
 const CHOICES: { value: Status; label: string; icon: typeof Check }[] = [
@@ -37,6 +39,9 @@ const ERROR_COPY: Record<string, string> = {
   invitation_required: "This event is invitation only — please use the link you were sent.",
   name_required: "Please tell us your name.",
   email_required: "Please give an email address so the host can reach you.",
+  request_declined: "The host wasn't able to confirm a place for you this time.",
+  answer_required: "Please answer the required questions.",
+  invalid_answer: "One of your answers isn't one of the options — please pick again.",
 };
 
 export function RsvpForm({
@@ -47,6 +52,7 @@ export function RsvpForm({
   calendar,
   timezone,
   giftsAvailable = false,
+  extras,
 }: {
   slug: string;
   token?: string;
@@ -58,13 +64,16 @@ export function RsvpForm({
   timezone: string;
   /** The host takes cash gifts: after answering, point the guest at the gift card. */
   giftsAvailable?: boolean;
+  /** Free host features: custom questions, waitlist / approval mode. */
+  extras?: PublicEvent["extras"];
 }) {
   const router = useRouter();
 
   const responded = you && you.rsvpStatus !== "pending";
 
   const [status, setStatus] = useState<Status | null>(
-    responded ? (you.rsvpStatus as Status) : null,
+    // A waitlisted guest asked to go: reopening the form starts from "going".
+    responded ? (you.rsvpStatus === "waitlisted" ? "attending" : (you.rsvpStatus as Status)) : null,
   );
   const [name, setName] = useState(you?.name ?? "");
   const [email, setEmail] = useState(you?.email ?? "");
@@ -72,6 +81,12 @@ export function RsvpForm({
   const [plusOneNames, setPlusOneNames] = useState<string[]>(you?.plusOneNames ?? []);
   const [dietaryNotes, setDietaryNotes] = useState(you?.dietaryNotes ?? "");
   const [message, setMessage] = useState(you?.message ?? "");
+  const questions = extras?.questions ?? [];
+  const [answers, setAnswers] = useState<Record<string, string>>(extras?.mine?.answers ?? {});
+  // A full event with the waitlist on still takes "going" (as a waitlist
+  // request); approval mode turns every "going" into a request.
+  const waitlistOpen = rsvp.atCapacity && (extras?.waitlistEnabled ?? false);
+  const goingIsRequest = waitlistOpen || (extras?.approvalRequired ?? false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +157,9 @@ export function RsvpForm({
   const showConfirmation = (confirmed || responded) && !editing;
 
   if (showConfirmation) {
-    const finalStatus = confirmed?.status ?? (you!.rsvpStatus as Status);
+    const finalStatus = (confirmed?.status ?? you!.rsvpStatus) as Status | "waitlisted";
+    const waitlisted = finalStatus === "waitlisted";
+    const waitReason = confirmed?.waitlistReason ?? extras?.mine?.waitlistReason ?? null;
     const finalPlusOnes = confirmed?.plusOnes ?? you!.plusOnes;
     const finalNames = confirmed?.plusOneNames ?? you?.plusOneNames ?? [];
     const finalName = confirmed?.name ?? you!.name;
@@ -160,18 +177,28 @@ export function RsvpForm({
             className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
             style={{ backgroundColor: "var(--ev-accent)", color: "var(--ev-accent-text)" }}
           >
-            {going ? <Check className="size-4" /> : finalStatus === "maybe" ? <HelpCircle className="size-4" /> : <X className="size-4" />}
+            {going ? <Check className="size-4" /> : waitlisted ? <Hourglass className="size-4" /> : finalStatus === "maybe" ? <HelpCircle className="size-4" /> : <X className="size-4" />}
           </span>
           <div className="min-w-0">
             <h2 className="ev-heading text-xl font-semibold sm:text-2xl">
               {going
                 ? "You're going"
-                : finalStatus === "maybe"
-                  ? "You're a maybe"
-                  : "You've declined"}
+                : waitlisted
+                  ? waitReason === "approval"
+                    ? "Waiting for the host"
+                    : "You're on the waitlist"
+                  : finalStatus === "maybe"
+                    ? "You're a maybe"
+                    : "You've declined"}
             </h2>
             <p className="ev-muted mt-1 text-sm">
-              {confirmed ? "Thanks — your response has been saved." : "Your response is recorded."}
+              {waitlisted
+                ? waitReason === "approval"
+                  ? "The host confirms each reply. If they say yes, we'll email you."
+                  : "The event is full right now. If a place opens and the host confirms you, we'll email you."
+                : confirmed
+                  ? "Thanks — your response has been saved."
+                  : "Your response is recorded."}
             </p>
             {giftsAvailable ? (
               <p className="mt-2 text-sm">
@@ -222,6 +249,19 @@ export function RsvpForm({
                   Google Calendar
                 </Button>
               </a>
+              {calendar.outlookUrl ? (
+                <a href={calendar.outlookUrl} target="_blank" rel="noopener noreferrer">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="border-black/15 bg-transparent text-[color:var(--ev-text)] hover:bg-black/5"
+                  >
+                    <CalendarPlus className="size-4" />
+                    Outlook
+                  </Button>
+                </a>
+              ) : null}
               <a href={calendar.icsUrl}>
                 <Button
                   type="button"
@@ -230,7 +270,7 @@ export function RsvpForm({
                   className="border-black/15 bg-transparent text-[color:var(--ev-text)] hover:bg-black/5"
                 >
                   <CalendarPlus className="size-4" />
-                  Apple / Outlook
+                  {calendar.outlookUrl ? "Apple (.ics)" : "Apple / Outlook"}
                 </Button>
               </a>
             </div>
@@ -264,6 +304,11 @@ export function RsvpForm({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!status) return;
+    const missing = missingRequired(questions, answers, status === "attending");
+    if (missing) {
+      setError(`Please answer: ${missing.label}`);
+      return;
+    }
 
     // Captured before the request: what the server last had on record, which is
     // this session's confirmation if there was one, otherwise what the page
@@ -282,6 +327,7 @@ export function RsvpForm({
         plusOneNames: status === "attending" ? plusOneNames : undefined,
         dietaryNotes: rsvp.collectDietary ? dietaryNotes.trim() || null : null,
         message: message.trim() || null,
+        ...(questions.length ? { answers } : {}),
       });
 
       // A public responder gets a token back — their only way to return and
@@ -294,7 +340,8 @@ export function RsvpForm({
       // from maybe/declined. Someone already coming who reopens the form to fix
       // a dietary note has not just accepted an invitation, and confetti every
       // time they save would turn a celebration into a tic.
-      if (status === "attending" && previousStatus !== "attending") {
+      // A waitlisted "going" is not a yes yet, so no confetti for it.
+      if (result.status === "attending" && previousStatus !== "attending") {
         setCelebrate(Date.now());
       }
 
@@ -318,7 +365,7 @@ export function RsvpForm({
       <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {CHOICES.map(({ value, label, icon: Icon }) => {
           const selected = status === value;
-          const disabled = value === "attending" && rsvp.atCapacity && !selected;
+          const disabled = value === "attending" && rsvp.atCapacity && !waitlistOpen && !selected;
           return (
             <button
               key={value}
@@ -338,14 +385,21 @@ export function RsvpForm({
               aria-pressed={selected}
             >
               <Icon className="size-4" />
-              {label}
+              {value === "attending" && waitlistOpen ? "Join the waitlist" : label}
             </button>
           );
         })}
       </div>
 
-      {rsvp.atCapacity && status !== "attending" ? (
+      {rsvp.atCapacity && status !== "attending" && !waitlistOpen ? (
         <p className="ev-muted mt-2 text-xs">This event is at capacity.</p>
+      ) : null}
+      {goingIsRequest ? (
+        <p className="ev-muted mt-2 text-xs">
+          {waitlistOpen
+            ? "This event is full — say you're going to join the waitlist, and the host can confirm you if a place opens."
+            : "The host confirms each \u201cgoing\u201d. You'll get an email once they do."}
+        </p>
       ) : null}
 
       {status ? (
@@ -441,6 +495,10 @@ export function RsvpForm({
               />
               <p className="ev-muted text-xs">For everyone in your party.</p>
             </div>
+          ) : null}
+
+          {status !== "declined" ? (
+            <RsvpQuestions questions={questions} answers={answers} onChange={setAnswers} attending={status === "attending"} />
           ) : null}
 
           <div className="space-y-1.5">

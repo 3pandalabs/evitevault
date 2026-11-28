@@ -120,6 +120,30 @@ export type EventSummary = {
   // Only on the full row (GET /events/:id) — lets the detail page mark which
   // individual rows are new before clearing the marker.
   responsesSeenAt?: string | null;
+  // Free host features (migration 0015). `myRole` is on both the list and
+  // the full row: "cohost" hides owner-only actions (delete, paid features).
+  myRole?: "owner" | "cohost";
+  waitlisted?: number;
+  remindersEnabled?: boolean;
+  reminderIncludeMaybe?: boolean;
+  registryLinks?: { label: string; url: string }[] | null;
+  playlistUrl?: string | null;
+  chipIn?: { venmo?: string | null; cashapp?: string | null; paypal?: string | null } | null;
+  approvalRequired?: boolean;
+  waitlistEnabled?: boolean;
+  rsvpQuestions?: RsvpQuestion[] | null;
+  potluckEnabled?: boolean;
+  datePollStatus?: "open" | "closed" | null;
+  albumEnabled?: boolean;
+  albumGuestUploads?: boolean;
+};
+
+export type RsvpQuestion = {
+  id: string;
+  type: "text" | "choice" | "yesno";
+  label: string;
+  options?: string[];
+  required?: boolean;
 };
 
 export type GuestRow = {
@@ -127,12 +151,17 @@ export type GuestRow = {
   name: string;
   email: string | null;
   phone: string | null;
-  rsvpStatus: "pending" | "attending" | "declined" | "maybe";
+  rsvpStatus: "pending" | "attending" | "declined" | "maybe" | "waitlisted";
   plusOnes: number;
   plusOneNames: string[] | null;
   dietaryNotes: string | null;
   message: string | null;
   source: "invited" | "public";
+  // Free host features (migration 0015).
+  answers?: Record<string, string> | null;
+  approvalStatus?: "pending" | "approved" | "declined" | null;
+  waitlistReason?: "capacity" | "approval" | null;
+  reminderSentAt?: string | null;
   // When mail actually reached them, not when the row was created. Null means
   // this guest is still waiting for an invitation, which is what the dashboard
   // counts.
@@ -151,6 +180,7 @@ export type Analytics = {
     pending: number;
     headcount: number;
     opened: number;
+    waitlisted?: number;
   };
   views: {
     total: number;
@@ -211,6 +241,17 @@ export type EventInput = {
   guestPhotosEnabled?: boolean;
   showGuestList?: boolean;
   photoAlbumUrl?: string | null;
+  // Free host features (migration 0015).
+  remindersEnabled?: boolean;
+  reminderIncludeMaybe?: boolean;
+  registryLinks?: { label: string; url: string }[] | null;
+  playlistUrl?: string | null;
+  chipIn?: { venmo?: string | null; cashapp?: string | null; paypal?: string | null } | null;
+  approvalRequired?: boolean;
+  waitlistEnabled?: boolean;
+  potluckEnabled?: boolean;
+  albumEnabled?: boolean;
+  albumGuestUploads?: boolean;
   // An empty object clears every override and restores the design's own look.
   themeOverrides?: ThemeOverrides | null;
 };
@@ -409,7 +450,11 @@ export const getEvent = (id: string) => hostFetch<EventSummary & Record<string, 
 export const listGuests = (id: string) => hostFetch<{ guests: GuestRow[] }>(`/events/${id}/guests`);
 export const getAnalytics = (id: string) => hostFetch<Analytics>(`/events/${id}/analytics`);
 
-export const addGuests = (id: string, guests: { name: string; email?: string | null }[]) =>
+export const addGuests = (
+  id: string,
+  guests: { name: string; email?: string | null; phone?: string | null }[],
+  opts: { sendInvites?: boolean } = {},
+) =>
   hostFetch<{
     added: number;
     skipped: number;
@@ -431,7 +476,8 @@ export const addGuests = (id: string, guests: { name: string; email?: string | n
     // ordering instead: the host has already published, seen the live link,
     // and is now typing addresses into a box on that event. Nothing about that
     // reads as a dry run.
-    body: JSON.stringify({ guests, sendInvites: true }),
+    // Guest import (CSV) may add a list quietly and invite later.
+    body: JSON.stringify({ guests, sendInvites: opts.sendInvites ?? true }),
   });
 
 export type FailedGuest = { id: string; name: string; email: string };

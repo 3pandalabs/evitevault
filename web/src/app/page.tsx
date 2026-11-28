@@ -4,9 +4,12 @@ import {
   ArrowRight,
   CalendarCheck,
   CalendarPlus,
+  Camera,
   Check,
+  Gift,
   ImageIcon,
   Images,
+  ListChecks,
   MessageCircle,
   Mic,
   Plus,
@@ -481,12 +484,27 @@ export default function HomePage() {
             <Tile
               icon={SlidersHorizontal}
               title="You set the rules"
-              body="Capacity, plus-one limits and an RSVP deadline that closes replies for you."
+              body="Capacity with a waitlist, approve each reply if you like, plus-one limits, your own questions (meal choice, song requests) and an RSVP deadline."
             />
             <Tile
               icon={CalendarPlus}
               title="Straight to their calendar"
-              body="Google Calendar and a .ics file for Apple Calendar and Outlook on every invitation."
+              body="Google, Outlook and Apple calendar on every invitation, and a reminder email the day before."
+            />
+            <Tile
+              icon={ListChecks}
+              title="Plan it together"
+              body="Add co-hosts, a what-to-bring list, a date poll before you fix the day, and import guests from a spreadsheet or your contacts."
+            />
+            <Tile
+              icon={Camera}
+              title="A shared album"
+              body="Guests add their photos right on the invitation; download them all afterwards. Only people with the link can see it."
+            />
+            <Tile
+              icon={Gift}
+              title="Registry, playlist, chip in"
+              body="Link your registry or wishlist and a playlist, and share your own Venmo, Cash App or PayPal."
             />
           </ul>
         </section>

@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
-import { loadOwnedEvent } from "../lib/ownership.js";
+import { loadManagedEvent } from "../lib/eventAccess.js";
 import {
   coverImageKey,
   eventIdForKey,
@@ -29,7 +29,7 @@ export async function storageRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
       const { contentType } = req.body as { contentType: string };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       if (!isAllowedImageType(contentType)) {
         return reply.code(400).send({ error: "unsupported_content_type" });
@@ -55,7 +55,7 @@ export async function storageRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { eventId } = req.params as { eventId: string };
       const { contentType } = req.body as { contentType: string };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       if (!isAllowedImageType(contentType)) {
         return reply.code(400).send({ error: "unsupported_content_type" });
@@ -75,7 +75,7 @@ export async function storageRoutes(app: FastifyInstance) {
       const { key } = req.body as { key: string };
       const eventId = eventIdForKey(key);
       if (!eventId) return reply.code(400).send({ error: "invalid_key" });
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       return { url: await presignDownload(key) };
     },

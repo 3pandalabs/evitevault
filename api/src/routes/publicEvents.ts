@@ -23,7 +23,10 @@ import { amountProblem, CAP_STATUSES, cleanText, feeConfigFrom, giftBreakdown, l
 import { createGiftCheckout } from "../lib/gifts/stripe.js";
 import { rateLimiter } from "../lib/rateLimit.js";
 import { eventEndsAt, hasEventEnded } from "../lib/eventTime.js";
-import { buildIcs, googleCalendarUrl } from "../lib/ics.js";
+import { buildIcs, googleCalendarUrl, outlookCalendarUrl } from "../lib/ics.js";
+import { cleanAnswers, parseQuestions } from "../lib/features/questions.js";
+import { decideRsvp } from "../lib/features/rsvpRules.js";
+import { publicExtras } from "./publicExtras.js";
 import { buildRsvpConfirmationEmail } from "../lib/emails/rsvpConfirmation.js";
 import { mailerConfigured, sendMail } from "../lib/mailer.js";
 import { resolveTheme } from "../lib/theme.js";
@@ -226,7 +229,12 @@ async function toPublicEvent(row: EventWithTemplate, guest: Guest | null) {
     calendar: {
       icsUrl: `${invitationUrl}/calendar.ics`,
       googleUrl: googleCalendarUrl(icsInput),
+      outlookUrl: outlookCalendarUrl(icsInput),
     },
+    // Free host features (migration 0015): registry/playlist/chip-in links,
+    // co-host names, custom questions, waitlist mode, potluck, date poll,
+    // album. Shaped only by publicExtras() in routes/publicExtras.ts.
+    extras: await publicExtras(event, guest),
     // Only ever the caller's own guest record, only when they presented its
     // token. Contact details are echoed back because the guest supplied them.
     you: guest
@@ -366,12 +374,15 @@ export async function publicEventRoutes(app: FastifyInstance) {
           plusOneNames: z.array(z.string().max(200)).max(20).optional(),
           dietaryNotes: z.string().max(1000).nullish(),
           message: z.string().max(2000).nullish(),
+          // Answers to the host's custom questions (lib/features/questions.ts).
+          answers: z.record(z.string().max(40), z.string().max(1000)).optional(),
         }),
       },
     },
     async (req, reply) => {
       const { slug } = req.params as z.infer<typeof slugParams>;
       const body = req.body as {
+        answers?: Record<string, string>;
         token?: string;
         name?: string;
         email?: string | null;
@@ -436,6 +447,11 @@ export async function publicEventRoutes(app: FastifyInstance) {
       // per RSVP, and a host would rather have 51 guests than a stranger's
       // browser showing an error at the moment they say yes. The dashboard
       // shows the overage.
+      //
+      // Since migration 0015 a full event (with the waitlist on) or an event
+      // in approval mode stores the "going" as 'waitlisted' instead
+      // (lib/features/rsvpRules.ts). A waitlisted guest is never counted.
+      let headcount = 0;
       if (body.status === "attending" && event.capacity !== null) {
         const [tally] = await db
           .select({
@@ -443,11 +459,28 @@ export async function publicEventRoutes(app: FastifyInstance) {
           })
           .from(guests)
           .where(eq(guests.eventId, event.id));
-        const alreadyCounted = guest?.rsvpStatus === "attending" ? 1 + guest.plusOnes : 0;
-        if ((tally?.headcount ?? 0) - alreadyCounted + 1 + plusOnes > event.capacity) {
-          return reply.code(409).send({ error: "at_capacity" });
-        }
+        headcount = tally?.headcount ?? 0;
       }
+      const decision = decideRsvp({
+        requested: body.status,
+        approvalRequired: event.approvalRequired,
+        waitlistEnabled: event.waitlistEnabled,
+        capacity: event.capacity,
+        headcount,
+        alreadyCounted: guest?.rsvpStatus === "attending" ? 1 + guest.plusOnes : 0,
+        partySize: 1 + plusOnes,
+        approvalStatus: guest?.approvalStatus ?? null,
+      });
+      if (!decision.ok) return reply.code(409).send({ error: decision.error });
+
+      const answered = cleanAnswers(parseQuestions(event.rsvpQuestions), body.answers, body.status === "attending");
+      if (!answered.ok) return reply.code(400).send({ error: answered.error, questionId: answered.questionId });
+      const extra = {
+        rsvpStatus: decision.status,
+        approvalStatus: decision.approvalStatus,
+        waitlistReason: decision.waitlistReason,
+        answers: Object.keys(answered.answers).length ? answered.answers : null,
+      };
 
       const now = new Date();
 
@@ -476,7 +509,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
         const [updated] = await db
           .update(guests)
           .set({
-            rsvpStatus: body.status,
+            ...extra,
             plusOnes,
             plusOneNames,
             dietaryNotes: event.collectDietary ? body.dietaryNotes ?? null : null,
@@ -496,6 +529,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
         return {
           ok: true,
           status: updated.rsvpStatus,
+          waitlistReason: updated.waitlistReason,
           plusOnes: updated.plusOnes,
           plusOneNames: updated.plusOneNames,
           name: updated.name,
@@ -531,7 +565,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
           eventId: event.id,
           name: body.name.trim(),
           email,
-          rsvpStatus: body.status,
+          ...extra,
           plusOnes,
           plusOneNames,
           dietaryNotes: event.collectDietary ? body.dietaryNotes ?? null : null,
@@ -549,6 +583,7 @@ export async function publicEventRoutes(app: FastifyInstance) {
       return reply.code(201).send({
         ok: true,
         status: created.rsvpStatus,
+        waitlistReason: created.waitlistReason,
         plusOnes: created.plusOnes,
         plusOneNames: created.plusOneNames,
         name: created.name,

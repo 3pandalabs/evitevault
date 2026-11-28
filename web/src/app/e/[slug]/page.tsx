@@ -2,6 +2,11 @@ import { CalendarDays, Clock, Images, MapPin, Users } from "lucide-react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { AddToCalendar } from "./add-to-calendar";
+import { DatePoll } from "./date-poll";
+import { EnvelopeIntro } from "./envelope-intro";
+import { ChipIn, RegistryAndPlaylist } from "./guest-links";
+import { PotluckList } from "./potluck-list";
+import { SharedAlbum } from "./shared-album";
 import { Guestbook } from "./guestbook";
 import { RsvpForm } from "./rsvp-form";
 import { SendGift } from "./send-gift";
@@ -77,6 +82,10 @@ export default async function InvitationPage({ params, searchParams }: PageProps
   const posts = event.guestbook.enabled ? await fetchGuestbook(slug) : [];
   const style = themeStyle(event.theme);
   const isPhotoLayout = event.theme.layout === "photo" && event.coverImageUrl;
+  // Free host features (migration 0015). Optional so an older API still renders.
+  const extras = event.extras;
+  const cohosts = extras?.cohostNames ?? [];
+  const hostLine = event.hostName && cohosts.length ? `${event.hostName} & ${cohosts.join(" & ")}` : event.hostName;
 
   return (
     <>
@@ -94,6 +103,8 @@ export default async function InvitationPage({ params, searchParams }: PageProps
       ) : null}
 
       <main className="ev-themed min-h-screen" style={style}>
+        {/* Envelope opening on first visit; never on a host preview, never with reduced motion. */}
+        {!event.preview ? <EnvelopeIntro slug={event.slug} title={event.title} /> : null}
         {/* Cover art. Deliberately a plain <img>, not next/image: the src is a
             presigned R2 URL that expires in ten minutes, and the optimizer
             would cache it and then serve a dead link. */}
@@ -115,8 +126,8 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/70 to-transparent p-6 sm:p-10">
                 <div className="text-white">
                   <h1 className="ev-heading text-3xl font-semibold sm:text-5xl">{event.title}</h1>
-                  {event.hostName ? (
-                    <p className="mt-2 text-sm opacity-90">Hosted by {event.hostName}</p>
+                  {hostLine ? (
+                    <p className="mt-2 text-sm opacity-90">Hosted by {hostLine}</p>
                   ) : null}
                 </div>
               </div>
@@ -151,9 +162,9 @@ export default async function InvitationPage({ params, searchParams }: PageProps
           ) : null}
           {!isPhotoLayout ? (
             <header className="text-center">
-              {event.hostName ? (
+              {hostLine ? (
                 <p className="ev-muted text-xs uppercase tracking-[0.2em]">
-                  {event.hostName} invites you
+                  {hostLine} {cohosts.length ? "invite" : "invites"} you
                 </p>
               ) : null}
               <h1 className="ev-heading mt-3 text-3xl font-semibold leading-tight sm:text-5xl">
@@ -243,7 +254,7 @@ export default async function InvitationPage({ params, searchParams }: PageProps
             ) : null}
 
             <div className="mt-6">
-              <AddToCalendar icsUrl={event.calendar.icsUrl} googleUrl={event.calendar.googleUrl} />
+              <AddToCalendar icsUrl={event.calendar.icsUrl} googleUrl={event.calendar.googleUrl} outlookUrl={event.calendar.outlookUrl} />
             </div>
           </section>
 
@@ -256,14 +267,30 @@ export default async function InvitationPage({ params, searchParams }: PageProps
               calendar={event.calendar}
               timezone={event.timezone}
               giftsAvailable={Boolean(event.gifts)}
+              extras={extras}
             />
           </section>
+
+          {/* Date poll: shown while the host is still choosing the date. */}
+          {extras?.poll ? <DatePoll slug={event.slug} token={token} timezone={event.timezone} initial={extras.poll} /> : null}
+
+          {/* What to bring (potluck / sign-up list). */}
+          {extras?.potluck ? <PotluckList slug={event.slug} token={token} initial={extras.potluck} /> : null}
+
+          {extras ? <RegistryAndPlaylist extras={extras} /> : null}
 
           {/* Cash gifts: only when the host turned them on and their payouts
               are set up (the API decides; amounts are never shown here). */}
           {event.gifts ? (
             <SendGift slug={event.slug} hostName={event.hostName} gifts={event.gifts} thanks={gift === "thanks"} />
           ) : null}
+
+          {/* The host's own Venmo / Cash App / PayPal: a separate, plainly
+              labelled box, never mixed with the Stripe gift above. */}
+          {extras ? <ChipIn extras={extras} hostName={event.hostName} /> : null}
+
+          {/* Shared album stored with the invitation (guests add with their link). */}
+          {extras?.album ? <SharedAlbum slug={event.slug} token={token} album={extras.album} /> : null}
 
           {/* Only once the host has an album to point at — which is usually
               after the day, so most invitations never render this. */}

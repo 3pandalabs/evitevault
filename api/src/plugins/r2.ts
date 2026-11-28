@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -146,4 +147,38 @@ export async function deleteEventObjects(eventId: string): Promise<number> {
     token = page.IsTruncated ? page.NextContinuationToken : undefined;
   } while (token);
   return deleted;
+}
+
+// --- Shared photo album (migration 0015, lib/features/album.ts) ------------
+//   events/<eventId>/album/<uuid>.<ext>   host- and guest-uploaded album photos
+
+export function albumImageKey(eventId: string, ext: string): string {
+  return `events/${eventId}/album/${crypto.randomUUID()}.${ext}`;
+}
+
+// Like presignUpload, but with the exact byte length signed in: R2 refuses a
+// PUT whose Content-Length differs, so the album's size cap holds even for a
+// client that ignores the browser-side resize.
+export function presignUploadSized(key: string, contentType: AllowedImageType, size: number): Promise<string> {
+  return getSignedUrl(
+    r2,
+    new PutObjectCommand({ Bucket: env.R2_BUCKET, Key: key, ContentType: contentType, ContentLength: size }),
+    { expiresIn: UPLOAD_URL_TTL_SECONDS, signableHeaders: new Set(["content-length", "content-type"]) },
+  );
+}
+
+/** Size and type of a stored object, or null when it does not exist. */
+export async function headObject(key: string): Promise<{ size: number; contentType: string | null } | null> {
+  try {
+    const r = await r2.send(new HeadObjectCommand({ Bucket: env.R2_BUCKET, Key: key }));
+    return { size: Number(r.ContentLength ?? 0), contentType: r.ContentType ?? null };
+  } catch {
+    return null;
+  }
+}
+
+export async function getObjectBytes(key: string): Promise<Buffer> {
+  const r = await r2.send(new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: key }));
+  const bytes = await r.Body!.transformToByteArray();
+  return Buffer.from(bytes);
 }

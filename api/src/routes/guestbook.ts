@@ -4,7 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "../auth/plugin.js";
 import { db } from "../db/index.js";
 import { guestbookPosts } from "../db/schema.js";
-import { loadOwnedEvent } from "../lib/ownership.js";
+import { loadManagedEvent } from "../lib/eventAccess.js";
 import { deleteObject, presignDownload } from "../plugins/r2.js";
 
 const eventParams = z.object({ eventId: z.string().uuid() });
@@ -17,7 +17,7 @@ export async function guestbookModerationRoutes(app: FastifyInstance) {
 
   app.get("/events/:eventId/guestbook", { schema: { params: eventParams } }, async (req, reply) => {
     const { eventId } = req.params as z.infer<typeof eventParams>;
-    if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+    if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
     const rows = await db
       .select()
@@ -41,7 +41,7 @@ export async function guestbookModerationRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const { eventId, postId } = req.params as z.infer<typeof postParams>;
       const { status } = req.body as { status: "visible" | "hidden" };
-      if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+      if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
       const [updated] = await db
         .update(guestbookPosts)
@@ -56,7 +56,7 @@ export async function guestbookModerationRoutes(app: FastifyInstance) {
 
   app.delete("/events/:eventId/guestbook/:postId", { schema: { params: postParams } }, async (req, reply) => {
     const { eventId, postId } = req.params as z.infer<typeof postParams>;
-    if (!(await loadOwnedEvent(eventId, req.userId!, reply))) return;
+    if (!(await loadManagedEvent(eventId, req.userId!, reply))) return;
 
     const [deleted] = await db
       .delete(guestbookPosts)

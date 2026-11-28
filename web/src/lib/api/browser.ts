@@ -44,11 +44,16 @@ export type RsvpInput = {
   plusOneNames?: string[];
   dietaryNotes?: string | null;
   message?: string | null;
+  // Answers to the host's custom questions, keyed by question id.
+  answers?: Record<string, string>;
 };
 
 export type RsvpResult = {
   ok: true;
-  status: "attending" | "declined" | "maybe";
+  // "waitlisted": they said going, but the event is full or the host approves
+  // each reply first.
+  status: "attending" | "declined" | "maybe" | "waitlisted";
+  waitlistReason?: "capacity" | "approval" | null;
   plusOnes: number;
   plusOneNames: string[] | null;
   name: string;

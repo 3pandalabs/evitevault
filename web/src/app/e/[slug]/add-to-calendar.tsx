@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 // Apple Calendar and Outlook have no stable "add event" URL scheme, so both get
 // the .ics download — which is also the fallback for any client we don't know
 // about. Only Google gets a dedicated link.
-export function AddToCalendar({ icsUrl, googleUrl }: { icsUrl: string; googleUrl: string }) {
+export function AddToCalendar({ icsUrl, googleUrl, outlookUrl }: { icsUrl: string; googleUrl: string; outlookUrl?: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -36,8 +36,13 @@ export function AddToCalendar({ icsUrl, googleUrl }: { icsUrl: string; googleUrl
           <a href={icsUrl} className="block px-4 py-3 text-sm hover:bg-black/5">
             Apple Calendar (.ics)
           </a>
+          {outlookUrl ? (
+            <a href={outlookUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-3 text-sm hover:bg-black/5">
+              Outlook.com / Microsoft 365
+            </a>
+          ) : null}
           <a href={icsUrl} className="block px-4 py-3 text-sm hover:bg-black/5">
-            Outlook / other (.ics)
+            {outlookUrl ? "Outlook desktop / other (.ics)" : "Outlook / other (.ics)"}
           </a>
         </div>
       ) : null}

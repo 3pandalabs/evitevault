@@ -74,7 +74,9 @@ export type PublicEvent = {
     headcount: number;
     attendees: { name: string; plusOnes: number }[] | null;
   };
-  calendar: { icsUrl: string; googleUrl: string };
+  calendar: { icsUrl: string; googleUrl: string; outlookUrl?: string };
+  /** Free host features (migration 0015); see PublicExtras. Optional so an older API still renders. */
+  extras?: PublicExtras;
   // Present only when the page was opened through a host preview link, which
   // is the one way an unpublished invitation is ever served.
   preview?: { status: string };
@@ -82,13 +84,53 @@ export type PublicEvent = {
     id: string;
     name: string;
     email: string | null;
-    rsvpStatus: "pending" | "attending" | "declined" | "maybe";
+    rsvpStatus: "pending" | "attending" | "declined" | "maybe" | "waitlisted";
     plusOnes: number;
     plusOneNames: string[] | null;
     dietaryNotes: string | null;
     message: string | null;
     respondedAt: string | null;
   } | null;
+};
+
+export type PublicQuestion = {
+  id: string;
+  type: "text" | "choice" | "yesno";
+  label: string;
+  options?: string[];
+  required?: boolean;
+};
+
+export type PublicPotluck = {
+  items: {
+    id: string;
+    name: string;
+    note: string | null;
+    quantity: number;
+    remaining: number;
+    claimedBy: { name: string; quantity: number }[];
+    mine: number;
+  }[];
+};
+
+export type PublicPoll = {
+  options: { id: string; startsAt: string; endsAt: string | null; yes: number; maybe: number; no: number; mine: "yes" | "maybe" | "no" | null }[];
+  canVote: boolean;
+};
+
+export type PublicExtras = {
+  cohostNames: string[];
+  registry: { label: string; url: string }[];
+  playlist: { url: string; service: string | null } | null;
+  /** The host's own Venmo / Cash App / PayPal links. RsvpVault never handles this money. */
+  chipIn: { kind: "venmo" | "cashapp" | "paypal"; label: string; handle: string; url: string }[];
+  questions: PublicQuestion[];
+  approvalRequired: boolean;
+  waitlistEnabled: boolean;
+  potluck: PublicPotluck | null;
+  poll: PublicPoll | null;
+  album: { count: number; max: number; maxBytes: number; guestUploads: boolean; canUpload: boolean } | null;
+  mine: { answers: Record<string, string>; waitlistReason: "capacity" | "approval" | null; approvalStatus: string | null } | null;
 };
 
 export type GuestbookPost = {

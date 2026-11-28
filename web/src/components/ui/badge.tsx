@@ -13,6 +13,7 @@ const badgeVariants = cva(
         declined: "border-transparent bg-rose-100 text-rose-800",
         maybe: "border-transparent bg-amber-100 text-amber-800",
         pending: "border-transparent bg-slate-100 text-slate-600",
+        waitlisted: "border-transparent bg-violet-100 text-violet-800",
       },
     },
     defaultVariants: { variant: "default" },
@@ -34,4 +35,6 @@ export const rsvpVariant = {
   declined: "declined",
   maybe: "maybe",
   pending: "pending",
+  // Said "going" but waiting: event full or the host approves each reply.
+  waitlisted: "waitlisted",
 } as const;
